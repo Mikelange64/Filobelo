@@ -29,6 +29,14 @@ class TaskResponse(TaskBase):
     due_date: datetime | None 
 
 
+class PaginatedTaskResponse(Base) :
+    tasks    : list[TaskResponse]
+    total    : int
+    skip     : int
+    limit    : int
+    has_more : bool
+
+
 class TaskUpdate(TaskBase):
     title: str | None = None
     content: str | None = Field(default=None, min_length=1, max_length=300)

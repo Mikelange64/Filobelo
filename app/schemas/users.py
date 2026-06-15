@@ -28,9 +28,17 @@ class UserPrivate(UserPublic):
     email      : EmailStr
     last_login : datetime | None
     
-    
+
 class SuperUserResponse(UserPrivate):
     is_superuser : bool
+
+
+class PaginatedSuperUserResponse(Base):
+    users    : list[SuperUserResponse]
+    total    : int
+    skip     : int
+    limit    : int
+    has_more : bool
 
 
 class UserUpdate(UserBase):

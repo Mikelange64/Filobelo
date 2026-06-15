@@ -32,6 +32,14 @@ class WorkspaceResponse(WorkspaceBase):
     due_date       : datetime | None
 
 
+class PaginatedWorkspaceResponse(Base):
+    workspaces : list[WorkspaceResponse]
+    total      : int
+    skip       : int
+    limit      : int
+    has_more   : bool
+
+
 class WorkspaceUpdate(WorkspaceBase):
     title        : str | None = Field(min_length=1, max_length=50, default=None)
     description  : str | None = Field(min_length=1, max_length=500, default=None)

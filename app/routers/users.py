@@ -20,8 +20,11 @@ from app.schemas import (
 )
 from app.utility import get_user_by_id
 
-router = APIRouter()
+router = APIRouter(tags=["users"])
 
+# =======================================================================================
+# CRUD ON USERS
+# =======================================================================================
 
 @router.post("", response_model=UserPrivate, status_code=status.HTTP_201_CREATED)
 def create_user(user: UserCreate, db: DbSession):
@@ -94,42 +97,10 @@ def login(
 @router.get("/me", response_model=UserPrivate)
 def get_current_user(user: CurrentUser):
     return user
-
-
-@router.get("/me/workspaces", response_model=list[WorkspaceResponse])
-def get_user_workspaces(
-    current_user: CurrentUser, db: DbSession
-):
-    workspaces = (
-        db.execute(
-            select(Workspace)
-            .join(WorkspaceMember, WorkspaceMember.workspace_id == Workspace.id)
-            .where(WorkspaceMember.user_id == current_user.id)
-        )
-        .scalars()
-        .all()
-    )
-
-    if not workspaces:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="User has no workspaces"
-        )
-
-    return workspaces
-
-
-@router.get("/{user_id}", response_model=UserPublic)
-def get_user(user_id: int, db: DbSession):
-    user = get_user_by_id(user_id, db)
-    return user
-
-
+    
+    
 @router.patch("/me", response_model=UserPrivate)
-def update_user(
-    current_user : CurrentUser,
-    user_data    : UserUpdate,
-    db           : DbSession,
-):
+def update_user(current_user: CurrentUser, user_data: UserUpdate, db: DbSession):
     # checks if the user updated their username (not blank or some as before) and if the new username is already taken
     if (
         user_data.username is not None
@@ -173,11 +144,38 @@ def update_user(
     return current_user
 
 
+@router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
+def delete_user(current_user: CurrentUser, db: DbSession):
+    db.delete(current_user)
+    db.commit()
+
+
+# ========================================================================================
+# OPERATIOS ON SUBRESOURCES
+# ========================================================================================
+
+
+@router.get("/me/workspaces", response_model=list[WorkspaceResponse])
+def get_user_workspaces(current_user: CurrentUser, db: DbSession):
+    workspaces = (
+        db.execute(select(Workspace)
+        .join(WorkspaceMember, WorkspaceMember.workspace_id == Workspace.id)
+        .where(WorkspaceMember.user_id == current_user.id))
+        .scalars().all()
+    )   
+    
+    return workspaces
+
+
+@router.get("/{user_id}", response_model=UserPublic)
+def get_user(user_id: int, db: DbSession):
+    user = get_user_by_id(user_id, db)
+    return user
+
+
 @router.patch("me/change-password", response_model=UserPrivate)
 def change_password(
-    current_user  : CurrentUser,
-    password_data : ChangePassword,
-    db            : DbSession,
+    current_user: CurrentUser, password_data: ChangePassword, db: DbSession,
 ):
     if not verify_password(password_data.old_password, current_user.password_hash):
         raise HTTPException(
@@ -198,12 +196,6 @@ def change_password(
     db.refresh(current_user)
 
     return current_user
-
-
-@router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
-def delete_user(current_user: CurrentUser, db: DbSession):
-    db.delete(current_user)
-    db.commit()
 
 
 # @router.post("/{user_id}/picture", response_model = UserPrivate)

@@ -1,37 +1,49 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, HTTPException, status, Query
+from sqlalchemy import select, func
 
-from app.database import get_db
+from app.database import DbSession
 from app.models import User
-from app.schemas import SuperUserResponse
-from app.utility import require_superuser
+from app.schemas import SuperUserResponse, PaginatedSuperUserResponse
+from app.utility import require_superuser, get_user_by_id
 
 router = APIRouter()
 
 
-@router.get("/all", response_model=list[SuperUserResponse])
+@router.get(
+    "/all", response_model=PaginatedSuperUserResponse, dependencies=[Depends(require_superuser)]
+)
 def get_all_users(
-    db        : Annotated[Session, Depends(get_db)],
-    superuser : Annotated[User, Depends(require_superuser)],
+    db    : DbSession, 
+    skip  : Annotated[int, Query(ge=0)] = 0,
+    limit : Annotated[int, Query(ge=1, le=100)] = 100
 ):
-    users = db.execute(select(User)).scalars().all()
-    return users
+    result_count = db.execute(select(func.count()).select_from(User)).scalar()
+    total = result_count or 0
+    
+    users = (
+        db.execute(select(User)
+        .order_by(User.joined_at.desc())
+        .offset(skip).limit(limit))
+        .scalars().all()
+    )
+
+    has_more = skip + len(users) < total
+
+    response = PaginatedSuperuserResponse(
+        users    = [SuperUserResponse.model_validate(u) for u in users],
+        total    = total,
+        skip     = skip,
+        limit    = limit,
+        has_more = has_more,
+    )
+    return response
 
 
-@router.get("/{user_id}", response_model=SuperUserResponse)
-def get_user(
-    user_id   : int,
-    db        : Annotated[Session, Depends(get_db)],
-    superuser : Annotated[User, Depends(require_superuser)],
-):
-    user = db.execute(select(User).where(User.id == user_id)).scalars().first()
-
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
-        )
-
+@router.get(
+    "/{user_id}", response_model=SuperUserResponse, dependencies=[Depends(require_superuser)]
+)
+def get_user(user_id: int, db: DbSession):
+    user = get_user_by_id(user_id, db)
     return user

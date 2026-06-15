@@ -1,4 +1,4 @@
-from .tasks import TaskCreate, TaskMove, TaskResponse, TaskUpdate
+from .tasks import TaskCreate, TaskMove, TaskResponse, TaskUpdate, PaginatedTaskResponse
 from .users import (
     ChangePassword,
     SuperUserResponse,
@@ -7,18 +7,21 @@ from .users import (
     UserPrivate,
     UserPublic,
     UserUpdate,
+    PaginatedSuperUserResponse
 )
-from .workspaces import WorkspaceCreate, WorkspaceResponse, WorkspaceUpdate
+from .workspaces import WorkspaceCreate, WorkspaceResponse, WorkspaceUpdate, PaginatedWorkspaceResponse
 
 __all__ = [
     "TaskCreate",
     "TaskResponse",
     "TaskUpdate",
+    "PaginatedTaskResponse",
     
     "TaskMove",
     "WorkspaceCreate",
     "WorkspaceResponse",
     "WorkspaceUpdate",
+    "PaginatedWorkspaceResponse",
     "SuperUserResponse",
     "UserCreate",
     "UserPublic",
@@ -27,4 +30,6 @@ __all__ = [
     "UserUpdate",
     "ChangePassword",
     "Token",
+
+    "PaginatedSuperUserResponse"
 ]

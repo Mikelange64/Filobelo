@@ -13,10 +13,10 @@ from app.schemas import (
     UserPublic,
     WorkspaceCreate, 
     WorkspaceResponse, 
-    WorkspaceUpdate
+    WorkspaceUpdate,
 )
 
-router = APIRouter() 
+router = APIRouter(tags=["workspaces"]) 
 
 
 # ========================================================================================

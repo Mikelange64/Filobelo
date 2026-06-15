@@ -1,7 +1,7 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import select, func
 
 from app.database import DbSession
 from app.models import Task, Workspace, WorkspaceMember
@@ -11,11 +11,13 @@ from app.schemas import (
     TaskResponse,
     TaskUpdate,
     WorkspaceResponse,
+    PaginatedTaskResponse
 )
 from app.utility import (
     get_target_membership,
     get_task_by_id,
     get_user_by_id,
+    get_workspace_by_id,
     require_admin,
     require_membership,
 )
@@ -45,22 +47,37 @@ def create_task(
 
 
 @router.get(
-    "/", response_model=list[TaskResponse], dependencies=[Depends(require_membership)]
+    "/", 
+    response_model=PaginatedTaskResponse, 
+    dependencies=[Depends(require_membership), Depends(get_workspace_by_id)]
 )
 def get_tasks(
-    workspace_id: int,
-    db: DbSession,
+    workspace_id: int, 
+    db: DbSession, 
+    skip  : Annotated[int, Query(ge=0)] = 0,
+    limit : Annotated[int, Query(g=1, le=10)] = 10  
 ):
-    workspace = (
-        db.execute(select(Workspace).where(Workspace.id == workspace_id))
-        .scalars()
-        .first()
+    count_result = db.execute(select(func.count()).select_from(Task)).scalar()
+    total = count_result or 0
+    
+    tasks = (
+        db.execute(select(Task)
+        .where(Task.workspace_id == workspace_id)
+        .order_by(Task.date_created.desc())
+        .offset(skip).limit(limit))
+        .scalars().all()
     )
 
-    if not workspace:
-        raise HTTPException(status_code=404, detail="Workspace not found")
+    has_more = skip + len(tasks) < total
+    response = PaginatedTaskResponse(
+        tasks    = [TaskResponse.model_validate(t) for t in tasks],
+        total    = total,
+        skip     = skip,
+        limit    = limit,
+        has_more = has_more
+    )
 
-    return workspace.tasks
+    return response
 
 
 @router.get(
