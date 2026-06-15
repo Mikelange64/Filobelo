@@ -25,7 +25,7 @@ class WorkspaceResponse(WorkspaceBase):
     id             : int
     title          : str
     description    : str
-    max_number     : int
+    max_number     : int | None
     num_of_members : int
     num_of_tasks   : int
     date_created   : datetime

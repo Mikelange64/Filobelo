@@ -1,21 +1,15 @@
-from fastapi import Depends, HTTPException, status
+from fastapi import HTTPException, status
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
 
-from typing import Annotated
-
-from app.models.association import WorkspaceMember
-from app.models.users import User
 from app.models.workspaces import Workspace
+from app.database import DbSession
+from app.models import WorkspaceMember, Task, User
 from app.auth import CurrentUser
-from app.database import get_db
 
 
 def require_admin(
-    workspace_id : int,
-    current_user : CurrentUser,
-    db           : Annotated[Session, Depends(get_db)]
+    workspace_id: int, current_user: CurrentUser, db: DbSession
 ) -> WorkspaceMember:
     query = select(WorkspaceMember).where(
         WorkspaceMember.user_id == current_user.id,
@@ -34,9 +28,7 @@ def require_admin(
 
 
 def require_membership(
-    workspace_id : int,
-    current_user : CurrentUser,
-    db           : Annotated[Session, Depends(get_db)]
+    workspace_id: int, current_user: CurrentUser, db: DbSession
 )-> WorkspaceMember :
     query = select(WorkspaceMember).where(
         WorkspaceMember.user_id == current_user.id,
@@ -54,9 +46,7 @@ def require_membership(
 
 
 def get_target_membership(
-    workspace_id : int,
-    user_id      : int,
-    db           : Annotated[Session, Depends(get_db)]
+    workspace_id: int, user_id: int, db: DbSession
 ) -> WorkspaceMember | None :
     
     is_member = db.execute(
@@ -78,3 +68,43 @@ def require_superuser(current_user : CurrentUser):
         )
 
     return current_user
+
+
+def get_user_by_id(user_id: int,  db: DbSession) -> User:
+    user = (
+        db.execute(select(User).where(User.id == user_id)).scalars().first()
+    )
+
+    if not user :
+        raise HTTPException(
+            status_code = status.HTTP_404_NOT_FOUND, detail = "User not found"
+        )
+    
+    return user
+
+
+def get_task_by_id(task_id: int, db: DbSession) -> Task: 
+    task = (
+        db.execute(select(Task).where(Task.id == task_id)).scalars().first()
+    )
+
+    if not task :
+        raise HTTPException(
+            status_code = status.HTTP_404_NOT_FOUND, detail = "Task not found"
+        )
+
+    return task
+
+
+def get_workspace_by_id(workspace_id: int,  db: DbSession) -> Workspace : 
+    workspace = (
+        db.execute(select(Workspace).where(Workspace.id == workspace_id))
+        .scalars().first()
+    )
+
+    if not workspace :
+        raise HTTPException(
+            status_code = status.HTTP_404_NOT_FOUND, detail = "Workspace not found"
+        )
+
+    return workspace

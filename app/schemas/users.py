@@ -18,13 +18,13 @@ class UserCreate(UserBase):
 class UserPublic(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     
+    id         : int
     username   : str
     image_path : str | None = None
     joined_at  : datetime
 
 
 class UserPrivate(UserPublic):
-    id         : int
     email      : EmailStr
     last_login : datetime | None
     

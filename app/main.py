@@ -5,17 +5,16 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy import select, func
+from sqlalchemy.orm import Session, joinedload
 from starlette.exceptions import HTTPException
 
+from app.auth import CurrentUser
 from app.admin import admin_users
-from app.database import Base, engine, get_db
-from app.models.tasks import Task
-from app.models.users import User
+from app.database import get_db
+from app.models import Task, User, Workspace, WorkspaceMember
 from app.routers import tasks, users, workspaces
 
-Base.metadata.create_all(bind=engine)
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
 
@@ -23,28 +22,27 @@ app.mount("/static", StaticFiles(directory="templates"), name="static")
 app.mount("/media", StaticFiles(directory="templates"), name="static")
 
 app.include_router(users.router, prefix="/api/users", tags=["user"])
-app.include_router(tasks.router, prefix="/api/tasks", tags=["task"])
+app.include_router(tasks.router, prefix="/api/workspaces", tags=["task"])
 app.include_router(workspaces.router, prefix="/api/workspaces", tags=["workspaces"])
 app.include_router(admin_users.router, prefix="/api/admin-users", tags=["admin_users"])
 
 
-@app.get("/{user_id}", include_in_schema=False)
-def home(request: Request, user_id: int, db: Annotated[Session, Depends(get_db)]):
-    result = db.execute(select(User).where(User.id == user_id))
-    user = result.scalars().first()
-
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    result = db.execute(
-        select(Task).where(Task.user_id == user.id, Task.is_completed == False)
+@app.get("", include_in_schema=False)
+def home(request: Request, current_user: CurrentUser, db: Annotated[Session, Depends(get_db)]):
+    pending_workspaces = (
+        db.execute(
+            select(Workspace)
+            .join(WorkspaceMember, WorkspaceMember.workspace_id == Workspace.id)
+            .where(WorkspaceMember.user_id == current_user.id, Workspace.progress == 100)
+        )
+        .scalars()
+        .all()
     )
-    pending_tasks = result.scalars().all()
 
     return templates.TemplateResponse(
         request=request,
         name="pending.html",
-        context={"pending_tasks": pending_tasks, "title": "Home"},
+        context={"pending_workspaces": pending_workspaces, "title": "Home"},
     )
 
 

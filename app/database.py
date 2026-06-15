@@ -1,10 +1,10 @@
+from typing import Annotated
+
+from fastapi import Depends
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, DeclarativeBase
-from dotenv import load_dotenv
+from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from app.config import settings
-
-load_dotenv()
 
 # Default back to sqlite ONLY if the .env variable is missing
 SQLALCHEMY_DATABASE_URL = settings.database_url
@@ -21,3 +21,6 @@ class Base(DeclarativeBase):
 def get_db():
     with SessionLocal() as db:
         yield db
+
+
+DbSession = Annotated[Session, Depends(get_db)]

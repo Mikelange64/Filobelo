@@ -1,23 +1,20 @@
-import jwt
-from datetime import UTC, timedelta, datetime
-
-from argon2 import PasswordHasher
-from fastapi import HTTPException, Depends, status
-from fastapi.security import OAuth2PasswordBearer
-
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
-from pwdlib import PasswordHash
 
+import jwt
+from fastapi import Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordBearer
+from pwdlib import PasswordHash
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.users import User
-from app.database import get_db
 from app.config import settings
-
+from app.database import get_db
+from app.models.users import User
 
 pw_hasher = PasswordHash.recommended()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/users/login")
+
 
 def hash_password(password: str) -> str:
     return pw_hasher.hash(password)
@@ -33,7 +30,9 @@ def create_access_token(data: dict, expired_delta: timedelta | None = None) -> s
     if expired_delta:
         expire = datetime.now(UTC) + expired_delta
     else:
-        expire = datetime.now(UTC) + timedelta(minutes=settings.access_token_expire_minutes)
+        expire = datetime.now(UTC) + timedelta(
+            minutes=settings.access_token_expire_minutes
+        )
 
     to_encode.update({"exp": expire})
     encode_jwt = jwt.encode(
@@ -51,17 +50,17 @@ def verify_access_token(token: str) -> bool | str | None:
             token,
             settings.secret_key.get_secret_value(),
             algorithms=["HS256"],
-            option={"require" : ["exp", "sub"]}
+            options={"require": ["exp", "sub"]},
         )
-    except ValueError:
+    except (jwt.PyJWTError, ValueError):
         return False
     else:
         return payload.get("sub")
 
 
 def get_current_user(
-        token : Annotated[str, Depends(oauth2_scheme)],
-        db    : Annotated[Session, Depends(get_db)]
+    token: Annotated[str, Depends(oauth2_scheme)],
+    db: Annotated[Session, Depends(get_db)],
 ):
     user_id = verify_access_token(token)
 
@@ -90,7 +89,7 @@ def get_current_user(
             detail="Invalid or expired token",
             headers={"WWW-Authenticate": "Bearer"},
         )
-        
+
     return user
 
 

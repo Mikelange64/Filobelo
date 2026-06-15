@@ -4,11 +4,10 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import func, or_, select
-from sqlalchemy.orm import Session
 
 from app.auth import CurrentUser, create_access_token, hash_password, verify_password
 from app.config import settings
-from app.database import get_db
+from app.database import DbSession
 from app.models import User, Workspace, WorkspaceMember
 from app.schemas import (
     ChangePassword,
@@ -19,33 +18,28 @@ from app.schemas import (
     UserUpdate,
     WorkspaceResponse,
 )
-from app.utility import require_membership
+from app.utility import get_user_by_id
 
 router = APIRouter()
 
 
 @router.post("", response_model=UserPrivate, status_code=status.HTTP_201_CREATED)
-def create_user(
-    user: UserCreate, 
-    db: Annotated[Session, Depends(get_db)]
-):
+def create_user(user: UserCreate, db: DbSession):
     email_exists = (
         db.execute(select(User).where(func.lower(User.email) == user.email.lower()))
-        .scalars()
-        .first()
+        .scalars().first()
     )
 
     username_exists = (
         db.execute(select(User).where(func.lower(User.username) == user.username))
-        .scalars()
-        .first()
+        .scalars().first()
     )
 
     if email_exists:
         raise HTTPException(status_code=400, detail="Email already registered")
 
     if username_exists:
-        raise HTTPException(status_code=400, detail="Username already in use")
+        raise HTTPException(status_code=400, detail="Username already registered")
 
     hashed_password = hash_password(user.password)
     new_user = User(
@@ -60,7 +54,7 @@ def create_user(
 
 @router.post("/login", response_model=Token)
 def login(
-    db        : Annotated[Session, Depends(get_db)],
+    db        : DbSession,
     form_data : Annotated[OAuth2PasswordRequestForm, Depends()],
 ):
     # here we use the form data username field to accept either email or username, so the user has a choice
@@ -102,23 +96,9 @@ def get_current_user(user: CurrentUser):
     return user
 
 
-@router.get("/{user_id}", response_model=UserPublic)
-def get_user(
-    user_id: int, db: Annotated[Session, Depends(get_db)]
-):
-    user = db.execute(select(User).where(User.id == user_id)).scalars().first()
-
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
-        )
-
-    return user
-
-
 @router.get("/me/workspaces", response_model=list[WorkspaceResponse])
 def get_user_workspaces(
-    current_user: CurrentUser, db: Annotated[Session, Depends(get_db)]
+    current_user: CurrentUser, db: DbSession
 ):
     workspaces = (
         db.execute(
@@ -138,11 +118,17 @@ def get_user_workspaces(
     return workspaces
 
 
+@router.get("/{user_id}", response_model=UserPublic)
+def get_user(user_id: int, db: DbSession):
+    user = get_user_by_id(user_id, db)
+    return user
+
+
 @router.patch("/me", response_model=UserPrivate)
 def update_user(
     current_user : CurrentUser,
     user_data    : UserUpdate,
-    db           : Annotated[Session, Depends(get_db)],
+    db           : DbSession,
 ):
     # checks if the user updated their username (not blank or some as before) and if the new username is already taken
     if (
@@ -151,14 +137,12 @@ def update_user(
     ):
         existing_username = (
             db.execute(select(User).where(User.username == user_data.username))
-            .scalars()
-            .first()
+            .scalars().first()
         )
-
+    
         if existing_username:
             raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Username already registered",
+                status_code=status.HTTP_409_CONFLICT, detail="Username already registered",
             )
 
     # checks if the user updated their email (not blank or some as before) address and if the new address is already taken
@@ -193,11 +177,12 @@ def update_user(
 def change_password(
     current_user  : CurrentUser,
     password_data : ChangePassword,
-    db            : Annotated[Session, Depends(get_db)],
+    db            : DbSession,
 ):
     if not verify_password(password_data.old_password, current_user.password_hash):
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Incorrect password"
+            status_code=status.HTTP_404_NOT_FOUND, 
+            detail="Incorrect password"
         )
 
     if verify_password(password_data.new_password, current_user.password_hash):
@@ -216,8 +201,17 @@ def change_password(
 
 
 @router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
-def delete_user(
-    current_user: CurrentUser, db: Annotated[Session, Depends(get_db)]
-):
+def delete_user(current_user: CurrentUser, db: DbSession):
     db.delete(current_user)
     db.commit()
+
+
+# @router.post("/{user_id}/picture", response_model = UserPrivate)
+# async def upload_profile_picture(
+#     user_id : int,
+#     file : UploadFile,
+#     current_user: CurrentUser,
+#     db : DbSession
+# ):
+#     # broswer send picture as content-type : "multi-part form data" which fast api handles with UploadFile
+#     if current_user.id != user_id :

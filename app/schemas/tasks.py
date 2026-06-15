@@ -1,5 +1,6 @@
-from pydantic import BaseModel, Field, ConfigDict, EmailStr
 from datetime import datetime
+
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
 class Base(BaseModel):
@@ -7,11 +8,12 @@ class Base(BaseModel):
 
 
 class TaskBase(BaseModel):
-    title        : str = Field(min_length=1, max_length=100)
-    content      : str = Field(min_length=1, max_length=300)
-    workspace_id : int
-    creator_id   : int
-    due_date     : datetime | None = None
+    title: str = Field(min_length=1, max_length=100)
+    content: str = Field(min_length=1, max_length=300)
+    creator_id: int
+    owner_id: int
+    workspace_id: int
+    due_date: datetime | None = None
 
 
 class TaskCreate(TaskBase):
@@ -21,21 +23,20 @@ class TaskCreate(TaskBase):
 class TaskResponse(TaskBase):
     model_config = ConfigDict(from_attributes=True)
 
-    id           : int
-    creator_id   : int
-    workspace_id : int | None
-    date_created : datetime
-    due_date     : datetime | None
-    is_completed : bool
+    id: int
+    is_completed: bool
+    date_created: datetime
+    due_date: datetime | None 
 
 
 class TaskUpdate(TaskBase):
-    title        : str | None = None
-    content      : str | None = Field(default=None, min_length=1, max_length=300)
-    workspace_id : int | None = None
-    due_date     : datetime | None = None
+    title: str | None = None
+    content: str | None = Field(default=None, min_length=1, max_length=300)
+    creator_id: int | None = None
+    owner_id: int | None = None
+    workspace_id: int | None = None
+    due_date: datetime | None = None
 
 
 class TaskMove(BaseModel):
-    workspace_id : int
-    
+    workspace_id: int

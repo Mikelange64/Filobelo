@@ -39,6 +39,11 @@ class Task(Base):
         nullable=False, 
         index=True
     )
+    
+    date_created : Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
+    due_date     : Mapped[datetime|None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     creator: Mapped["User"] = relationship(
         "User", foreign_keys=[creator_id], back_populates="created_tasks"
@@ -49,11 +54,6 @@ class Task(Base):
     workspace: Mapped["Workspace"] = relationship(
         "Workspace", foreign_keys=[workspace_id], back_populates="tasks"
     )
-
-    date_created: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.now(UTC)
-    )
-    due_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
 
     @property
     def _days_remaining(self):
