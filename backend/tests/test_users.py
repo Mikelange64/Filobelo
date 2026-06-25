@@ -19,7 +19,7 @@ def assert_user_private_shape(response, expected_username=None, expected_email=N
     """Assert a 200/201 response body has the UserPrivate shape."""
     data = response.json()
     assert "id" in data
-    assert "image_path" in data or data.get("image_path") is None
+    assert "image_path" in data
     assert "joined_at" in data
     assert "last_login" in data
     assert "password" not in data
@@ -310,20 +310,13 @@ def test_get_user_workspaces_no_auth(client: TestClient):
             id="update_email",
         ),
         pytest.param(
-            {"image_path": "new_profile_pic.jpg"},
-            {"image_path": "new_profile_pic.jpg"},
-            id="update_image_path",
-        ),
-        pytest.param(
             {
                 "username": "brandnew",
                 "email": "brandnew@example.com",
-                "image_path": "brandnew_pic.jpg",
             },
             {
                 "username": "brandnew",
                 "email": "brandnew@example.com",
-                "image_path": "brandnew_pic.jpg",
             },
             id="update_all_fields",
         ),

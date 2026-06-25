@@ -20,7 +20,7 @@ class UserPublic(BaseModel):
     
     id         : int
     username   : str
-    image_path : str | None = None
+    image_path : str
     joined_at  : datetime
 
 
@@ -44,4 +44,3 @@ class PaginatedSuperUserResponse(Base):
 class UserUpdate(UserBase):
     username   : str | None      = Field(default=None, min_length=5, max_length=50)
     email      : EmailStr | None = Field(default=None,  max_length=120)
-    image_path : str | None      = None

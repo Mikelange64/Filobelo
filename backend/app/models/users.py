@@ -16,7 +16,7 @@ class User(Base) :
     email         : Mapped[str] = mapped_column(String(120), unique=True, nullable=False)
     password_hash : Mapped[str] = mapped_column(String(100), nullable=False)
     is_superuser  : Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    image_path    : Mapped[str | None] = mapped_column(String(200), default=None)
+    image_file    : Mapped[str | None] = mapped_column(String(200), default=None)
     last_login    : Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     joined_at     : Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -47,11 +47,10 @@ class User(Base) :
     )
 
     @property
-    def get_image_path(self):
-        if not self.image_path:
-            # return "/static/defaults/default_profile_picture.jpg"
-            return f"https://{settings.s3_bucket_name}.s3.{settings.s3_region}.amazonaws.com/profile_pics/{self.image_path}"
-        return f"/media/profile_pics/{self.image_path}"
+    def image_path(self):
+        if self.image_file:
+            return f"https://{settings.s3_bucket_name}.s3.{settings.s3_region}.amazonaws.com/profile_pics/{self.image_file}"
+        return "/static/defaults/default_profile_picture.jpg"
 
 
 class PasswordResetToken(Base):

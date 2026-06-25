@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, ConfigDict, EmailStr
-from datetime import datetime
+from datetime import datetime, timedelta
 from .users import UserPublic
 from .tasks import TaskResponse
 
@@ -30,6 +30,10 @@ class WorkspaceResponse(WorkspaceBase):
     num_of_tasks   : int
     date_created   : datetime
     due_date       : datetime | None
+    progress       : float
+    time_remaining : timedelta | None
+    is_pinned      : bool
+    is_archived    : bool
 
 
 class PaginatedWorkspaceResponse(Base):
@@ -45,4 +49,5 @@ class WorkspaceUpdate(WorkspaceBase):
     description  : str | None = Field(min_length=1, max_length=500, default=None)
     max_number   : int | None = None
     due_date     : datetime | None = None
-    is_completed : bool | None = None
+    is_pinned    : bool | None = None
+    is_archived  : bool | None = None

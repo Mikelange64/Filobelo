@@ -165,7 +165,7 @@ def update_user(current_user: CurrentUser, user_data: UserUpdate, db: DbSession)
 
 @router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
 def delete_user(current_user: CurrentUser, db: DbSession):
-    old_filename = current_user.image_path
+    old_filename = current_user.image_file
 
     db.delete(current_user)
     db.commit()
@@ -346,8 +346,8 @@ def upload_profile_picture(
             detail="Failed to upload image. Please try again",
         ) from err
 
-    old_filename = current_user.image_path  # store the old filename
-    current_user.image_path = new_filename
+    old_filename = current_user.image_file  # store the old filename
+    current_user.image_file = new_filename
 
     db.commit()
     db.refresh(current_user)
@@ -362,7 +362,7 @@ def upload_profile_picture(
 def delete_profile_picture(
     current_user: CurrentUser, db: DbSession,
 ):
-    old_filename = current_user.image_path
+    old_filename = current_user.image_file
 
     if old_filename is None:
         raise HTTPException(
@@ -370,7 +370,7 @@ def delete_profile_picture(
             detail="No profile picture to delete",
         )
 
-    current_user.image_path = None
+    current_user.image_file = None
     db.commit()
     db.refresh(current_user)
 

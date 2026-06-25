@@ -187,7 +187,7 @@ def test_upload_profile_picture_success(
 
     assert response.status_code == 200
     data = response.json()
-    assert data["image_path"] is not None
+    assert data["image_path"].startswith("https://")
     assert data["image_path"].endswith(".jpeg")
 
     # Verify S3 has the uploaded object
@@ -273,7 +273,7 @@ def test_delete_profile_picture_success(
 
     assert response.status_code == 200
     data = response.json()
-    assert data["image_path"] is None
+    assert data["image_path"] == "/static/defaults/default_profile_picture.jpg"
 
     # S3 object should be gone
     assert count_s3_objects(mocked_s3, "test-bucket") == 0

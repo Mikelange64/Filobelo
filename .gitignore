@@ -12,12 +12,6 @@ uv.lock
 !.env.example
 *.log
 
-# --- PyCharm (JetBrains) ---
-.idea/
-*.iml
-cmake-build-*/
-out/
-
 # --- FastAPI / Testing ---
 .pytest_cache/
 .coverage
