@@ -1,12 +1,16 @@
+from pathlib import Path
+
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
-from starlette.exceptions import HTTPException
+from sqlalchemy import text
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.admin import admin_users
 from app.routers import tasks, users, workspaces
+from app.database import DbSession
 
 app = FastAPI()
 
@@ -18,28 +22,42 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount(
+    "/static",
+    StaticFiles(directory=Path(__file__).parent.parent / "static"),
+    name="static",
+)
 
-app.include_router(users.router, prefix="/api/users", tags=["user"])
-app.include_router(tasks.router, prefix="/api/workspaces", tags=["task"])
-app.include_router(workspaces.router, prefix="/api/workspaces", tags=["workspaces"])
-app.include_router(admin_users.router, prefix="/api/admin-users", tags=["admin_users"])
+app.include_router(users.router, prefix="/api/users")
+app.include_router(tasks.router, prefix="/api/workspaces")
+app.include_router(workspaces.router, prefix="/api/workspaces")
+app.include_router(admin_users.router, prefix="/api/admin-users")
 
 
 # ======================================================================================================================
 # EXCEPTION HANDLER
 # ======================================================================================================================
 
+@app.get("/health")
+def health_check(db: DbSession):
+    try:
+        db.execute(text("SELECT 1"))
+    except Exception as exc:
+        raise HTTPException(
+            status_code = status.HTTP_503_SERVICE_UNAVAILABLE, detail = "Database Unavailable"
+        ) from exc
 
-@app.exception_handler(HTTPException)
-def general_exception_handler(request: Request, exc: HTTPException):
+    return {"status" : "healthy"}
+
+@app.exception_handler(StarletteHTTPException)
+def general_exception_handler(request: Request, exc: StarletteHTTPException):
     message = exc.detail if exc.detail else "An error occurred, please try again"
-    return JSONResponse(status_code=exc.status_code, content={"message": message})
+    return JSONResponse(status_code=exc.status_code, content={"detail": message})
 
 
 @app.exception_handler(RequestValidationError)
 def validation_exception_handler(request: Request, exc: RequestValidationError):
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-        content={"message": exc.errors()},
+        content={"detail": exc.errors()},
     )

@@ -159,13 +159,13 @@ def test_login_success(client: TestClient, create_kwargs, login_username):
         ),
     ],
 )
-def test_login_failure_404(client: TestClient, precreate_kwargs, login_data):
+def test_login_failure_401(client: TestClient, precreate_kwargs, login_data):
     if precreate_kwargs is not None:
         create_test_user(client, **precreate_kwargs)
 
     response = client.post(f"{prefix}/login", data=login_data)
 
-    assert response.status_code == 404
+    assert response.status_code == 401
     assert response.json()["message"] == "Incorrect password or email/username"
 
 

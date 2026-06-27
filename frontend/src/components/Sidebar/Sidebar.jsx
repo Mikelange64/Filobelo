@@ -15,6 +15,7 @@ function Sidebar({
   onSelectWorkspace,
   onTogglePin,
   onArchive,
+  onLeave,
   onDelete,
   onProfileClick,
 }) {
@@ -62,6 +63,7 @@ function Sidebar({
                     onSelect={onSelectWorkspace}
                     onTogglePin={onTogglePin}
                     onArchive={onArchive}
+                    onLeave={onLeave}
                     onDelete={onDelete}
                   />
                 ))}

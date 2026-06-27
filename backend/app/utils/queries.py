@@ -1,6 +1,7 @@
 from fastapi import HTTPException, status
 
 from sqlalchemy import select
+from sqlalchemy.orm import joinedload
 
 from app.models.workspaces import Workspace
 from app.database import DbSession
@@ -33,9 +34,13 @@ def get_task_by_id(task_id: int, db: DbSession) -> Task:
     return task
 
 
-def get_workspace_by_id(workspace_id: int,  db: DbSession) -> Workspace : 
+def get_workspace_by_id(workspace_id: int,  db: DbSession) -> Workspace :
     workspace = (
-        db.execute(select(Workspace).where(Workspace.id == workspace_id))
+        db.execute(
+            select(Workspace)
+            .options(joinedload(Workspace.members), joinedload(Workspace.tasks))
+            .where(Workspace.id == workspace_id)
+        )
         .scalars().first()
     )
 

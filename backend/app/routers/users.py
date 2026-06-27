@@ -17,10 +17,11 @@ from app.auth import (
 )
 from app.config import settings
 from app.database import DbSession
-from app.models import User, Workspace, WorkspaceMember, PasswordResetToken
+from app.models import User, Workspace, WorkspaceMember, PasswordResetToken, RefreshToken
 from app.schemas import (
     ChangePasswordRequest,
     ForgotPasswordRequest,
+    RefreshRequest,
     ResetPasswordRequest,
     Token,
     UserCreate,
@@ -96,21 +97,87 @@ def login(
 
     if not user or not verify_password(form_data.password, user.password_hash):
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
+            status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect password or email/username",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
     access_token = create_access_token(
         data={"sub": str(user.id)},
-        expired_delta=access_token_expires,
+        expired_delta=timedelta(minutes=settings.access_token_expire_minutes),
     )
+
+    # rotate refresh token: delete old ones, issue a fresh one
+    db.execute(sql_delete(RefreshToken).where(RefreshToken.user_id == user.id))
+    raw_refresh = generate_reset_tokens()
+    
+    db.add(RefreshToken(    
+        user_id    = user.id,
+        token_hash = hash_reset_token(raw_refresh),
+        expires_at = datetime.now(UTC) + timedelta(days=settings.refresh_token_expire_days),
+    ))
 
     user.last_login = datetime.now(UTC)
     db.commit()
 
-    return Token(access_token=access_token, token_type="bearer")
+    return Token(access_token=access_token, refresh_token=raw_refresh, token_type="bearer")
+
+
+@router.post("/refresh", response_model=Token)
+def refresh_access_token(body: RefreshRequest, db: DbSession):
+    token_hash = hash_reset_token(body.refresh_token)
+    stored = (
+        db.execute(select(RefreshToken)
+        .where(RefreshToken.token_hash == token_hash))
+        .scalars().first()
+    )
+
+    if not stored or stored.expires_at < datetime.now(UTC):
+        if stored:
+            db.delete(stored)
+            db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired refresh token",
+        )
+
+    user = db.execute(select(User).where(User.id == stored.user_id)).scalars().first()
+    
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired refresh token",
+        )
+
+    access_token = create_access_token(
+        data={"sub": str(user.id)},
+        expired_delta=timedelta(minutes=settings.access_token_expire_minutes),
+    )
+
+    # rotate: delete old refresh token, issue a new one
+    db.delete(stored)
+    raw_refresh = generate_reset_tokens()
+    
+    db.add(RefreshToken(
+        user_id    = user.id,
+        token_hash = hash_reset_token(raw_refresh),
+        expires_at = datetime.now(UTC) + timedelta(days=settings.refresh_token_expire_days),
+    ))
+    db.commit()
+
+    return Token(access_token=access_token, refresh_token=raw_refresh, token_type="bearer")
+
+
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+def logout(body: RefreshRequest, db: DbSession):
+    token_hash = hash_reset_token(body.refresh_token)
+    stored = (
+        db.execute(select(RefreshToken).where(RefreshToken.token_hash == token_hash))
+        .scalars().first()
+    )
+    if stored:
+        db.delete(stored)
+        db.commit()
 
 
 @router.get("/me", response_model=UserPrivate)

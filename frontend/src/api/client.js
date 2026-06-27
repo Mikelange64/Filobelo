@@ -1,0 +1,153 @@
+const BASE_URL = import.meta.env.VITE_API_URL
+
+const STORAGE_KEYS = {
+  access: 'wa_access_token',
+  refresh: 'wa_refresh_token',
+}
+
+export function getTokens() {
+  return {
+    access: localStorage.getItem(STORAGE_KEYS.access),
+    refresh: localStorage.getItem(STORAGE_KEYS.refresh),
+  }
+}
+
+export function setTokens(access, refresh) {
+  localStorage.setItem(STORAGE_KEYS.access, access)
+  localStorage.setItem(STORAGE_KEYS.refresh, refresh)
+}
+
+export function clearTokens() {
+  localStorage.removeItem(STORAGE_KEYS.access)
+  localStorage.removeItem(STORAGE_KEYS.refresh)
+}
+
+async function attemptRefresh() {
+  const { refresh } = getTokens()
+  if (!refresh) throw new Error('No refresh token')
+
+  const res = await fetch(`${BASE_URL}/users/refresh`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ refresh_token: refresh }),
+  })
+
+  if (!res.ok) {
+    clearTokens()
+    throw new Error('Refresh failed')
+  }
+
+  const data = await res.json()
+  setTokens(data.access_token, data.refresh_token)
+  return data.access_token
+}
+
+// Authenticated fetch — adds Bearer header, retries once after a 401 via refresh.
+// On a second 401 or refresh failure, clears tokens and redirects to /login.
+export async function authFetch(path, options = {}) {
+  const { access } = getTokens()
+
+    const makeHeaders = (token) => ({
+    'Content-Type': 'application/json',
+    ...(token && { Authorization: `Bearer ${token}` }),
+    ...options.headers,
+    })
+
+  let res = await fetch(`${BASE_URL}${path}`, { ...options, headers: makeHeaders(access) })
+
+  if (res.status === 401) {
+    try {
+      const newToken = await attemptRefresh()
+      res = await fetch(`${BASE_URL}${path}`, { ...options, headers: makeHeaders(newToken) })
+    } catch {
+      clearTokens()
+      window.location.href = '/login'
+      throw new ApiError(401, 'Session expired')
+    }
+  }
+
+  return parseResponse(res)
+}
+
+async function parseResponse(res) {
+  if (res.status === 204) return null
+  if (res.ok) return res.json()
+
+  let detail = 'Request failed'
+  try {
+    const body = await res.json()
+    detail = body.detail ?? detail
+  } catch { /* non-JSON error body */ }
+  throw new ApiError(res.status, detail)
+}
+
+export class ApiError extends Error {
+  constructor(status, detail) {
+    super(detail)
+    this.status = status
+    this.detail = detail
+  }
+}
+
+// Login uses OAuth2PasswordRequestForm — must send application/x-www-form-urlencoded.
+// The `username` field accepts either email or username (see backend router).
+export async function loginRequest(emailOrUsername, password) {
+  const body = new URLSearchParams({ username: emailOrUsername, password })
+  const res = await fetch(`${BASE_URL}/users/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body,
+  })
+  const data = await parseResponse(res)
+  setTokens(data.access_token, data.refresh_token)
+  return data
+}
+
+// Register — JSON body.
+export async function registerRequest(username, email, password) {
+  const res = await fetch(`${BASE_URL}/users`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, email, password }),
+  })
+  return parseResponse(res)
+}
+
+// Logout — deletes server-side refresh token.
+export function logoutRequest(refreshToken) {
+  return authFetch('/users/logout', {
+    method: 'POST',
+    body: JSON.stringify({ refresh_token: refreshToken }),
+  })
+}
+
+// Workspace mutations
+export function createWorkspace(data) {
+  return authFetch('/workspaces', { method: 'POST', body: JSON.stringify(data) })
+}
+
+export function patchWorkspace(id, data) {
+  return authFetch(`/workspaces/${id}`, { method: 'PATCH', body: JSON.stringify(data) })
+}
+
+export function deleteWorkspace(id) {
+  return authFetch(`/workspaces/${id}/`, { method: 'DELETE' })
+}
+
+export function leaveWorkspace(id) {
+  return authFetch(`/workspaces/${id}/members/me`, { method: 'DELETE' })
+}
+
+// Avatar upload — multipart, so Content-Type must NOT be set manually
+// (the browser sets it with the correct boundary).
+export async function uploadAvatarRequest(file) {
+  const { access } = getTokens()
+  const form = new FormData()
+  form.append('file', file)
+  const res = await fetch(`${BASE_URL}/users/me/picture`, {
+    method: 'PATCH',
+    headers: { Authorization: `Bearer ${access}` },
+    body: form,
+  })
+  return parseResponse(res)
+}

@@ -107,7 +107,7 @@ def test_reset_password_success(client: TestClient, db_session):
         f"{prefix}/login",
         data={"username": "test@example.com", "password": "testpassword123"},
     )
-    assert login_fails.status_code == 404
+    assert login_fails.status_code == 401
 
     # Login with new password works
     login_ok = client.post(

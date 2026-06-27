@@ -24,6 +24,11 @@ htmlcov/
 Thumbs.db
 
 
+# --- Seed data ---
+# Keep the folder tracked but ignore any images dropped into it
+backend/populate_images/*
+!backend/populate_images/.gitkeep
+
 # --- Personal Notes ---
 SETUP.md
 .future.txt

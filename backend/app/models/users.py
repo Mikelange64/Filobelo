@@ -45,6 +45,10 @@ class User(Base) :
         back_populates="user",
         cascade="all, delete-orphan"
     )
+    refresh_tokens : Mapped[list["RefreshToken"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan"
+    )
 
     @property
     def image_path(self):
@@ -70,3 +74,17 @@ class PasswordResetToken(Base):
     )
 
     user: Mapped["User"] = relationship(back_populates="reset_tokens")
+
+
+class RefreshToken(Base):
+    __tablename__ = "refresh_tokens"
+
+    id         : Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id    : Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    token_hash : Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    expires_at : Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at : Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
+
+    user: Mapped["User"] = relationship(back_populates="refresh_tokens")

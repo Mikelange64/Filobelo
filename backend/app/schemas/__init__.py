@@ -1,10 +1,11 @@
 from .auth import (
     ChangePasswordRequest,
     ForgotPasswordRequest,
+    RefreshRequest,
     ResetPasswordRequest,
     Token,
 )
-from .tasks import PaginatedTaskResponse, TaskCreate, TaskMove, TaskResponse, TaskUpdate
+from .tasks import PaginatedTaskResponse, TaskCreate, TaskMove, TaskResponse, TaskSummary, TaskUpdate
 from .users import (
     PaginatedSuperUserResponse,
     SuperUserResponse,
@@ -25,6 +26,7 @@ __all__ = [
     "TaskCreate",
     "TaskMove",
     "TaskResponse",
+    "TaskSummary",
     "PaginatedTaskResponse",
     "TaskUpdate",
     
@@ -45,6 +47,7 @@ __all__ = [
     
     # AUTH
     "ForgotPasswordRequest",
+    "RefreshRequest",
     "ResetPasswordRequest",
     "ChangePasswordRequest",
 ]

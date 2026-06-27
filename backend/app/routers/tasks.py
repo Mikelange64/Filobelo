@@ -169,7 +169,7 @@ def complete_task(
 ):
     task = get_task_by_id(task_id, db)
 
-    if task.owner_id == current_user.user_id:
+    if task.owner_id != current_user.user_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="User is not the owner of this task",

@@ -24,7 +24,7 @@ function WorkspaceGrid({ workspaces, membersByWorkspaceId, onSelectWorkspace, on
           <WorkspaceCard
             key={ws.id}
             workspace={ws}
-            members={membersByWorkspaceId?.[ws.id]}
+            members={ws.members ?? membersByWorkspaceId?.[ws.id]}
             onSelect={onSelectWorkspace}
           />
         ))}

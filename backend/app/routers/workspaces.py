@@ -12,9 +12,10 @@ from app.utils import get_workspace_by_id
 from app.models import Workspace, WorkspaceMember
 from app.schemas import (
     UserPublic,
-    WorkspaceCreate, 
-    WorkspaceResponse, 
+    WorkspaceCreate,
+    WorkspaceResponse,
     WorkspaceUpdate,
+    PaginatedWorkspaceResponse,
 )
 
 router = APIRouter(tags=["workspaces"]) 
@@ -25,11 +26,62 @@ router = APIRouter(tags=["workspaces"])
 # ========================================================================================
 
 
+@router.get("", response_model=PaginatedWorkspaceResponse)
+def get_my_workspaces(
+    current_user : CurrentUser,
+    db           : DbSession,
+    skip         : int = 0,
+    limit        : int = 20,
+):
+    base = (
+        select(Workspace)
+        .join(WorkspaceMember, WorkspaceMember.workspace_id == Workspace.id)
+        .where(WorkspaceMember.user_id == current_user.id)
+    )
+
+    total = db.execute(select(func.count()).select_from(base.subquery())).scalar() or 0
+
+    workspaces = (
+        db.execute(
+            base
+            .options(joinedload(Workspace.members), joinedload(Workspace.tasks))
+            .offset(skip)
+            .limit(limit)
+        )
+        .scalars().unique().all()
+    )
+
+    workspace_ids = [ws.id for ws in workspaces]
+    role_map = {
+            ws_id: role
+            for ws_id, role in db.execute(
+                select(
+                    WorkspaceMember.workspace_id,
+                    WorkspaceMember.role,
+                ).where(
+                    WorkspaceMember.workspace_id.in_(workspace_ids),
+                    WorkspaceMember.user_id == current_user.id,
+                )
+            ).all()
+        }
+    
+    return PaginatedWorkspaceResponse(
+        workspaces=[
+            WorkspaceResponse.model_validate(ws).model_copy(
+                update={"current_user_role": role_map.get(ws.id)}
+            )
+            for ws in workspaces
+        ],
+        total=total,
+        skip=skip,
+        limit=limit,
+        has_more=skip + limit < total,
+    )
+
+
 @router.post("", response_model=WorkspaceResponse, status_code=status.HTTP_201_CREATED)
 def create_workspace(
-    current_user : CurrentUser,
-    workspace    : WorkspaceCreate,
-    db           : DbSession,
+    current_user: CurrentUser, workspace: WorkspaceCreate, db: DbSession,
 ):
     new_workspace = Workspace(
         creator_id=current_user.id,
@@ -51,7 +103,11 @@ def create_workspace(
     db.commit()
     db.refresh(new_workspace)
 
-    return new_workspace
+    workspace_response = WorkspaceResponse.model_validate(new_workspace)
+    
+    return workspace_response.model_copy(
+        update={"current_user_role": "admin"}
+    )
 
 
 @router.get("/{workspace_id}", response_model=WorkspaceResponse)
@@ -75,9 +131,7 @@ def get_workspace(workspace_id: int, db: DbSession):
     "/{workspace_id}", response_model=WorkspaceResponse, dependencies=[Depends(require_membership)]
 )
 def update_workspace_partial(
-    workspace_id   : int,
-    workspace_data : WorkspaceUpdate,
-    db             : DbSession,
+    workspace_id: int, workspace_data: WorkspaceUpdate, db: DbSession,
 ) -> Workspace | None:
     workspace = get_workspace_by_id(workspace_id, db)
     
@@ -94,9 +148,7 @@ def update_workspace_partial(
     "/{workspace_id}/", response_model=WorkspaceResponse, dependencies=[Depends(require_membership)]
 )
 def update_workspace_full(
-    workspace_id   : int,
-    workspace_data : WorkspaceCreate,
-    db             : DbSession,
+    workspace_id: int, workspace_data: WorkspaceCreate, db: DbSession,
 ) -> Workspace | None:
     workspace = get_workspace_by_id(workspace_id, db)
     
@@ -112,10 +164,7 @@ def update_workspace_full(
 @router.delete(
     "/{workspace_id}/", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_admin)]
 )
-def delete_workspace(
-    workspace_id : int,
-    db           : DbSession,
-) -> None :
+def delete_workspace(workspace_id: int, db: DbSession,) -> None :
     workspace = get_workspace_by_id(workspace_id, db)
     db.delete(workspace)
     db.commit()
@@ -129,21 +178,17 @@ def delete_workspace(
 @router.get(
     "/{workspace_id}/members", response_model=list[UserPublic], dependencies=[Depends(require_membership)]
 )
-def get_members(
-    workspace_id : int,
-    db           : DbSession,
-):
+def get_members(workspace_id: int, db: DbSession):
     workspace = get_workspace_by_id(workspace_id, db)
     return workspace.members
 
 
-@router.patch("/{workspace_id}/members/{user_id}", response_model=WorkspaceResponse)
-def add_user(
-    user_id      : int,
-    workspace_id : int,
-    db           : DbSession,
-    current_user : Annotated[WorkspaceMember, Depends(require_admin)],
-):
+@router.patch(
+    "/{workspace_id}/members/{user_id}", 
+    response_model=WorkspaceResponse,
+    dependencies=[Depends(require_admin)]
+)
+def add_user(workspace_id: int, user_id: int, db: DbSession):
     is_member = get_target_membership(workspace_id, user_id, db)
 
     if is_member:
@@ -159,13 +204,12 @@ def add_user(
     return workspace
 
 
-@router.patch("/{workspace_id}/members/{user_id}/admin", response_model=WorkspaceResponse)
-def make_admin(
-    workspace_id : int,
-    user_id      : int,
-    db           : DbSession,
-    current_user : Annotated[WorkspaceMember, Depends(require_admin)],
-):
+@router.patch(
+    "/{workspace_id}/members/{user_id}/admin", 
+    response_model=WorkspaceResponse,
+    dependencies=[Depends(require_admin)]
+)
+def make_admin(workspace_id: int, user_id: int, db: DbSession):
     member = get_target_membership(workspace_id, user_id, db)
 
     if not member:
@@ -223,13 +267,12 @@ def leave_workspace(
         db.commit()
         
         
-@router.delete("/{workspace_id}/members/{user_id}", response_model=WorkspaceResponse)
-def remove_user(
-    workspace_id : int,
-    user_id      : int,
-    db           : DbSession,
-    current_user : Annotated[WorkspaceMember, Depends(require_admin)],
-):
+@router.delete(
+    "/{workspace_id}/members/{user_id}", 
+    response_model=WorkspaceResponse,
+    dependencies=[Depends(require_admin)]
+)
+def remove_user(workspace_id : int, user_id: int, db: DbSession):
     member = get_target_membership(workspace_id, user_id, db)
 
     if not member:

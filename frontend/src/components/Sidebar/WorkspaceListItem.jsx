@@ -1,6 +1,6 @@
 import useDismissableMenu from '../../hooks/useDismissableMenu'
 import StatusDot from '../shared/StatusDot'
-import { getWorkspaceStatus, isWorkspaceLate } from '../../utils/workspaceStatus'
+import { getWorkspaceUrgency } from '../../utils/workspaceStatus'
 import './WorkspaceListItem.css'
 
 function WorkspaceListItem({
@@ -8,12 +8,12 @@ function WorkspaceListItem({
   onSelect,
   onTogglePin,
   onArchive,
+  onLeave,
   onDelete,
 }) {
   const [menuOpen, setMenuOpen, menuRef] = useDismissableMenu()
-  const status = getWorkspaceStatus(workspace)
-  const late = isWorkspaceLate(workspace)
-  const canDelete = workspace.currentUserRole === 'admin'
+  const urgency = getWorkspaceUrgency(workspace)
+  const isAdmin = workspace.currentUserRole === 'admin'
 
   function handleMenuAction(action) {
     setMenuOpen(false)
@@ -27,7 +27,7 @@ function WorkspaceListItem({
         className="workspace-item__select"
         onClick={() => onSelect?.(workspace.id)}
       >
-        <StatusDot status={status} late={late} />
+        <StatusDot urgency={urgency} />
         <span className="workspace-item__title">{workspace.title}</span>
       </button>
 
@@ -65,7 +65,17 @@ function WorkspaceListItem({
                 Archive
               </button>
             </li>
-            {canDelete && (
+            <li role="none">
+              <button
+                type="button"
+                role="menuitem"
+                className="workspace-item__menu-item workspace-item__menu-item--danger"
+                onClick={() => handleMenuAction(onLeave)}
+              >
+                Leave
+              </button>
+            </li>
+            {isAdmin && (
               <li role="none">
                 <button
                   type="button"

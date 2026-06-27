@@ -1,44 +1,56 @@
 import StatusDot from '../shared/StatusDot'
-import { formatDueDate } from '../../utils/date'
+import { getDaysRemaining, formatDueDate } from '../../utils/date'
 import './ComingUpSection.css'
 
 function byDueDate(a, b) {
-  return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()
+  if (!a.dueDate && !b.dueDate) return 0
+  if (!a.dueDate) return 1
+  if (!b.dueDate) return -1
+  return new Date(a.dueDate) - new Date(b.dueDate)
 }
 
-function ComingUpSection({ tasks = [], onSelectTask }) {
-  if (tasks.length === 0) return null
+function getTaskUrgency(dueDate) {
+  if (!dueDate) return 'neutral'
+  const days = getDaysRemaining(dueDate)
+  if (days < 0) return 'error'
+  if (days <= 3) return 'warning'
+  return 'success'
+}
+
+function ComingUpSection({ tasks = [], hasActiveWorkspaces = false, onSelectTask }) {
+  if (!hasActiveWorkspaces) return null
 
   const sorted = [...tasks].sort(byDueDate)
 
   return (
-    <section className="coming-up" aria-label="Coming up">
-      <h2 className="coming-up__heading">Coming up</h2>
-      <ul className="coming-up__list">
-        {sorted.map((task) => {
-          const overdue = new Date(task.dueDate).getTime() < Date.now()
-          return (
-            <li key={task.id}>
-              <button
-                type="button"
-                className="coming-up__item"
-                onClick={() => onSelectTask?.(task.id)}
-              >
-                <StatusDot status={task.workspaceStatus} late={overdue} />
-                <span className="coming-up__title">{task.title}</span>
-                <span className="coming-up__workspace">
-                  {task.workspaceTitle}
-                </span>
-                <span
-                  className={`coming-up__due${overdue ? ' coming-up__due--late' : ''}`}
+    <section className="coming-up" aria-label="Upcoming tasks">
+      <h2 className="coming-up__heading">Upcoming tasks</h2>
+
+      {sorted.length === 0 ? (
+        <p className="coming-up__empty">No tasks yet — add tasks inside a workspace to see them here.</p>
+      ) : (
+        <ul className="coming-up__list">
+          {sorted.map((task) => {
+            const urgency = getTaskUrgency(task.dueDate)
+            return (
+              <li key={task.id}>
+                <button
+                  type="button"
+                  className="coming-up__item"
+                  onClick={() => onSelectTask?.(task.id)}
                 >
-                  {formatDueDate(task.dueDate)}
-                </span>
-              </button>
-            </li>
-          )
-        })}
-      </ul>
+                  <StatusDot urgency={urgency} />
+                  <span className="coming-up__title">{task.title}</span>
+                  <span className="coming-up__workspace">{task.workspaceTitle}</span>
+                  <span className={`coming-up__due coming-up__due--${urgency}`}>
+                    {formatDueDate(task.dueDate)}
+                  </span>
+                </button>
+              </li>
+            )
+          })}
+        </ul>
+      )}
     </section>
   )
 }

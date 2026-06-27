@@ -65,4 +65,4 @@ class Workspace(Base):
         if self.due_date is None:
             return None
 
-        return self.due_date - datetime.now()
+        return self.due_date - datetime.now(UTC)

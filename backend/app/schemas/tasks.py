@@ -48,3 +48,12 @@ class TaskUpdate(TaskBase):
 
 class TaskMove(BaseModel):
     workspace_id: int
+
+
+class TaskSummary(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id           : int
+    title        : str
+    due_date     : datetime | None
+    is_completed : bool

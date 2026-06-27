@@ -30,7 +30,10 @@ class Settings(BaseSettings):
     max_upload_size_bytes: int = 5 * 1024 * 1024
 
     # PASSWORD RESET TOKENS
-    reset_token_expire_minutes : int = 60
+    reset_token_expire_minutes  : int = 60
+
+    # REFRESH TOKENS
+    refresh_token_expire_days : int = 7
 
     # MAIL SERVICE (SANDBOX FOR DEVELOPMENT)
     mail_host     : str = "localhost"               

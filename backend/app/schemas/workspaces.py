@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field, ConfigDict, EmailStr
 from datetime import datetime, timedelta
 from .users import UserPublic
-from .tasks import TaskResponse
+from .tasks import TaskSummary
 
 
 class Base(BaseModel):
@@ -22,18 +22,21 @@ class WorkspaceCreate(WorkspaceBase):
 class WorkspaceResponse(WorkspaceBase):
     model_config = ConfigDict(from_attributes=True)
 
-    id             : int
-    title          : str
-    description    : str
-    max_number     : int | None
-    num_of_members : int
-    num_of_tasks   : int
-    date_created   : datetime
-    due_date       : datetime | None
-    progress       : float
-    time_remaining : timedelta | None
-    is_pinned      : bool
-    is_archived    : bool
+    id                : int
+    title             : str
+    description       : str
+    max_number        : int | None
+    num_of_members    : int
+    num_of_tasks      : int
+    date_created      : datetime
+    due_date          : datetime | None
+    progress          : float
+    time_remaining    : timedelta | None
+    is_pinned         : bool
+    is_archived       : bool
+    members           : list[UserPublic]
+    tasks             : list[TaskSummary]
+    current_user_role : str | None = None
 
 
 class PaginatedWorkspaceResponse(Base):

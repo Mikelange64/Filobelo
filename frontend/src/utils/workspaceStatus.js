@@ -1,3 +1,5 @@
+import { getDaysRemaining } from './date'
+
 export const WORKSPACE_STATUS = {
   NOT_STARTED: 'not-started',
   IN_PROGRESS: 'in-progress',
@@ -25,6 +27,17 @@ export function getActiveWorkspaces(workspaces) {
   return workspaces.filter(
     (ws) => !ws.isArchived && getWorkspaceStatus(ws) !== WORKSPACE_STATUS.COMPLETE,
   )
+}
+
+/** Single urgency level for a workspace — drives status dot and card accent.
+ *  error = overdue, warning = due ≤3d, success = in-progress/complete, neutral = not started / no deadline */
+export function getWorkspaceUrgency(workspace) {
+  if (isWorkspaceLate(workspace)) return 'error'
+  const days = getDaysRemaining(workspace.dueDate)
+  if (days !== null && days <= 3) return 'warning'
+  const status = getWorkspaceStatus(workspace)
+  if (status === WORKSPACE_STATUS.IN_PROGRESS || status === WORKSPACE_STATUS.COMPLETE) return 'success'
+  return 'neutral'
 }
 
 /** Overdue first, then soonest due date, no-deadline workspaces last. */

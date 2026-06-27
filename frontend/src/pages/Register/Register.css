@@ -1,0 +1,55 @@
+.reg-avatar__input {
+  display: none;
+}
+
+.auth-form__group--avatar {
+  align-items: center;
+}
+
+.reg-avatar__trigger {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+
+.reg-avatar__placeholder {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: var(--color-neutral-bg);
+  border: 2px dashed var(--color-border-strong);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-muted);
+  transition: background-color 0.15s, border-color 0.15s;
+}
+
+.reg-avatar__trigger:hover .reg-avatar__placeholder {
+  background: var(--color-bg-canvas-hover);
+  border-color: var(--color-brand-primary);
+  color: var(--color-brand-primary);
+}
+
+.reg-avatar__preview {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--color-brand-primary);
+}
+
+.reg-avatar__label {
+  font-size: 0.8125rem;
+  color: var(--color-brand-primary);
+  font-weight: 600;
+}
+
+.reg-avatar__trigger:hover .reg-avatar__label {
+  text-decoration: underline;
+}

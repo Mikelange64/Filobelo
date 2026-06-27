@@ -20,7 +20,11 @@ function HomeCanvas({
         onNewWorkspace={onNewWorkspace}
         mascotSlot={mascotSlot}
       />
-      <ComingUpSection tasks={comingUpTasks} onSelectTask={onSelectTask} />
+      <ComingUpSection
+        tasks={comingUpTasks}
+        hasActiveWorkspaces={workspaces.length > 0}
+        onSelectTask={onSelectTask}
+      />
     </div>
   )
 }

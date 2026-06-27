@@ -10,7 +10,7 @@ from app.dependencies import require_superuser
 from app.utils import get_user_by_id
 
 
-router = APIRouter()
+router = APIRouter(tags=["admin_users"])
 
 
 @router.get(
