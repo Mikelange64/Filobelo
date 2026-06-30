@@ -1,20 +1,26 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import select, func
+from sqlalchemy.orm import joinedload
 
 from app.database import DbSession
-from app.models import Task, WorkspaceMember
+from app.models import Task, Workspace, WorkspaceMember
 from app.schemas import (
+    PaginatedTaskResponse,
     TaskCreate,
+    TaskFullUpdate,
+    TaskMove,
     TaskResponse,
     TaskUpdate,
+    WorkspaceResponse,
 )
 from app.dependencies import (
     get_target_membership,
     require_admin,
     require_membership,
 )
-from app.utils import get_task_by_id
+from app.utils import get_task_by_id, get_workspace_by_id
 
 
 router = APIRouter(prefix="/{workspace_id}/tasks", tags=["tasks"])
@@ -40,6 +46,26 @@ def create_task(
     db.commit()
     db.refresh(new_task)
     return new_task
+
+
+@router.get("/", response_model=PaginatedTaskResponse, dependencies=[Depends(require_membership)])
+def list_tasks(
+    workspace_id: int,
+    db: DbSession,
+    skip: int = 0,
+    limit: int = 50,
+):
+    base = select(Task).where(Task.workspace_id == workspace_id)
+    total = db.execute(select(func.count()).select_from(base.subquery())).scalar() or 0
+    tasks = db.execute(base.offset(skip).limit(limit)).scalars().all()
+
+    return PaginatedTaskResponse(
+        tasks=tasks,
+        total=total,
+        skip=skip,
+        limit=limit,
+        has_more=skip + limit < total,
+    )
 
 
 @router.get(
@@ -78,6 +104,30 @@ def update_task_partial(
     return task
 
 
+@router.put("/{task_id}", response_model=TaskResponse)
+def update_task_full(
+    task_id: int,
+    workspace_id: int,
+    task_data: TaskFullUpdate,
+    db: DbSession,
+    member: Annotated[WorkspaceMember, Depends(require_membership)],
+):
+    task = get_task_by_id(task_id, db)
+    if task.owner_id != member.user_id and member.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authorized to fully update this task",
+        )
+
+    task.title = task_data.title
+    task.content = task_data.content
+    task.due_date = task_data.due_date
+
+    db.commit()
+    db.refresh(task)
+    return task
+
+
 @router.delete(
     "/{task_id}",
     status_code=status.HTTP_204_NO_CONTENT,
@@ -101,10 +151,10 @@ def complete_task(
     member: Annotated[WorkspaceMember, Depends(require_membership)],
 ):
     task = get_task_by_id(task_id, db)
-    if task.owner_id != member.user_id:
+    if task.owner_id != member.user_id and member.role != "admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only the task owner can mark it complete",
+            detail="Only the task owner or an admin can mark it complete",
         )
     task.is_completed = not task.is_completed
     db.commit()
@@ -133,7 +183,7 @@ def reassign_task(
     target = get_target_membership(workspace_id, user_id, db)
     if not target:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
+            status_code=status.HTTP_403_FORBIDDEN,
             detail="User is not a member of this workspace",
         )
 
@@ -141,3 +191,21 @@ def reassign_task(
     db.commit()
     db.refresh(task)
     return task
+
+
+@router.patch(
+    "/{task_id}/move",
+    response_model=WorkspaceResponse,
+    dependencies=[Depends(require_admin)],
+)
+def move_task(
+    task_id: int,
+    workspace_id: int,
+    data: TaskMove,
+    db: DbSession,
+):
+    task = get_task_by_id(task_id, db)
+    task.workspace_id = data.workspace_id
+    db.commit()
+
+    return get_workspace_by_id(data.workspace_id, db)

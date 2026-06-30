@@ -50,8 +50,6 @@ export function AuthProvider({ children }) {
 
   async function register(username, email, password) {
     await registerRequest(username, email, password)
-    // auto-login after successful registration
-    await login(username, password)
   }
 
   async function refreshUser() {

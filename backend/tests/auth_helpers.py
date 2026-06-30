@@ -82,6 +82,21 @@ def auth_header(token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
+def create_folder(
+    client: TestClient,
+    token: str,
+    name: str = "Test Folder",
+    color: str = "#3B82F6",
+) -> dict:
+    response = client.post(
+        "/api/folders",
+        json={"name": name, "color": color},
+        headers=auth_header(token),
+    )
+    assert response.status_code == 201, f"Failed to create folder: {response.text}"
+    return response.json()
+
+
 def create_task(
     client: TestClient,
     token: str,

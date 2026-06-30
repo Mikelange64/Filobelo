@@ -4,6 +4,8 @@ import Topbar from './components/Topbar/Topbar'
 import Sidebar from './components/Sidebar/Sidebar'
 import NewWorkspaceModal from './components/Home/NewWorkspaceModal'
 import ProfileModal from './components/Profile/ProfileModal'
+import CalendarModal from './components/Calendar/CalendarModal'
+import Toast from './components/shared/Toast'
 import { useAuth } from './context/AuthContext'
 import {
   authFetch,
@@ -11,6 +13,10 @@ import {
   patchWorkspace,
   deleteWorkspace,
   leaveWorkspace,
+  getFolders,
+  createFolder,
+  updateFolder,
+  deleteFolder,
 } from './api/client'
 import './App.css'
 
@@ -32,6 +38,7 @@ function normalizeWorkspace(ws) {
     dateCreated: ws.date_created,
     maxNumber: ws.max_number,
     currentUserRole: ws.current_user_role ?? null,
+    folderId: ws.folder_id ?? null,
     members: ws.members?.map((m) => ({
       id: m.id,
       name: m.username,
@@ -50,20 +57,32 @@ function AppShell() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const [workspaces, setWorkspaces] = useState([])
+  const [folders, setFolders] = useState([])
   const [searchValue, setSearchValue] = useState('')
   const [showNewModal, setShowNewModal] = useState(false)
   const [showProfileModal, setShowProfileModal] = useState(false)
+  const [showCalendar, setShowCalendar] = useState(false)
+  const [calendarPrefillDate, setCalendarPrefillDate] = useState(null)
+  const [toast, setToast] = useState(null)
+
+  function showComingSoon() {
+    setToast('Currently unavailable — coming soon')
+  }
 
   useEffect(() => {
-    async function loadWorkspaces() {
+    async function loadData() {
       try {
-        const data = await authFetch('/workspaces')
-        setWorkspaces(data.workspaces.map(normalizeWorkspace))
+        const [wsData, folderData] = await Promise.all([
+          authFetch('/workspaces'),
+          getFolders(),
+        ])
+        setWorkspaces(wsData.workspaces.map(normalizeWorkspace))
+        setFolders(folderData)
       } catch (err) {
         console.error(err)
       }
     }
-    loadWorkspaces()
+    loadData()
   }, [])
 
   const currentUser = {
@@ -134,7 +153,7 @@ function AppShell() {
       await deleteWorkspace(id)
     } catch (err) {
       setWorkspaces((prev) => [ws, ...prev])
-      alert(err.detail ?? 'Could not delete workspace') // TODO: replace with toast
+      setToast(err.message ?? 'Could not delete workspace')
     }
   }
 
@@ -146,7 +165,39 @@ function AppShell() {
       await leaveWorkspace(id)
     } catch (err) {
       setWorkspaces((prev) => [ws, ...prev])
-      alert(err.detail ?? 'Could not leave workspace') // TODO: replace with toast
+      setToast(err.message ?? 'Could not leave workspace')
+    }
+  }
+
+  async function handleMoveToFolder(workspaceId, folderId) {
+    const ws = workspaces.find((w) => w.id === workspaceId)
+    if (!ws) return
+    setWorkspaces((prev) => prev.map((w) => w.id === workspaceId ? { ...w, folderId } : w))
+    try {
+      await patchWorkspace(workspaceId, { folder_id: folderId })
+    } catch {
+      setWorkspaces((prev) => prev.map((w) => w.id === workspaceId ? { ...w, folderId: ws.folderId } : w))
+    }
+  }
+
+  async function handleCreateFolder(name, color) {
+    const folder = await createFolder(name, color)
+    setFolders((prev) => [...prev, folder])
+  }
+
+  async function handleUpdateFolder(id, data) {
+    const updated = await updateFolder(id, data)
+    setFolders((prev) => prev.map((f) => (f.id === id ? updated : f)))
+  }
+
+  async function handleDeleteFolder(id) {
+    const folder = folders.find((f) => f.id === id)
+    setFolders((prev) => prev.filter((f) => f.id !== id))
+    setWorkspaces((prev) => prev.map((w) => w.folderId === id ? { ...w, folderId: null } : w))
+    try {
+      await deleteFolder(id)
+    } catch {
+      setFolders((prev) => [...prev, folder])
     }
   }
 
@@ -154,6 +205,7 @@ function AppShell() {
     const ws = await createWorkspace(data)
     setWorkspaces((prev) => [normalizeWorkspace(ws), ...prev])
     setShowNewModal(false)
+    setCalendarPrefillDate(null)
   }
 
   const outletCtx = {
@@ -166,21 +218,26 @@ function AppShell() {
     onArchive: handleArchive,
     onDelete: handleDelete,
     onLeave: handleLeave,
+    onComingSoon: showComingSoon,
   }
 
   return (
     <div className="app-shell">
       <Sidebar
         workspaces={activeWorkspaces}
+        folders={folders}
         currentUser={currentUser}
         onNewWorkspace={() => setShowNewModal(true)}
-        onOpenInbox={() => console.log('open inbox')}
-        onOpenKanbanOverview={() => console.log('open kanban overview')}
+        onOpenInbox={showComingSoon}
         onSelectWorkspace={handleSelectWorkspace}
         onTogglePin={handleTogglePin}
         onArchive={handleArchive}
         onLeave={handleLeave}
         onDelete={handleDelete}
+        onCreateFolder={handleCreateFolder}
+        onUpdateFolder={handleUpdateFolder}
+        onDeleteFolder={handleDeleteFolder}
+        onMoveToFolder={handleMoveToFolder}
         onProfileClick={() => setShowProfileModal(true)}
       />
 
@@ -189,13 +246,13 @@ function AppShell() {
           onLogoClick={() => navigate('/')}
           searchValue={searchValue}
           onSearchChange={setSearchValue}
-          onSearchSubmit={(value) => console.log('search submit:', value)}
+          onSearchSubmit={() => {}}
           searchSuggestions={searchSuggestions}
           onSelectSuggestion={handleSelectWorkspace}
           user={currentUser}
           notificationCount={0}
-          onCalendarToggle={() => console.log('calendar toggle')}
-          onNotificationsClick={() => console.log('notifications click')}
+          onCalendarToggle={() => setShowCalendar((v) => !v)}
+          onNotificationsClick={showComingSoon}
           onProfileClick={(action) => {
             if (action === 'sign-out') logout()
             else if (action === 'account') setShowProfileModal(true)
@@ -206,14 +263,29 @@ function AppShell() {
 
       {showNewModal && (
         <NewWorkspaceModal
-          onClose={() => setShowNewModal(false)}
+          onClose={() => { setShowNewModal(false); setCalendarPrefillDate(null) }}
           onCreate={handleCreateWorkspace}
+          defaultDueDate={calendarPrefillDate}
+        />
+      )}
+
+      {showCalendar && (
+        <CalendarModal
+          workspaces={activeWorkspaces}
+          onClose={() => setShowCalendar(false)}
+          onSelectWorkspace={(id) => { setShowCalendar(false); handleSelectWorkspace(id) }}
+          onNewWorkspaceOnDate={(date) => {
+            setCalendarPrefillDate(date)
+            setShowNewModal(true)
+          }}
         />
       )}
 
       {showProfileModal && (
         <ProfileModal onClose={() => setShowProfileModal(false)} />
       )}
+
+      {toast && <Toast message={toast} onDismiss={() => setToast(null)} />}
     </div>
   )
 }

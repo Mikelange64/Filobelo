@@ -18,6 +18,7 @@ function ThemeToggle() {
         type="button"
         className="theme-toggle"
         aria-label={`Theme: ${theme}. Click to change`}
+        data-tooltip="Theme"
         aria-haspopup="listbox"
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}

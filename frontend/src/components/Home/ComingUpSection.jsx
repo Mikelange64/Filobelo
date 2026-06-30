@@ -10,7 +10,7 @@ function byDueDate(a, b) {
 }
 
 function getTaskUrgency(dueDate) {
-  if (!dueDate) return 'success'
+  if (!dueDate) return 'neutral'
   const days = getDaysRemaining(dueDate)
   if (days < 0) return 'error'
   if (days <= 3) return 'warning'
@@ -40,10 +40,12 @@ function ComingUpSection({ tasks = [], hasActiveWorkspaces = false, onSelectTask
                   onClick={() => onSelectTask?.(task.id)}
                 >
                   <StatusDot urgency={urgency} />
-                  <span className="coming-up__title">{task.title}</span>
-                  <span className="coming-up__workspace">{task.workspaceTitle}</span>
+                  <span className="coming-up__content">
+                    <span className="coming-up__title">{task.title}</span>
+                    <span className="coming-up__workspace">{task.workspaceTitle}</span>
+                  </span>
                   <span className={`coming-up__due coming-up__due--${urgency}`}>
-                    {formatDueDate(task.dueDate)}
+                    {task.dueDate ? formatDueDate(task.dueDate) : 'No deadline'}
                   </span>
                 </button>
               </li>

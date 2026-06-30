@@ -89,3 +89,49 @@
 .workspace-item__menu-item--danger {
   color: var(--color-error-text);
 }
+
+.workspace-item__menu-item--submenu {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.workspace-item__menu-item--back {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+}
+
+.workspace-item__menu-item--folder {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.workspace-item__menu-item--active {
+  color: var(--color-brand-primary);
+}
+
+.workspace-item__menu-divider {
+  height: 1px;
+  background-color: var(--color-border);
+  margin: 4px 0;
+}
+
+.workspace-item__folder-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.workspace-item__folder-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-left: auto;
+  opacity: 0.8;
+}

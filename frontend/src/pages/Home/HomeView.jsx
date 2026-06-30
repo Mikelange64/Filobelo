@@ -9,7 +9,10 @@ function HomeView() {
       comingUpTasks={upcomingTasks}
       onSelectWorkspace={onSelectWorkspace}
       onNewWorkspace={onNewWorkspace}
-      onSelectTask={(id) => console.log('open task', id)}
+      onSelectTask={(taskId) => {
+        const task = upcomingTasks.find((t) => t.id === taskId)
+        if (task) onSelectWorkspace(task.workspaceId)
+      }}
     />
   )
 }

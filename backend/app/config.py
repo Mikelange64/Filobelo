@@ -35,15 +35,17 @@ class Settings(BaseSettings):
     # REFRESH TOKENS
     refresh_token_expire_days : int = 7
 
-    # MAIL SERVICE (SANDBOX FOR DEVELOPMENT)
+    # MAIL SERVICE (RESEND FOR DEPLOYMENT)
     mail_host     : str = "localhost"               
-    mail_port     : int = 587                        
+    mail_port     : int = 465                        
     mail_username : str = ""                        
     mail_password : SecretStr = SecretStr("")       
-    mail_from     : str = "noreply@example.com"     
+    mail_from     : str = "noreply@filobelo.com"     
     mail_use_tls  : bool = True   
     
-    frontend_url  : str = "http://localhost:8000" # hardcoded for security                  
+    cors_origins  : list[str] = ["http://localhost:5173"]
+
+    frontend_url  : str = "http://localhost:5173" # hardcoded for security
 
 
 settings = Settings() # type: ignore[call-arg] # Loaded from .env

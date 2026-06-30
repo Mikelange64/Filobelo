@@ -1,23 +1,22 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.orm import joinedload
 
 from app.auth import CurrentUser
 from app.database import DbSession
 from app.dependencies import get_target_membership, require_admin, require_membership
-from app.utils import get_workspace_by_id
-
 from app.models import User, Workspace, WorkspaceMember
 from app.schemas import (
-    WorkspaceCreate,
-    WorkspaceResponse,
-    WorkspaceUpdate,
-    WorkspaceMemberPublic,
     PaginatedWorkspaceResponse,
     UserPublic,
+    WorkspaceCreate,
+    WorkspaceMemberPublic,
+    WorkspaceResponse,
+    WorkspaceUpdate,
 )
+from app.utils import get_workspace_by_id
 
 router = APIRouter(tags=["workspaces"])
 
@@ -44,12 +43,13 @@ def get_my_workspaces(
 
     workspaces = (
         db.execute(
-            base
-            .options(joinedload(Workspace.members), joinedload(Workspace.tasks))
+            base.options(joinedload(Workspace.members), joinedload(Workspace.tasks))
             .offset(skip)
             .limit(limit)
         )
-        .scalars().unique().all()
+        .scalars()
+        .unique()
+        .all()
     )
 
     workspace_ids = [ws.id for ws in workspaces]
@@ -78,7 +78,9 @@ def get_my_workspaces(
 
 
 @router.post("", response_model=WorkspaceResponse, status_code=status.HTTP_201_CREATED)
-def create_workspace(current_user: CurrentUser, workspace: WorkspaceCreate, db: DbSession):
+def create_workspace(
+    current_user: CurrentUser, workspace: WorkspaceCreate, db: DbSession
+):
     new_workspace = Workspace(
         creator_id=current_user.id,
         title=workspace.title,
@@ -89,24 +91,36 @@ def create_workspace(current_user: CurrentUser, workspace: WorkspaceCreate, db: 
     db.add(new_workspace)
     db.flush()
 
-    new_member = WorkspaceMember(user_id=current_user.id, workspace_id=new_workspace.id, role="admin")
+    new_member = WorkspaceMember(
+        user_id=current_user.id, workspace_id=new_workspace.id, role="admin"
+    )
     db.add(new_member)
     db.commit()
     db.refresh(new_workspace)
 
-    return WorkspaceResponse.model_validate(new_workspace).model_copy(update={"current_user_role": "admin"})
+    return WorkspaceResponse.model_validate(new_workspace).model_copy(
+        update={"current_user_role": "admin"}
+    )
 
 
 @router.get("/{workspace_id}", response_model=WorkspaceResponse)
-def get_workspace(workspace_id: int, current_user: CurrentUser, db: DbSession):
-    workspace = db.execute(
-        select(Workspace)
-        .options(joinedload(Workspace.members), joinedload(Workspace.tasks))
-        .where(Workspace.id == workspace_id)
-    ).scalars().first()
+def get_workspace(
+    workspace_id: int, db: DbSession, current_user: CurrentUser
+):
+    workspace = (
+        db.execute(
+            select(Workspace)
+            .options(joinedload(Workspace.members), joinedload(Workspace.tasks))
+            .where(Workspace.id == workspace_id)
+        )
+        .scalars()
+        .first()
+    )
 
     if not workspace:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workspace not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Workspace not found"
+        )
 
     role = db.execute(
         select(WorkspaceMember.role).where(
@@ -115,13 +129,19 @@ def get_workspace(workspace_id: int, current_user: CurrentUser, db: DbSession):
         )
     ).scalar()
 
-    return WorkspaceResponse.model_validate(workspace).model_copy(update={"current_user_role": role})
+    return WorkspaceResponse.model_validate(workspace).model_copy(
+        update={"current_user_role": role}
+    )
 
 
 @router.patch(
-    "/{workspace_id}", response_model=WorkspaceResponse, dependencies=[Depends(require_membership)]
+    "/{workspace_id}",
+    response_model=WorkspaceResponse,
+    dependencies=[Depends(require_membership)],
 )
-def update_workspace_partial(workspace_id: int, workspace_data: WorkspaceUpdate, db: DbSession):
+def update_workspace_partial(
+    workspace_id: int, workspace_data: WorkspaceUpdate, db: DbSession
+):
     workspace = get_workspace_by_id(workspace_id, db)
 
     update = workspace_data.model_dump(exclude_unset=True)
@@ -133,13 +153,38 @@ def update_workspace_partial(workspace_id: int, workspace_data: WorkspaceUpdate,
     return workspace
 
 
+@router.put(
+    "/{workspace_id}/",
+    response_model=WorkspaceResponse,
+    dependencies=[Depends(require_membership)],
+)
+def update_workspace_full(
+    workspace_id: int, workspace_data: WorkspaceCreate, db: DbSession
+):
+    workspace = get_workspace_by_id(workspace_id, db)
+
+    workspace.title = workspace_data.title
+    workspace.description = workspace_data.description
+    workspace.max_number = workspace_data.max_number
+    workspace.due_date = workspace_data.due_date
+
+    db.commit()
+    db.refresh(workspace)
+    return workspace
+
+
 @router.delete(
-    "/{workspace_id}/", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_admin)]
+    "/{workspace_id}/",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_admin)],
 )
 def delete_workspace(workspace_id: int, current_user: CurrentUser, db: DbSession):
     workspace = get_workspace_by_id(workspace_id, db)
     if workspace.creator_id != current_user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only the workspace creator can delete it")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the workspace creator can delete it",
+        )
     db.delete(workspace)
     db.commit()
 
@@ -161,7 +206,12 @@ def get_members(workspace_id: int, db: DbSession):
         .where(WorkspaceMember.workspace_id == workspace_id)
     ).all()
     return [
-        WorkspaceMemberPublic(id=user.id, username=user.username, image_path=user.image_path, role=membership.role)
+        WorkspaceMemberPublic(
+            id=user.id,
+            username=user.username,
+            image_path=user.image_path,
+            role=membership.role,
+        )
         for membership, user in rows
     ]
 
@@ -173,7 +223,9 @@ def get_members(workspace_id: int, db: DbSession):
 )
 def add_user(workspace_id: int, user_id: int, db: DbSession):
     if get_target_membership(workspace_id, user_id, db):
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="User already in the workspace")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="User already in the workspace"
+        )
 
     db.add(WorkspaceMember(user_id=user_id, workspace_id=workspace_id))
     db.commit()
@@ -189,7 +241,10 @@ def add_user(workspace_id: int, user_id: int, db: DbSession):
 def make_admin(workspace_id: int, user_id: int, db: DbSession):
     member = get_target_membership(workspace_id, user_id, db)
     if not member:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User is not a member of this workspace")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User is not a member of this workspace",
+        )
 
     workspace = get_workspace_by_id(workspace_id, db)
     if member.role == "admin":
@@ -227,20 +282,29 @@ def leave_workspace(
     ).scalar()
 
     if member_count == 0:
-        workspace = db.execute(select(Workspace).where(Workspace.id == workspace_id)).scalars().first()
+        workspace = (
+            db.execute(select(Workspace).where(Workspace.id == workspace_id))
+            .scalars()
+            .first()
+        )
         db.delete(workspace)
         db.commit()
 
 
 @router.delete(
     "/{workspace_id}/members/{user_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
+    response_model=WorkspaceResponse,
     dependencies=[Depends(require_admin)],
 )
 def remove_user(workspace_id: int, user_id: int, db: DbSession):
     member = get_target_membership(workspace_id, user_id, db)
     if not member:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User is not a member of this workspace")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User is not a member of this workspace",
+        )
 
     db.delete(member)
     db.commit()
+
+    return get_workspace_by_id(workspace_id, db)

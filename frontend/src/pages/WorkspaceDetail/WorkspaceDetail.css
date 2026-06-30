@@ -772,7 +772,7 @@
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 8px;
+  gap: 10px;
   z-index: 100;
   pointer-events: none;
 }
@@ -780,33 +780,64 @@
 .floating-actions__btn {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 16px;
+  justify-content: center;
+  gap: 0;
   border: none;
-  border-radius: 24px;
+  border-radius: 999px;
   font-size: 0.84rem;
   font-weight: 500;
   cursor: pointer;
   white-space: nowrap;
+  overflow: hidden;
   box-shadow: var(--shadow-card);
   pointer-events: auto;
-  transition: transform 0.1s, box-shadow 0.1s;
+  max-width: 44px;
+  transition: max-width 0.22s ease, gap 0.22s ease, padding 0.22s ease, transform 0.1s, box-shadow 0.1s;
 }
 
 .floating-actions__btn:hover {
+  max-width: 220px;
+  gap: 8px;
   transform: translateY(-1px);
   box-shadow: var(--shadow-overlay);
 }
 
+.floating-actions__label {
+  overflow: hidden;
+  max-width: 0;
+  opacity: 0;
+  transition: max-width 0.2s ease, opacity 0.15s ease;
+  pointer-events: none;
+}
+
+.floating-actions__btn:hover .floating-actions__label {
+  max-width: 160px;
+  opacity: 1;
+}
+
 .floating-actions__btn--filobelo {
+  width: 44px;
+  height: 44px;
+  padding: 0 12px;
   background: var(--color-brand-primary);
   color: var(--color-text-on-brand);
 }
 
+.floating-actions__btn--filobelo:hover {
+  padding: 0 16px;
+}
+
 .floating-actions__btn--chat {
+  width: 38px;
+  height: 38px;
+  padding: 0 10px;
   background: var(--color-bg-overlay);
   color: var(--color-text-secondary);
   border: 1px solid var(--color-border);
+}
+
+.floating-actions__btn--chat:hover {
+  padding: 0 14px;
 }
 
 /* ─── Read-only checkboxes (non-owners) ─────────────────────────────────────── */

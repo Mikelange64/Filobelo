@@ -123,7 +123,8 @@ function Topbar({
         <button
           type="button"
           className="topbar__icon-btn topbar__icon-btn--muted"
-          aria-label="Calendar (coming soon)"
+          aria-label="Calendar"
+          data-tooltip="Calendar"
           onClick={onCalendarToggle}
         >
           <CalendarIcon />
@@ -132,11 +133,8 @@ function Topbar({
         <button
           type="button"
           className="topbar__icon-btn topbar__icon-btn--muted"
-          aria-label={
-            notificationCount > 0
-              ? `Notifications (${notificationCount} unread, coming soon)`
-              : 'Notifications (coming soon)'
-          }
+          aria-label="Notifications"
+          data-tooltip="Notifications"
           onClick={onNotificationsClick}
         >
           <BellIcon />

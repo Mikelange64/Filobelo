@@ -157,7 +157,7 @@ function TaskRowMenu({ isCompleted, isOwner, isAdmin, onEdit, onToggle, onReassi
               Edit
             </button>
           </li>
-          {isOwner && (
+          {(isOwner || isAdmin) && (
             <li role="none">
               <button type="button" role="menuitem" className="wd-menu-item"
                 onClick={() => { onToggle(); setIsOpen(false) }}>
@@ -190,9 +190,10 @@ function TaskRowMenu({ isCompleted, isOwner, isAdmin, onEdit, onToggle, onReassi
 function TaskRow({ task, member, isAdmin, currentUserId, onSelect, onToggle, onReassign, onDelete }) {
   const urgency = getTaskUrgency(task.dueDate)
   const isOwner = task.ownerId === currentUserId
+  const canToggle = isOwner || isAdmin
   return (
     <div className={`task-row${task.isCompleted ? ' task-row--completed' : ''}`}>
-      {isOwner ? (
+      {canToggle ? (
         <button
           type="button"
           className={`task-row__checkbox${task.isCompleted ? ' task-row__checkbox--checked' : ''}`}
@@ -225,11 +226,10 @@ function TaskRow({ task, member, isAdmin, currentUserId, onSelect, onToggle, onR
         task.dueDate
           ? (
             <span className={`task-row__due task-row__due--${urgency}`}>
-              <CalIcon />
               {formatDueDate(task.dueDate)}
             </span>
           ) : (
-            <span className="task-row__due task-row__due--success">On track</span>
+            <span className="task-row__due task-row__due--neutral">No deadline</span>
           )
       )}
 
@@ -366,7 +366,7 @@ function InvitePanel({ workspaceId, onMemberAdded }) {
   )
 }
 
-function MemberListRow({ member, isAdmin, isSelf, onRemove, onPromote, onLeave }) {
+function MemberListRow({ member, isAdmin, isSelf, onRemove, onPromote, onLeave, onMessage }) {
   const [menuOpen, setMenuOpen, menuRef] = useDismissableMenu()
 
   return (
@@ -399,7 +399,7 @@ function MemberListRow({ member, isAdmin, isSelf, onRemove, onPromote, onLeave }
               <>
                 <li role="none">
                   <button type="button" role="menuitem" className="wd-menu-item"
-                    onClick={() => setMenuOpen(false)}>
+                    onClick={() => { onMessage?.(); setMenuOpen(false) }}>
                     Message
                   </button>
                 </li>
@@ -527,7 +527,7 @@ function SettingsTab({ workspace, isAdmin, isCreator, workspaceId, onWorkspaceUp
   )
 }
 
-function SlideOver({ task, fullTask, slideOverLoading, workspace, memberById, members, isAdmin, currentUserId, workspaceId, width, onResize, onClose, onToggle, onDelete, onSave, onReassign }) {
+function SlideOver({ task, fullTask, slideOverLoading, workspace, memberById, members, isAdmin, currentUserId, workspaceId, width, onResize, onClose, onToggle, onDelete, onSave, onReassign, onComingSoon }) {
   const [editTitle, setEditTitle] = useState(task.title)
   const [editContent, setEditContent] = useState('')
   const [menuOpen, setMenuOpen, menuRef] = useDismissableMenu()
@@ -562,6 +562,7 @@ function SlideOver({ task, fullTask, slideOverLoading, workspace, memberById, me
 
   const owner = memberById.get(task.ownerId)
   const isOwner = task.ownerId === currentUserId
+  const canToggle = isOwner || isAdmin
   const canReassign = isOwner || isAdmin
 
   async function handleTitleBlur() {
@@ -589,7 +590,7 @@ function SlideOver({ task, fullTask, slideOverLoading, workspace, memberById, me
             </button>
             {menuOpen && (
               <ul className="wd-menu-list" role="menu">
-                {isOwner && (
+                {canToggle && (
                   <li role="none">
                     <button type="button" role="menuitem" className="wd-menu-item"
                       onClick={() => { onToggle(task.id); setMenuOpen(false) }}>
@@ -621,7 +622,7 @@ function SlideOver({ task, fullTask, slideOverLoading, workspace, memberById, me
 
         <div className="slide-over__body">
           <div className="slide-over__title-row">
-            {isOwner ? (
+            {canToggle ? (
               <button
                 type="button"
                 className={`slide-over__checkbox${task.isCompleted ? ' slide-over__checkbox--checked' : ''}`}
@@ -688,7 +689,7 @@ function SlideOver({ task, fullTask, slideOverLoading, workspace, memberById, me
 
           <div className="slide-over__comment-tabs">
             <button type="button" className="wd-tab wd-tab--active" style={{ paddingLeft: 0 }}>Comments</button>
-            <button type="button" className="wd-tab">
+            <button type="button" className="wd-tab" onClick={onComingSoon}>
               Resources <span className="wd-tab__soon">SOON</span>
             </button>
           </div>
@@ -703,16 +704,16 @@ function SlideOver({ task, fullTask, slideOverLoading, workspace, memberById, me
   )
 }
 
-function FloatingActions() {
+function FloatingActions({ onComingSoon }) {
   return (
     <div className="floating-actions">
-      <button type="button" className="floating-actions__btn floating-actions__btn--filobelo">
+      <button type="button" className="floating-actions__btn floating-actions__btn--filobelo" onClick={onComingSoon} aria-label="Ask Filobelo AI assistant">
         <SparkleIcon />
-        <span>Ask Filobelo · AI assistant</span>
+        <span className="floating-actions__label">Ask Filobelo</span>
       </button>
-      <button type="button" className="floating-actions__btn floating-actions__btn--chat">
+      <button type="button" className="floating-actions__btn floating-actions__btn--chat" onClick={onComingSoon} aria-label="Chat">
         <ChatIcon />
-        <span>Workspace chat coming soon</span>
+        <span className="floating-actions__label">Chat</span>
       </button>
     </div>
   )
@@ -739,7 +740,7 @@ function WorkspaceDetail() {
   const workspaceId = parseInt(id, 10)
   const { user } = useAuth()
   const navigate = useNavigate()
-  const { onDelete: shellDelete, onLeave: shellLeave } = useOutletContext()
+  const { onDelete: shellDelete, onLeave: shellLeave, onComingSoon } = useOutletContext()
   const currentUserId = user?.id
 
   const [workspace, setWorkspace]               = useState(null)
@@ -797,6 +798,7 @@ function WorkspaceDetail() {
   }
 
   function handleTabChange(tabId) {
+    if (tabId === 'kanban') { onComingSoon?.(); return }
     setActiveTab(tabId)
     if (tabId === 'members') loadDetailMembers()
   }
@@ -1133,6 +1135,7 @@ function WorkspaceDetail() {
                   onRemove={handleRemoveMember}
                   onPromote={handlePromoteToAdmin}
                   onLeave={handleLeaveWorkspace}
+                  onMessage={onComingSoon}
                 />
               ))}
             </ul>
@@ -1175,6 +1178,7 @@ function WorkspaceDetail() {
           onDelete={handleDeleteTask}
           onSave={handleSaveTask}
           onReassign={(taskId) => setReassignTaskId(taskId)}
+          onComingSoon={onComingSoon}
         />
       )}
 
@@ -1189,7 +1193,7 @@ function WorkspaceDetail() {
       )}
 
       {/* ── Floating actions ── */}
-      <FloatingActions />
+      <FloatingActions onComingSoon={onComingSoon} />
     </div>
   )
 }

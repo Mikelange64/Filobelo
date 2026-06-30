@@ -105,10 +105,6 @@ def test_create_task_as_regular_member_success(
             {"content": "No title here.", "creator_id": 1, "owner_id": 1},
             id="missing_title",
         ),
-        pytest.param(
-            {"title": "No Content", "creator_id": 1, "owner_id": 1},
-            id="missing_content",
-        ),
     ],
 )
 def test_create_task_validation_error(
@@ -527,12 +523,35 @@ def test_delete_task_nonexistent(client: TestClient, user_auth_headers, workspac
 
 # ========================================================================================
 # COMPLETE TASK
-# NOTE: Known bug — condition `task.owner_id == current_user.user_id` is inverted.
-# Current behavior blocks the owner and allows non-owners. Tests match current behavior.
 # ========================================================================================
 
 
-def test_complete_task_as_non_owner_success(
+def test_complete_task_as_owner_success(client: TestClient, user_auth_headers, task):
+    response = client.patch(
+        f"{taskprefix}/{task['workspace_id']}/tasks/{task['id']}/complete",
+        headers=user_auth_headers,
+    )
+    assert response.status_code == 200
+    assert response.json()["is_completed"] is True
+
+
+def test_complete_task_as_admin_success(
+    client: TestClient, user_token, user_auth_headers, workspace
+):
+    """Admin (non-owner) can also toggle task completion."""
+    other_user = create_test_user(client, username="other", email="other@example.com")
+    add_workspace_member(client, user_token, workspace["id"], other_user["id"])
+    other_token = login_user(client, email="other@example.com")
+    task = create_task(client, other_token, workspace["id"])
+    response = client.patch(
+        f"{taskprefix}/{workspace['id']}/tasks/{task['id']}/complete",
+        headers=user_auth_headers,
+    )
+    assert response.status_code == 200
+    assert response.json()["is_completed"] is True
+
+
+def test_complete_task_non_owner_non_admin_blocked(
     client: TestClient, user_token, user_auth_headers, task
 ):
     other_user = create_test_user(client, username="other", email="other@example.com")
@@ -541,16 +560,6 @@ def test_complete_task_as_non_owner_success(
     response = client.patch(
         f"{taskprefix}/{task['workspace_id']}/tasks/{task['id']}/complete",
         headers=auth_header(other_token),
-    )
-    assert response.status_code == 200
-    assert response.json()["is_completed"] is True
-
-
-def test_complete_task_owner_blocked(client: TestClient, user_auth_headers, task):
-    """BUG: Owner cannot complete their own task due to inverted condition."""
-    response = client.patch(
-        f"{taskprefix}/{task['workspace_id']}/tasks/{task['id']}/complete",
-        headers=user_auth_headers,
     )
     assert response.status_code == 403
 

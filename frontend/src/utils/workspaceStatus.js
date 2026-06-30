@@ -30,11 +30,12 @@ export function getActiveWorkspaces(workspaces) {
 }
 
 /** Single urgency level for a workspace — drives status dot and card accent.
- *  error = overdue, warning = due ≤3d, success = everything else (no deadline = always on track) */
+ *  error = overdue, warning = due ≤3d, success = has deadline and on track, neutral = no deadline */
 export function getWorkspaceUrgency(workspace) {
   if (isWorkspaceLate(workspace)) return 'error'
   const days = getDaysRemaining(workspace.dueDate)
   if (days !== null && days <= 3) return 'warning'
+  if (days === null) return 'neutral'
   return 'success'
 }
 

@@ -1,0 +1,322 @@
+.cal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.5);
+  padding: 24px;
+}
+
+.cal {
+  display: flex;
+  flex-direction: column;
+  width: 74vw;
+  max-width: 1040px;
+  background-color: var(--color-bg-overlay);
+  border: 1px solid var(--color-border-strong);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+}
+
+/* ── Header ── */
+
+.cal__header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--color-border-strong);
+  flex-shrink: 0;
+}
+
+.cal__nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.cal__nav-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-text-primary);
+  cursor: pointer;
+}
+
+.cal__nav-btn:hover {
+  background-color: var(--color-bg-card-hover);
+}
+
+.cal__today-btn {
+  padding: 5px 12px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-text-primary);
+  font-size: 0.82rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.cal__today-btn:hover {
+  background-color: var(--color-bg-card-hover);
+}
+
+.cal__title {
+  flex: 1;
+  margin: 0;
+  text-align: center;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+/* ── Controls (right side) ── */
+
+.cal__controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.cal__jump-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.cal__spinners {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.cal__date-sep {
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+  user-select: none;
+}
+
+/* ── Spinner field ── */
+
+.cal__spinner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.cal__spinner-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 16px;
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  padding: 0;
+  border-radius: 2px;
+}
+
+.cal__spinner-btn:hover {
+  color: var(--color-text-primary);
+  background-color: var(--color-bg-card-hover);
+}
+
+.cal__spinner-val {
+  width: 100%;
+  height: 26px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-control);
+  background-color: var(--color-bg-canvas);
+  color: var(--color-text-primary);
+  font-size: 0.8rem;
+  font-weight: 500;
+  text-align: center;
+  padding: 0;
+}
+
+.cal__spinner-val:focus {
+  outline: none;
+  border-color: var(--color-brand-primary);
+}
+
+.cal__close-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.cal__close-btn:hover {
+  background-color: var(--color-bg-card-hover);
+  color: var(--color-text-primary);
+}
+
+/* ── Grid ── */
+
+.cal__grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  grid-template-rows: 38px repeat(6, 80px);
+}
+
+.cal__day-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  border-bottom: 1px solid var(--color-border-strong);
+  border-right: 1px solid var(--color-border-strong);
+}
+
+.cal__day-header:last-child {
+  border-right: none;
+}
+
+/* ── Day cells ── */
+
+.cal__cell {
+  padding: 7px 9px;
+  border-right: 1px solid var(--color-border-strong);
+  border-bottom: 1px solid var(--color-border-strong);
+  overflow: hidden;
+  cursor: pointer;
+  transition: background-color 0.1s;
+  position: relative;
+}
+
+.cal__cell:nth-child(7n) {
+  border-right: none;
+}
+
+.cal__cell:hover {
+  background-color: var(--color-bg-card-hover);
+}
+
+.cal__cell--other-month {
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+.cal__cell--today {
+  background-color: var(--color-bg-card);
+}
+
+.cal__cell--selected {
+  outline: 2px solid var(--color-brand-primary);
+  outline-offset: -2px;
+}
+
+.cal__date-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  font-size: 0.85rem;
+  color: var(--color-text-primary);
+  margin-bottom: 4px;
+}
+
+.cal__cell--other-month .cal__date-num {
+  color: var(--color-text-muted);
+}
+
+.cal__cell--today .cal__date-num {
+  background-color: var(--color-brand-primary);
+  color: var(--color-text-on-brand);
+  border-radius: 50%;
+  font-weight: 700;
+}
+
+/* ── Workspace chips ── */
+
+.cal__chips {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cal__chip {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  width: 100%;
+  padding: 2px 6px;
+  border: none;
+  border-radius: 3px;
+  font-size: 0.71rem;
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+  white-space: nowrap;
+  background-color: var(--color-bg-card);
+  color: var(--color-text-primary);
+  transition: filter 0.1s;
+}
+
+.cal__chip:hover {
+  filter: brightness(1.1);
+}
+
+.cal__chip span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cal__chip-dot {
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: var(--color-text-muted);
+}
+
+.cal__chip-dot--error   { background-color: var(--color-error); }
+.cal__chip-dot--warning { background-color: var(--color-warning); }
+.cal__chip-dot--success { background-color: var(--color-success); }
+
+.cal__chip--error {
+  background-color: var(--color-error-bg);
+  color: var(--color-error-text);
+}
+
+.cal__chip--warning {
+  background-color: var(--color-warning-bg);
+  color: var(--color-warning-text);
+}
+
+.cal__chip--success {
+  background-color: var(--color-success-bg);
+  color: var(--color-success-text);
+}
+
+.cal__overflow {
+  font-size: 0.68rem;
+  color: var(--color-text-muted);
+  padding: 1px 6px;
+  cursor: default;
+}

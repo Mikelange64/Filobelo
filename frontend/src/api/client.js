@@ -76,7 +76,7 @@ async function parseResponse(res) {
   let detail = 'Request failed'
   try {
     const body = await res.json()
-    detail = body.detail ?? detail
+    detail = body.message ?? body.detail ?? detail
   } catch { /* non-JSON error body */ }
   throw new ApiError(res.status, detail)
 }
@@ -194,6 +194,23 @@ export function toggleTask(workspaceId, taskId) {
   })
 }
 
+// Folders
+export function getFolders() {
+  return authFetch('/folders')
+}
+
+export function createFolder(name, color) {
+  return authFetch('/folders', { method: 'POST', body: JSON.stringify({ name, color }) })
+}
+
+export function updateFolder(id, data) {
+  return authFetch(`/folders/${id}`, { method: 'PATCH', body: JSON.stringify(data) })
+}
+
+export function deleteFolder(id) {
+  return authFetch(`/folders/${id}`, { method: 'DELETE' })
+}
+
 // User self-management
 export function updateUser(data) {
   return authFetch('/users/me', { method: 'PATCH', body: JSON.stringify(data) })
@@ -212,6 +229,15 @@ export function changePassword(currentPassword, newPassword) {
 
 export function removeAvatar() {
   return authFetch('/users/me/picture', { method: 'DELETE' })
+}
+
+export async function verifyEmail(token) {
+  const res = await fetch(`${BASE_URL}/users/verify-email`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token }),
+  })
+  return parseResponse(res)
 }
 
 export async function forgotPassword(email) {

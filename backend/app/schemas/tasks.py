@@ -11,7 +11,13 @@ class TaskCreate(BaseModel):
 
 class TaskUpdate(BaseModel):
     title    : str | None = Field(default=None, min_length=1, max_length=100)
-    content  : str | None = Field(default=None, max_length=300)
+    content  : str | None = Field(default=None, min_length=1, max_length=300)
+    due_date : datetime | None = None
+
+
+class TaskFullUpdate(BaseModel):
+    title    : str = Field(min_length=1, max_length=100)
+    content  : str = Field(min_length=1, max_length=300)
     due_date : datetime | None = None
 
 

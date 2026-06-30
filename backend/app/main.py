@@ -11,12 +11,13 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.admin import admin_users
 from app.routers import folders, tasks, users, workspaces
 from app.database import DbSession
+from app.config import settings
 
 app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=settings.cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -53,7 +54,7 @@ def health_check(db: DbSession):
 @app.exception_handler(StarletteHTTPException)
 def general_exception_handler(request: Request, exc: StarletteHTTPException):
     message = exc.detail if exc.detail else "An error occurred, please try again"
-    return JSONResponse(status_code=exc.status_code, content={"detail": message})
+    return JSONResponse(status_code=exc.status_code, content={"message": message})
 
 
 @app.exception_handler(RequestValidationError)

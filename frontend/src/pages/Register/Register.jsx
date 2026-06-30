@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
-import { uploadAvatarRequest } from '../../api/client'
 import '../auth.css'
 import './Register.css'
 
@@ -31,18 +30,19 @@ function CameraIcon() {
 
 function Register() {
   const { register } = useAuth()
-  const navigate = useNavigate()
   const fileInputRef = useRef(null)
 
   const [username, setUsername] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [confirm, setConfirm] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [avatarFile, setAvatarFile] = useState(null)
   const [avatarPreview, setAvatarPreview] = useState(null)
   const [error, setError] = useState('')
   const [fieldErrors, setFieldErrors] = useState({})
   const [loading, setLoading] = useState(false)
+  const [success, setSuccess] = useState(false)
 
   useEffect(() => {
     return () => {
@@ -62,6 +62,7 @@ function Register() {
     if (username.trim().length < 5) errs.username = 'Must be at least 5 characters'
     if (!email.includes('@')) errs.email = 'Enter a valid email address'
     if (password.length < 8) errs.password = 'Must be at least 8 characters'
+    if (password !== confirm) errs.confirm = 'Passwords do not match'
     return errs
   }
 
@@ -76,20 +77,29 @@ function Register() {
     setLoading(true)
     try {
       await register(username.trim(), email.trim(), password)
-      // Tokens are now set — upload avatar if one was selected (best-effort)
-      if (avatarFile) {
-        try {
-          await uploadAvatarRequest(avatarFile)
-        } catch {
-          // Avatar upload failure is non-fatal; the account was created successfully
-        }
-      }
-      navigate('/', { replace: true })
+      setSuccess(true)
     } catch (err) {
       setError(err.detail ?? 'Something went wrong. Please try again.')
     } finally {
       setLoading(false)
     }
+  }
+
+  if (success) {
+    return (
+      <div className="auth-page">
+        <div className="auth-card">
+          <h1 className="auth-card__heading">Check your email</h1>
+          <p className="auth-card__subtext">
+            We sent a verification link to <strong>{email}</strong>.
+            Click it to activate your account, then sign in.
+          </p>
+          <p className="auth-card__footer">
+            <Link to="/login">Go to sign in</Link>
+          </p>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -198,6 +208,24 @@ function Register() {
             )}
           </div>
 
+          <div className="auth-form__group">
+            <label className="auth-form__label" htmlFor="reg-confirm">
+              Confirm password
+            </label>
+            <input
+              id="reg-confirm"
+              type="password"
+              className={`auth-form__input${confirm && confirm !== password ? ' auth-form__input--error' : ''}${fieldErrors.confirm ? ' auth-form__input--error' : ''}`}
+              value={confirm}
+              onChange={(e) => { setConfirm(e.target.value); setFieldErrors((p) => ({ ...p, confirm: '' })) }}
+              autoComplete="new-password"
+              required
+            />
+            {fieldErrors.confirm && (
+              <span className="auth-form__field-error">{fieldErrors.confirm}</span>
+            )}
+          </div>
+
           {error && (
             <p className="auth-form__error-banner" role="alert">{error}</p>
           )}
@@ -205,7 +233,7 @@ function Register() {
           <button
             type="submit"
             className="auth-form__submit"
-            disabled={loading}
+            disabled={loading || (confirm && confirm !== password)}
           >
             {loading ? 'Creating account…' : 'Create account'}
           </button>

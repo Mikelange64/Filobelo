@@ -187,14 +187,14 @@ def test_login_validation_error(client: TestClient, login_data):
 # ========================================================================================
 
 
-def test_get_current_user_success(client: TestClient, user_auth_headers):
+def test_get_me_success(client: TestClient, user_auth_headers):
     response = client.get(f"{prefix}/me", headers=user_auth_headers)
 
     assert response.status_code == 200
     assert_user_private_shape(response, "testuser", "test@example.com")
 
 
-def test_get_current_user_no_token(client: TestClient):
+def test_get_me_no_token(client: TestClient):
     response = client.get(f"{prefix}/me")
 
     assert_auth_error(response, "Not authenticated")
@@ -207,7 +207,7 @@ def test_get_current_user_no_token(client: TestClient):
         pytest.param("not-even-a-jwt", id="malformed_token"),
     ],
 )
-def test_get_current_user_bad_token(client: TestClient, token):
+def test_get_me_bad_token(client: TestClient, token):
     response = client.get(f"{prefix}/me", headers=auth_header(token))
 
     assert_auth_error(response, "Invalid or expired token")

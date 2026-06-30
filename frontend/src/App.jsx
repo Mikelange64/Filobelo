@@ -8,6 +8,7 @@ import Login from './pages/Login/Login'
 import Register from './pages/Register/Register'
 import ForgotPassword from './pages/ForgotPassword/ForgotPassword'
 import ResetPassword from './pages/ResetPassword/ResetPassword'
+import VerifyEmail from './pages/VerifyEmail/VerifyEmail'
 
 function AuthRoute({ children }) {
   const { user, loading } = useAuth()
@@ -23,6 +24,7 @@ function App() {
       <Route path="/register" element={<AuthRoute><Register /></AuthRoute>} />
       <Route path="/forgot-password" element={<AuthRoute><ForgotPassword /></AuthRoute>} />
       <Route path="/reset-password" element={<AuthRoute><ResetPassword /></AuthRoute>} />
+      <Route path="/verify-email" element={<VerifyEmail />} />
       <Route path="/" element={<ProtectedRoute><AppShell /></ProtectedRoute>}>
         <Route index element={<HomeView />} />
         <Route path="workspaces/:id" element={<WorkspaceDetail />} />

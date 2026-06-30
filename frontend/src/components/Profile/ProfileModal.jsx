@@ -29,27 +29,31 @@ function AccountPanel({ user, refreshUser, logout, onClose }) {
 
   const [username, setUsername] = useState(user.username ?? '')
   const [email, setEmail] = useState(user.email ?? '')
-  const [savingField, setSavingField] = useState(null)
-  const [savedField, setSavedField] = useState(null)
-  const [fieldError, setFieldError] = useState({})
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const [saveError, setSaveError] = useState('')
   const [avatarLoading, setAvatarLoading] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
-  async function handleSaveField(field) {
-    const value = field === 'username' ? username.trim() : email.trim()
-    if (!value) return
-    setSavingField(field)
-    setFieldError((prev) => ({ ...prev, [field]: null }))
+  const isDirty = username.trim() !== (user.username ?? '') || email.trim() !== (user.email ?? '')
+
+  async function handleSave() {
+    if (!isDirty) return
+    setSaving(true)
+    setSaveError('')
+    const patch = {}
+    if (username.trim() !== user.username) patch.username = username.trim()
+    if (email.trim() !== user.email) patch.email = email.trim()
     try {
-      await updateUser({ [field]: value })
+      await updateUser(patch)
       await refreshUser()
-      setSavedField(field)
-      setTimeout(() => setSavedField((f) => (f === field ? null : f)), 2000)
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2500)
     } catch (err) {
-      setFieldError((prev) => ({ ...prev, [field]: err.detail ?? 'Could not save' }))
+      setSaveError(err.detail ?? 'Could not save changes')
     } finally {
-      setSavingField(null)
+      setSaving(false)
     }
   }
 
@@ -141,51 +145,40 @@ function AccountPanel({ user, refreshUser, logout, onClose }) {
       <div className="pm-fields">
         <div className="pm-field">
           <label className="pm-field__label" htmlFor="pm-username">Username</label>
-          <div className="pm-field__row">
-            <input
-              id="pm-username"
-              type="text"
-              className="pm-field__input"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') handleSaveField('username') }}
-              autoComplete="username"
-            />
-            <button
-              type="button"
-              className="pm-btn pm-btn--primary"
-              onClick={() => handleSaveField('username')}
-              disabled={savingField === 'username' || username.trim() === user.username}
-            >
-              {savingField === 'username' ? 'Saving…' : savedField === 'username' ? 'Saved ✓' : 'Save'}
-            </button>
-          </div>
-          {fieldError.username && <p className="pm-field__error">{fieldError.username}</p>}
+          <input
+            id="pm-username"
+            type="text"
+            className="pm-field__input"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') handleSave() }}
+            autoComplete="username"
+          />
         </div>
 
         <div className="pm-field">
           <label className="pm-field__label" htmlFor="pm-email">Email</label>
-          <div className="pm-field__row">
-            <input
-              id="pm-email"
-              type="email"
-              className="pm-field__input"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') handleSaveField('email') }}
-              autoComplete="email"
-            />
-            <button
-              type="button"
-              className="pm-btn pm-btn--primary"
-              onClick={() => handleSaveField('email')}
-              disabled={savingField === 'email' || email.trim() === user.email}
-            >
-              {savingField === 'email' ? 'Saving…' : savedField === 'email' ? 'Saved ✓' : 'Save'}
-            </button>
-          </div>
-          {fieldError.email && <p className="pm-field__error">{fieldError.email}</p>}
+          <input
+            id="pm-email"
+            type="email"
+            className="pm-field__input"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') handleSave() }}
+            autoComplete="email"
+          />
         </div>
+
+        {saveError && <p className="pm-field__error">{saveError}</p>}
+
+        <button
+          type="button"
+          className="pm-btn pm-btn--primary"
+          onClick={handleSave}
+          disabled={!isDirty || saving}
+        >
+          {saving ? 'Saving…' : saved ? 'Saved ✓' : 'Save changes'}
+        </button>
       </div>
 
       <div className="pm-danger-zone">

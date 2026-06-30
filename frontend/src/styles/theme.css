@@ -10,8 +10,8 @@
 /* ===== LIGHT MODE (default) ===== */
 :root {
   /* Brand — teal is the sole decorative accent */
-  --color-brand-primary: hsl(184 60% 38%);
-  --color-brand-primary-hover: hsl(184 60% 30%);
+  --color-brand-primary: hsl(184 76% 34%);
+  --color-brand-primary-hover: hsl(184 76% 26%);
   --color-brand-secondary: hsl(184 50% 50%);       /* teal variant — used for avatars */
   --color-brand-secondary-hover: hsl(184 50% 42%);
 
@@ -129,8 +129,8 @@
 
 /* ===== Manual toggle — light (duplicates :root, wins on specificity) ===== */
 :root[data-theme='light'] {
-  --color-brand-primary: hsl(184 60% 38%);
-  --color-brand-primary-hover: hsl(184 60% 30%);
+  --color-brand-primary: hsl(184 76% 34%);
+  --color-brand-primary-hover: hsl(184 76% 26%);
   --color-brand-secondary: hsl(184 50% 50%);
   --color-brand-secondary-hover: hsl(184 50% 42%);
 
