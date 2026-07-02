@@ -225,6 +225,22 @@
   padding: 10px 12px;
 }
 
+.auth-form__resend-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  color: var(--color-error-text);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.auth-form__resend-link:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
 .auth-form__submit {
   width: 100%;
   padding: 11px;

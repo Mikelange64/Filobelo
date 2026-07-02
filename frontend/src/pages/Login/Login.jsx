@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
+import { resendVerification } from '../../api/client'
 import '../auth.css'
 import './Login.css'
 
@@ -30,18 +31,32 @@ function Login() {
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [unverified, setUnverified] = useState(false)
+  const [resendStatus, setResendStatus] = useState('idle') // idle | sending | sent
 
   async function handleSubmit(e) {
     e.preventDefault()
     setError('')
+    setUnverified(false)
+    setResendStatus('idle')
     setLoading(true)
     try {
       await login(identifier.trim(), password)
       navigate('/', { replace: true })
     } catch (err) {
       setError(err.detail ?? 'Something went wrong. Please try again.')
+      setUnverified(err.status === 403)
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function handleResend() {
+    setResendStatus('sending')
+    try {
+      await resendVerification(identifier.trim())
+    } finally {
+      setResendStatus('sent')
     }
   }
 
@@ -99,7 +114,25 @@ function Login() {
           </div>
 
           {error && (
-            <p className="auth-form__error-banner" role="alert">{error}</p>
+            <p className="auth-form__error-banner" role="alert">
+              {error}
+              {unverified && resendStatus !== 'sent' && (
+                <>
+                  {' '}
+                  <button
+                    type="button"
+                    className="auth-form__resend-link"
+                    onClick={handleResend}
+                    disabled={resendStatus === 'sending'}
+                  >
+                    {resendStatus === 'sending' ? 'Sending…' : 'Resend verification email'}
+                  </button>
+                </>
+              )}
+              {unverified && resendStatus === 'sent' && (
+                <> Verification email sent — check your inbox.</>
+              )}
+            </p>
           )}
 
           <button

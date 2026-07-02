@@ -260,6 +260,15 @@ export async function verifyEmail(token) {
   return parseResponse(res)
 }
 
+export async function resendVerification(identifier) {
+  const res = await fetch(`${BASE_URL}/users/resend-verification`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ identifier }),
+  })
+  return parseResponse(res)
+}
+
 export async function forgotPassword(email) {
   const res = await fetch(`${BASE_URL}/users/forgot-password`, {
     method: 'POST',
