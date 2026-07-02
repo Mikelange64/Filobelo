@@ -32,6 +32,7 @@ from app.schemas import (
     EmailVerification,
     ForgotPasswordRequest,
     RefreshRequest,
+    ResendVerificationRequest,
     ResetPasswordRequest,
     Token,
     UserCreate,
@@ -127,11 +128,17 @@ def login(
         .first()
     )
 
-    if not user or not user.is_verified or not  verify_password(form_data.password, user.password_hash):
+    if not user or not  verify_password(form_data.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect password or email/username",
             headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    if not user.is_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, 
+            detail= "Please verify your email before logging in"
         )
 
     access_token = create_access_token(
@@ -333,6 +340,50 @@ def verify_email(request_data: EmailVerification, db: DbSession):
     db.commit()
 
     return {"message": "Email verified successfully"}
+
+
+@router.post("/resend-verification", status_code=status.HTTP_202_ACCEPTED)
+def resend_verification_email(db: DbSession, request_data: ResendVerificationRequest):
+    email_or_username = request_data.identifier.lower()
+    user = (
+        db.execute(
+            select(User).where(
+                or_(
+                    func.lower(User.email) == email_or_username,
+                    func.lower(User.username) == email_or_username,
+                )
+            )
+        )
+        .scalars()
+        .first()
+    )
+
+    if user and not user.is_verified:
+        db.execute(
+            sql_delete(VerificationToken).where(VerificationToken.user_id == user.id)
+        )
+
+        token = generate_reset_tokens()
+        token_hash = hash_reset_token(token)
+        expires_at = datetime.now(UTC) + timedelta(hours=24)
+
+        db.add(
+            VerificationToken(
+                user_id=user.id, token_hash=token_hash, expires_at=expires_at
+            )
+        )
+        db.commit()
+
+        try:
+            send_verification_email(
+                to_email=user.email, username=user.username, token=token
+            )
+        except Exception:
+            pass
+
+    return {
+        "message": "If an account exists and isn't verified yet, a new verification link has been sent"
+    }
 
 
 # ========================================================================================

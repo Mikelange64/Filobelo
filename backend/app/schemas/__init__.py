@@ -3,6 +3,7 @@ from .auth import (
     ChangePasswordRequest,
     ForgotPasswordRequest,
     RefreshRequest,
+    ResendVerificationRequest,
     ResetPasswordRequest,
     Token,
 )
@@ -60,6 +61,7 @@ __all__ = [
     "EmailVerification",
     "ForgotPasswordRequest",
     "RefreshRequest",
+    "ResendVerificationRequest",
     "ResetPasswordRequest",
     "ChangePasswordRequest",
 ]

@@ -18,7 +18,12 @@ class RefreshRequest(BaseModel):
 class EmailVerification(BaseModel):
     token : str
 
-    
+
+class ResendVerificationRequest(BaseModel):
+    # login accepts email or username, so this mirrors that instead of forcing email only
+    identifier: str = Field(max_length=120)
+
+
 # ================================= PASSWORD RESET TOKENS ================================
 
 class ForgotPasswordRequest(BaseModel):
