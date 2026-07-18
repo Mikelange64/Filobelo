@@ -112,3 +112,5 @@ def require_superuser(current_user : CurrentUser) -> User:
         )
         
     return current_user
+
+

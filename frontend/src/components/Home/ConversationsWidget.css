@@ -1,0 +1,103 @@
+.conversations-widget {
+  margin-top: 20px;
+  padding: 16px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background-color: var(--color-bg-card);
+  box-shadow: var(--shadow-card);
+}
+
+.conversations-widget__heading {
+  margin: 0 0 8px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.conversations-widget__list {
+  display: flex;
+  flex-direction: column;
+}
+
+.conversations-widget__row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 6px;
+  border: none;
+  border-radius: var(--radius-control);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.1s;
+}
+
+.conversations-widget__row:hover {
+  background-color: var(--color-bg-card-hover);
+}
+
+.conversations-widget__avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  min-width: 30px;
+  border-radius: 50%;
+  background: var(--color-brand-secondary);
+  color: var(--color-text-on-brand);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.conversations-widget__avatar--bot {
+  background: var(--color-info-bg);
+  color: var(--color-brand-primary);
+}
+
+.conversations-widget__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.conversations-widget__top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.conversations-widget__title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.conversations-widget__workspace {
+  margin-left: 7px;
+  font-size: 0.76rem;
+  font-weight: 500;
+  color: var(--color-text-muted);
+}
+
+.conversations-widget__time {
+  flex-shrink: 0;
+  font-size: 0.74rem;
+  color: var(--color-text-muted);
+}
+
+.conversations-widget__preview {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+}

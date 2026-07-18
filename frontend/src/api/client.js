@@ -36,11 +36,19 @@ async function attemptRefresh() {
     const { refresh } = getTokens()
     if (!refresh) throw new Error('No refresh token')
 
-    const res = await fetch(`${BASE_URL}/users/refresh`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refresh_token: refresh }),
-    })
+    let res
+    try {
+      res = await fetch(`${BASE_URL}/users/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh_token: refresh }),
+      })
+    } catch {
+      // Network/connection failure (e.g. backend momentarily unreachable) -
+      // not a verdict on the refresh token itself, so don't wipe a session
+      // that may still be perfectly valid.
+      throw new NetworkError('Could not reach server')
+    }
 
     if (!res.ok) {
       clearTokens()
@@ -61,6 +69,8 @@ async function attemptRefresh() {
 
 // Authenticated fetch — adds Bearer header, retries once after a 401 via refresh.
 // On a second 401 or refresh failure, clears tokens and redirects to /login.
+// A network failure during that retry does NOT clear tokens - it means the
+// server was briefly unreachable, not that the session is actually invalid.
 export async function authFetch(path, options = {}) {
   const { access } = getTokens()
 
@@ -76,7 +86,10 @@ export async function authFetch(path, options = {}) {
     try {
       const newToken = await attemptRefresh()
       res = await fetch(`${BASE_URL}${path}`, { ...options, headers: makeHeaders(newToken) })
-    } catch {
+    } catch (err) {
+      if (err instanceof NetworkError) {
+        throw new ApiError(0, 'Could not reach server - please try again')
+      }
       clearTokens()
       window.dispatchEvent(new CustomEvent('auth:expired'))
       throw new ApiError(401, 'Session expired')
@@ -105,6 +118,8 @@ export class ApiError extends Error {
     this.detail = detail
   }
 }
+
+class NetworkError extends Error {}
 
 // Login uses OAuth2PasswordRequestForm — must send application/x-www-form-urlencoded.
 // The `username` field accepts either email or username (see backend router).
@@ -145,6 +160,13 @@ export function createWorkspace(data) {
 
 export function patchWorkspace(id, data) {
   return authFetch(`/workspaces/${id}`, { method: 'PATCH', body: JSON.stringify(data) })
+}
+
+// Pin/archive/folder are the caller's own preferences for a shared
+// workspace, not admin-only workspace fields - separate endpoint so any
+// member can set them for themselves.
+export function patchWorkspacePreferences(id, data) {
+  return authFetch(`/workspaces/${id}/me`, { method: 'PATCH', body: JSON.stringify(data) })
 }
 
 export function deleteWorkspace(id) {
@@ -354,4 +376,45 @@ export async function uploadResourceFile(workspaceId, taskId, file) {
     body: form,
   })
   return parseResponse(res)
+}
+
+// Conversations (scoped to a workspace)
+export function listConversations(workspaceId) {
+  return authFetch(`/workspaces/${workspaceId}/conversations/`)
+}
+
+// Recent conversations across every workspace the user belongs to (Home page widget).
+export function listRecentConversations(limit = 4) {
+  return authFetch(`/conversations/recent?limit=${limit}`)
+}
+
+export function createConversation(workspaceId, data) {
+  return authFetch(`/workspaces/${workspaceId}/conversations/`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+}
+
+export function updateConversation(workspaceId, conversationId, data) {
+  return authFetch(`/workspaces/${workspaceId}/conversations/${conversationId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  })
+}
+
+export function deleteConversation(workspaceId, conversationId) {
+  return authFetch(`/workspaces/${workspaceId}/conversations/${conversationId}`, {
+    method: 'DELETE',
+  })
+}
+
+export function listMessages(workspaceId, conversationId, skip = 0, limit = 100) {
+  return authFetch(`/workspaces/${workspaceId}/conversations/${conversationId}/messages?skip=${skip}&limit=${limit}`)
+}
+
+export function sendMessage(workspaceId, conversationId, data) {
+  return authFetch(`/workspaces/${workspaceId}/conversations/${conversationId}/messages`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
 }

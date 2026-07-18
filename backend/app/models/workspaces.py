@@ -25,9 +25,7 @@ class Workspace(Base):
     title       : Mapped[str] = mapped_column(String(50), nullable=False)
     description : Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
     max_number  : Mapped[int | None] = mapped_column(Integer, nullable=True, default=None)
-    folder_id   : Mapped[int | None] = mapped_column(Integer, ForeignKey("folders.id"), nullable=True, default=None, index=True)
 
-    folder: Mapped["Folder | None"] = relationship(back_populates="workspaces")
     members: Mapped[list["User"]] = relationship(
         secondary="workspace_member", back_populates="workspaces", viewonly=True
     )
@@ -45,8 +43,6 @@ class Workspace(Base):
     due_date: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True, default=None
     )
-    is_pinned     : Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    is_archived   : Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     is_completed  : Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     completed_at  : Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, default=None)
 
@@ -91,4 +87,3 @@ class Folder(Base):
     )
 
     owner      : Mapped["User"] = relationship(back_populates="folders")
-    workspaces : Mapped[list["Workspace"]] = relationship(back_populates="folder")

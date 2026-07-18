@@ -23,6 +23,7 @@ class UserPublic(BaseModel):
 class UserPrivate(UserPublic):
     email      : EmailStr
     last_login : datetime | None
+    is_premium : bool
     
 
 class SuperUserResponse(UserPrivate):

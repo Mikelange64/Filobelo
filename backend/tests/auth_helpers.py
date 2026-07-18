@@ -121,7 +121,7 @@ def create_task(
         "title": title,
         "content": content,
         "creator_id": 1,  # ignored by endpoint, overridden from auth
-        "owner_id": 1,  # ignored by endpoint, overridden from auth
+        # owner_id omitted - tasks are unassigned by default unless requested
         "workspace_id": workspace_id,
     }
     if due_date is not None:

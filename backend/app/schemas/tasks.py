@@ -6,18 +6,22 @@ from pydantic import BaseModel, ConfigDict, Field
 class TaskCreate(BaseModel):
     title    : str = Field(min_length=1, max_length=100)
     content  : str = Field(default='', max_length=300)
+    color    : str = Field(min_length=1, max_length=50, default="#6bc4d4")
+    owner_id : int | None = None
     due_date : datetime | None = None
 
 
 class TaskUpdate(BaseModel):
     title    : str | None = Field(default=None, min_length=1, max_length=100)
     content  : str | None = Field(default=None, min_length=1, max_length=300)
+    color    : str | None = Field(default=None, min_length=1, max_length=50)
     due_date : datetime | None = None
 
 
 class TaskFullUpdate(BaseModel):
     title    : str = Field(min_length=1, max_length=100)
     content  : str = Field(min_length=1, max_length=300)
+    color    : str = Field(min_length=1, max_length=50, default="#6bc4d4")
     due_date : datetime | None = None
 
 
@@ -27,6 +31,7 @@ class TaskResponse(BaseModel):
     id           : int
     title        : str
     content      : str
+    color        : str
     creator_id   : int | None
     owner_id     : int | None
     workspace_id : int
@@ -49,6 +54,7 @@ class TaskSummary(BaseModel):
 
     id           : int
     title        : str
+    color        : str
     due_date     : datetime | None
     is_completed : bool
     owner_id     : int | None

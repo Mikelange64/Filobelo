@@ -12,11 +12,13 @@ dependencies = [
     "filetype>=1.2.0",
     "greenlet>=3.3.2",
     "httpx>=0.28.1",
+    "openai>=2.46.0",
     "pillow>=12.2.0",
     "psycopg[binary]>=3.3.4",
     "pwdlib[argon2]>=0.3.0",
     "pydantic-settings>=2.13.1",
     "pyjwt>=2.12.1",
+    "redis>=8.0.1",
     "sqlalchemy>=2.0.48",
 ]
 

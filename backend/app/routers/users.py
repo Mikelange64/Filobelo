@@ -10,6 +10,7 @@ from sqlalchemy import func, or_, select
 
 from app.auth import (
     CurrentUser,
+    LoginForm,
     create_access_token,
     generate_reset_tokens,
     get_current_user,
@@ -27,6 +28,12 @@ from app.models import (
     VerificationToken,
     Workspace,
     WorkspaceMember,
+)
+from app.redis_client import(
+    login_limiter, 
+    register_limiter, 
+    password_reset_limiter,
+    resend_verification_limiter
 )
 from app.schemas import (
     ChangePasswordRequest,
@@ -61,6 +68,8 @@ router = APIRouter(tags=["users"])
 
 @router.post("", response_model=UserPrivate, status_code=status.HTTP_201_CREATED)
 def create_user(user: UserCreate, db: DbSession):
+    register_limiter(user, db)
+
     email_exists = (
         db.execute(select(User).where(func.lower(User.email) == user.email.lower()))
         .scalars()
@@ -109,11 +118,8 @@ def create_user(user: UserCreate, db: DbSession):
     return new_user
 
 
-@router.post("/login", response_model=Token)
-def login(
-    db: DbSession,
-    form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
-):
+@router.post("/login", response_model=Token, dependencies=[Depends(login_limiter)])
+def login(db: DbSession, form_data: LoginForm,):
     # here we use the form data username field to accept either email or username, so the user has a choice
     email_or_username = form_data.username.lower()
     user = (
@@ -129,7 +135,7 @@ def login(
         .first()
     )
 
-    if not user or not  verify_password(form_data.password, user.password_hash):
+    if not user or not verify_password(form_data.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect password or email/username",
@@ -352,6 +358,8 @@ def verify_email(request_data: EmailVerification, db: DbSession):
 
 @router.post("/resend-verification", status_code=status.HTTP_202_ACCEPTED)
 def resend_verification_email(db: DbSession, request_data: ResendVerificationRequest):
+    resend_verification_limiter(request_data, db)
+
     email_or_username = request_data.identifier.lower()
     user = (
         db.execute(
@@ -401,6 +409,8 @@ def resend_verification_email(db: DbSession, request_data: ResendVerificationReq
 
 @router.post("/forgot-password", status_code=status.HTTP_202_ACCEPTED)
 def forgot_password(db: DbSession, request_data: ForgotPasswordRequest):
+    password_reset_limiter(request_data, db)
+
     user = (
         db.execute(
             select(User).where(func.lower(User.email) == request_data.email.lower())

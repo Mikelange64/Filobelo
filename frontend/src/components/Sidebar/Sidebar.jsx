@@ -56,6 +56,7 @@ function FolderCreateRow({ onCreate, onCancel }) {
   const [showPicker, setShowPicker] = useState(false)
   const inputRef = useRef(null)
   const pickerRef = useRef(null)
+  const containerRef = useRef(null)
 
   useEffect(() => { inputRef.current?.focus() }, [])
 
@@ -67,6 +68,14 @@ function FolderCreateRow({ onCreate, onCancel }) {
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [showPicker])
+
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (containerRef.current && !containerRef.current.contains(e.target)) onCancel()
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [onCancel])
 
   function handleKeyDown(e) {
     if (e.key === 'Enter') submit()
@@ -80,7 +89,7 @@ function FolderCreateRow({ onCreate, onCancel }) {
   }
 
   return (
-    <div className="sidebar__folder-create">
+    <div className="sidebar__folder-create" ref={containerRef}>
       <div className="sidebar__folder-create-row">
         <div className="sidebar__color-dot-wrap" ref={pickerRef}>
           <button

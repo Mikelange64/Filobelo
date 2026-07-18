@@ -1,7 +1,7 @@
 from datetime import datetime, UTC
 from enum import Enum
 
-from sqlalchemy import Integer, Text, ForeignKey, DateTime, String, Boolean, Enum as sqlEnum
+from sqlalchemy import Integer, Text, ForeignKey, DateTime, String, Boolean, Enum as sqlEnum, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -10,6 +10,10 @@ from app.database import Base
 class ConversationType(str, Enum):
     WORKSPACE = "WORKSPACE"
     BOT = "BOT"
+
+class SenderType(Enum):
+    USER = "USER"
+    BOT  = "BOT"
 
 
 class Conversation(Base):
@@ -36,25 +40,39 @@ class Conversation(Base):
 
     is_pinned    : Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_archived  : Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    last_opened_at  : Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(UTC),
+        server_default=func.now(),
+    )
+    # Null until the first message is sent - set by the send_message endpoint,
+    # not defaulted at creation time (a new conversation has no messages yet).
+    last_message_at : Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        default=None,
+    )
 
-    messages: Mapped[list["Message"]] = relationship(
+    messages     : Mapped[list["Message"]] = relationship(
         "Message",
         back_populates="conversation",
         cascade="all, delete-orphan",
         order_by="Message.created_at",
     )
-    workspace: Mapped["Workspace"] = relationship(
+    workspace    : Mapped["Workspace"] = relationship(
         "Workspace", foreign_keys=[workspace_id], back_populates="conversations"
     )
-    creator : Mapped["User | None"] = relationship(
+    creator      : Mapped["User | None"] = relationship(
         "User", foreign_keys=[creator_id], back_populates="conversations_created"
     )
 
     @property
-    def last_message_at(self):
-        if self.messages :
-            last_message = self.messages[-1]
-            return last_message.created_at
+    def last_message(self) -> str | None:
+        if not self.messages:
+            return None
+        content = self.messages[-1].content
+        return content if len(content) <= 100 else content[:100] + "…"
 
 
 class Message(Base):
@@ -67,21 +85,22 @@ class Message(Base):
         nullable=False, 
         index=True
     ) 
-    sender_id : Mapped[int | None] = mapped_column(
+    sender_id       : Mapped[int | None] = mapped_column(
         Integer,
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
         index=True
     )
-    content    : Mapped[str] = mapped_column(Text, nullable=False)
-    created_at : Mapped[datetime] = mapped_column(
+    sender_type     : Mapped[SenderType] = mapped_column(sqlEnum(SenderType), nullable=False)
+    content         : Mapped[str] = mapped_column(Text, nullable=False)
+    created_at      : Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
     )
 
-    conversation : Mapped["Conversation"] = relationship(
+    conversation    : Mapped["Conversation"] = relationship(
         "Conversation", back_populates="messages",
     )
-    sender : Mapped["User | None"] = relationship(
+    sender          : Mapped["User | None"] = relationship(
         "User", foreign_keys=[sender_id], back_populates="messages_sent"
     )
     

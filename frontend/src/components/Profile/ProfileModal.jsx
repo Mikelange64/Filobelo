@@ -84,6 +84,11 @@ function AccountPanel({ user, refreshUser, logout, onClose, onToast }) {
     }
   }
 
+  function handleSignOut() {
+    logout()
+    onClose()
+  }
+
   async function handleDeleteAccount() {
     if (!confirmDelete) {
       setConfirmDelete(true)
@@ -178,6 +183,12 @@ function AccountPanel({ user, refreshUser, logout, onClose, onToast }) {
           disabled={!isDirty || saving}
         >
           {saving ? 'Saving…' : saved ? 'Saved ✓' : 'Save changes'}
+        </button>
+      </div>
+
+      <div className="pm-signout-row">
+        <button type="button" className="pm-btn pm-btn--ghost" onClick={handleSignOut}>
+          Sign out
         </button>
       </div>
 

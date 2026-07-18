@@ -226,7 +226,7 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-control);
   box-shadow: 0 8px 24px hsl(30 20% 10% / 0.12);
-  z-index: 10;
+  z-index: 250;
 }
 
 .topbar__profile-menu-item {

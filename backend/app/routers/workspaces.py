@@ -13,13 +13,14 @@ from app.dependencies import (
     require_admin,
     require_membership,
 )
-from app.models import User, Workspace, WorkspaceMember
+from app.models import Folder, User, Workspace, WorkspaceMember
 from app.config import settings
 from app.schemas import (
     InviteExternalRequest,
     PaginatedWorkspaceResponse,
     UserPublic,
     WorkspaceCreate,
+    WorkspaceMemberPrefsUpdate,
     WorkspaceMemberPublic,
     WorkspaceResponse,
     WorkspaceUpdate,
@@ -28,6 +29,25 @@ from app.utils import get_workspace_by_id
 from app.utils.email_utils import send_join_invite_email, send_member_added_email
 
 router = APIRouter(tags=["workspaces"])
+
+
+def _workspace_response(
+    workspace: Workspace, member: WorkspaceMember | None
+) -> WorkspaceResponse:
+    """Merges a Workspace with the requesting user's own WorkspaceMember row.
+
+    Pin/archive/folder are per-member preferences on a shared workspace, so
+    they never live on the Workspace row itself - every response has to be
+    stitched together from both models this way.
+    """
+    return WorkspaceResponse.model_validate(workspace).model_copy(
+        update={
+            "current_user_role": member.role if member else None,
+            "is_pinned": member.is_pinned if member else False,
+            "is_archived": member.is_archived if member else False,
+            "folder_id": member.folder_id if member else None,
+        }
+    )
 
 
 # ========================================================================================
@@ -62,22 +82,19 @@ def get_my_workspaces(
     )
 
     workspace_ids = [ws.id for ws in workspaces]
-    role_map = {
-        ws_id: role
-        for ws_id, role in db.execute(
-            select(WorkspaceMember.workspace_id, WorkspaceMember.role).where(
+    member_map = {
+        m.workspace_id: m
+        for m in db.execute(
+            select(WorkspaceMember).where(
                 WorkspaceMember.workspace_id.in_(workspace_ids),
                 WorkspaceMember.user_id == current_user.id,
             )
-        ).all()
+        ).scalars()
     }
 
     return PaginatedWorkspaceResponse(
         workspaces=[
-            WorkspaceResponse.model_validate(ws).model_copy(
-                update={"current_user_role": role_map.get(ws.id)}
-            )
-            for ws in workspaces
+            _workspace_response(ws, member_map.get(ws.id)) for ws in workspaces
         ],
         total=total,
         skip=skip,
@@ -107,9 +124,7 @@ def create_workspace(
     db.commit()
     db.refresh(new_workspace)
 
-    return WorkspaceResponse.model_validate(new_workspace).model_copy(
-        update={"current_user_role": "admin"}
-    )
+    return _workspace_response(new_workspace, new_member)
 
 
 @router.get("/completed", response_model=PaginatedWorkspaceResponse)
@@ -141,22 +156,19 @@ def get_completed_workspaces(
     )
 
     workspace_ids = [ws.id for ws in workspaces]
-    role_map = {
-        ws_id: role
-        for ws_id, role in db.execute(
-            select(WorkspaceMember.workspace_id, WorkspaceMember.role).where(
+    member_map = {
+        m.workspace_id: m
+        for m in db.execute(
+            select(WorkspaceMember).where(
                 WorkspaceMember.workspace_id.in_(workspace_ids),
                 WorkspaceMember.user_id == current_user.id,
             )
-        ).all()
+        ).scalars()
     }
 
     return PaginatedWorkspaceResponse(
         workspaces=[
-            WorkspaceResponse.model_validate(ws).model_copy(
-                update={"current_user_role": role_map.get(ws.id)}
-            )
-            for ws in workspaces
+            _workspace_response(ws, member_map.get(ws.id)) for ws in workspaces
         ],
         total=total,
         skip=skip,
@@ -185,9 +197,7 @@ def complete_workspace(
     db.commit()
     db.refresh(workspace)
 
-    return WorkspaceResponse.model_validate(workspace).model_copy(
-        update={"current_user_role": member.role}
-    )
+    return _workspace_response(workspace, member)
 
 
 @router.patch("/{workspace_id}/reopen", response_model=WorkspaceResponse)
@@ -210,9 +220,7 @@ def reopen_workspace(
     db.commit()
     db.refresh(workspace)
 
-    return WorkspaceResponse.model_validate(workspace).model_copy(
-        update={"current_user_role": member.role}
-    )
+    return _workspace_response(workspace, member)
 
 
 @router.get("/{workspace_id}", response_model=WorkspaceResponse)
@@ -234,25 +242,22 @@ def get_workspace(
             status_code=status.HTTP_404_NOT_FOUND, detail="Workspace not found"
         )
 
-    role = db.execute(
-        select(WorkspaceMember.role).where(
+    member = db.execute(
+        select(WorkspaceMember).where(
             WorkspaceMember.workspace_id == workspace_id,
             WorkspaceMember.user_id == current_user.id,
         )
-    ).scalar()
+    ).scalars().first()
 
-    return WorkspaceResponse.model_validate(workspace).model_copy(
-        update={"current_user_role": role}
-    )
+    return _workspace_response(workspace, member)
 
 
-@router.patch(
-    "/{workspace_id}",
-    response_model=WorkspaceResponse,
-    dependencies=[Depends(require_admin)],
-)
+@router.patch("/{workspace_id}", response_model=WorkspaceResponse)
 def update_workspace_partial(
-    workspace_id: int, workspace_data: WorkspaceUpdate, db: DbSession
+    workspace_id: int,
+    workspace_data: WorkspaceUpdate,
+    db: DbSession,
+    member: Annotated[WorkspaceMember, Depends(require_admin)],
 ):
     workspace = get_workspace_by_id(workspace_id, db)
 
@@ -262,16 +267,15 @@ def update_workspace_partial(
 
     db.commit()
     db.refresh(workspace)
-    return workspace
+    return _workspace_response(workspace, member)
 
 
-@router.put(
-    "/{workspace_id}/",
-    response_model=WorkspaceResponse,
-    dependencies=[Depends(require_admin)],
-)
+@router.put("/{workspace_id}/", response_model=WorkspaceResponse)
 def update_workspace_full(
-    workspace_id: int, workspace_data: WorkspaceCreate, db: DbSession
+    workspace_id: int,
+    workspace_data: WorkspaceCreate,
+    db: DbSession,
+    member: Annotated[WorkspaceMember, Depends(require_admin)],
 ):
     workspace = get_workspace_by_id(workspace_id, db)
 
@@ -282,7 +286,35 @@ def update_workspace_full(
 
     db.commit()
     db.refresh(workspace)
-    return workspace
+    return _workspace_response(workspace, member)
+
+
+@router.patch("/{workspace_id}/me", response_model=WorkspaceResponse)
+def update_my_workspace_preferences(
+    workspace_id: int,
+    data: WorkspaceMemberPrefsUpdate,
+    db: DbSession,
+    current_user: CurrentUser,
+    member: Annotated[WorkspaceMember, Depends(require_membership)],
+):
+    """Pin/archive/file this workspace for the caller only - any member can
+    do this for themselves, it never touches anyone else's view."""
+    workspace = get_workspace_by_id(workspace_id, db)
+
+    update = data.model_dump(exclude_unset=True)
+    if update.get("folder_id") is not None:
+        folder = db.get(Folder, update["folder_id"])
+        if not folder or folder.owner_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Folder not found"
+            )
+
+    for field, value in update.items():
+        setattr(member, field, value)
+
+    db.commit()
+    db.refresh(member)
+    return _workspace_response(workspace, member)
 
 
 # ========================================================================================
@@ -312,12 +344,14 @@ def get_members(workspace_id: int, db: DbSession):
     ]
 
 
-@router.patch(
-    "/{workspace_id}/members/{user_id}",
-    response_model=WorkspaceResponse,
-    dependencies=[Depends(require_admin)],
-)
-def add_user(workspace_id: int, user_id: int, current_user: CurrentUser, db: DbSession):
+@router.patch("/{workspace_id}/members/{user_id}", response_model=WorkspaceResponse)
+def add_user(
+    workspace_id: int,
+    user_id: int,
+    current_user: CurrentUser,
+    db: DbSession,
+    member: Annotated[WorkspaceMember, Depends(require_admin)],
+):
     if get_target_membership(workspace_id, user_id, db):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail="User already in the workspace"
@@ -343,7 +377,7 @@ def add_user(workspace_id: int, user_id: int, current_user: CurrentUser, db: DbS
     except Exception:
         pass
 
-    return get_workspace_by_id(workspace_id, db)
+    return _workspace_response(get_workspace_by_id(workspace_id, db), member)
 
 
 @router.post(
@@ -384,26 +418,27 @@ def invite_external(
     return {"message": f"Invitation sent to {body.email}"}
 
 
-@router.patch(
-    "/{workspace_id}/members/{user_id}/admin",
-    response_model=WorkspaceResponse,
-    dependencies=[Depends(require_admin)],
-)
-def make_admin(workspace_id: int, user_id: int, db: DbSession):
-    member = get_target_membership(workspace_id, user_id, db)
-    if not member:
+@router.patch("/{workspace_id}/members/{user_id}/admin", response_model=WorkspaceResponse)
+def make_admin(
+    workspace_id: int,
+    user_id: int,
+    db: DbSession,
+    caller_member: Annotated[WorkspaceMember, Depends(require_admin)],
+):
+    target_member = get_target_membership(workspace_id, user_id, db)
+    if not target_member:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="User is not a member of this workspace",
         )
 
     workspace = get_workspace_by_id(workspace_id, db)
-    if member.role == "admin":
-        return workspace
+    if target_member.role == "admin":
+        return _workspace_response(workspace, caller_member)
 
-    member.role = "admin"
+    target_member.role = "admin"
     db.commit()
-    return workspace
+    return _workspace_response(workspace, caller_member)
 
 
 @router.delete("/{workspace_id}/members/me", status_code=status.HTTP_204_NO_CONTENT)
@@ -416,20 +451,21 @@ def leave_workspace(
     db.commit()
 
 
-@router.delete(
-    "/{workspace_id}/members/{user_id}",
-    response_model=WorkspaceResponse,
-    dependencies=[Depends(require_admin)],
-)
-def remove_user(workspace_id: int, user_id: int, db: DbSession):
-    member = get_target_membership(workspace_id, user_id, db)
-    if not member:
+@router.delete("/{workspace_id}/members/{user_id}", response_model=WorkspaceResponse)
+def remove_user(
+    workspace_id: int,
+    user_id: int,
+    db: DbSession,
+    caller_member: Annotated[WorkspaceMember, Depends(require_admin)],
+):
+    target_member = get_target_membership(workspace_id, user_id, db)
+    if not target_member:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="User is not a member of this workspace",
         )
 
-    handle_membership_departure(member, db)
+    handle_membership_departure(target_member, db)
     db.commit()
 
-    return get_workspace_by_id(workspace_id, db)
+    return _workspace_response(get_workspace_by_id(workspace_id, db), caller_member)

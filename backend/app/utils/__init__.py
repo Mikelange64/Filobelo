@@ -7,11 +7,13 @@ from .image_utils import (
 )
 from .oembed import fetch_oembed_thumbnail
 from .queries import (
+    get_conversation_by_id_with_messages,
     get_conversation_by_id,
     get_resource_by_id,
     get_task_by_id,
     get_user_by_id,
     get_workspace_by_id,
+    get_workspace_task_index,
 )
 
 __all__ = [
@@ -19,8 +21,10 @@ __all__ = [
     "get_user_by_id",
     "get_task_by_id",
     "get_workspace_by_id",
+    "get_workspace_task_index",
     "get_resource_by_id",
     "get_conversation_by_id",
+    "get_conversation_by_id_with_messages",
 
     # IMAGE UTILS
     "upload_profile_image",

@@ -6,7 +6,7 @@ import hashlib
 import secrets
 
 from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from pwdlib import PasswordHash
 from sqlalchemy import select
 
@@ -98,6 +98,7 @@ def get_current_user(
 
 
 CurrentUser = Annotated[User, Depends(get_current_user)]
+LoginForm = Annotated[OAuth2PasswordRequestForm, Depends()]
 
 
 # ================================= PASSWORD RESET TOKEN =================================

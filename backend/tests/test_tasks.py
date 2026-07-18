@@ -67,7 +67,6 @@ def test_create_task_as_admin_success(client: TestClient, user_auth_headers, wor
             "title": "My Task",
             "content": "Task content here.",
             "creator_id": 1,
-            "owner_id": 1,
             "workspace_id": workspace["id"],
         },
         headers=user_auth_headers,
@@ -88,13 +87,14 @@ def test_create_task_as_regular_member_success(
             "title": "Member Task",
             "content": "Created by a regular member.",
             "creator_id": 1,
-            "owner_id": 1,
             "workspace_id": workspace["id"],
         },
         headers=auth_header(member_token),
     )
     assert response.status_code == 201
     assert response.json()["creator_id"] == second_user["id"]
+    # owner_id is omitted from the request - tasks default to their creator
+    # unless a different assignee is explicitly chosen at creation.
     assert response.json()["owner_id"] == second_user["id"]
 
 

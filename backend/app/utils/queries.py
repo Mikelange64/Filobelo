@@ -68,6 +68,43 @@ def get_conversation_by_id(conversation_id: int, workspace_id: int, db: DbSessio
     return conversation
 
 
+def get_conversation_by_id_with_messages(conversation_id: int, workspace_id: int, db: DbSession) -> Conversation:
+    # scoped to workspace_id so a member of one workspace can't reach another
+    # workspace's conversation by guessing its id
+    conversation = (
+        db.execute(
+            select(Conversation)
+            .options(joinedload(Conversation.messages))
+            .where(
+                Conversation.id == conversation_id,
+                Conversation.workspace_id == workspace_id,
+            )
+        )
+        .scalars().first()
+    )
+
+    if not conversation :
+        raise HTTPException(
+            status_code = status.HTTP_404_NOT_FOUND, detail = "Conversation not found"
+        )
+
+    return conversation
+
+
+def get_workspace_task_index(workspace_id: int, db: DbSession) -> list[Task]:
+    # unique() is required here: joinedload against Task.resources (a
+    # collection) produces one raw row per resource, so a task with 3
+    # resources comes back as 3 duplicate Task rows before dedup.
+    return (
+        db.execute(
+            select(Task)
+            .options(joinedload(Task.resources))
+            .where(Task.workspace_id == workspace_id)
+        )
+        .unique().scalars().all()
+    )
+
+
 def get_workspace_by_id(workspace_id: int,  db: DbSession) -> Workspace :
     workspace = (
         db.execute(

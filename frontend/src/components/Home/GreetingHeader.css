@@ -1,0 +1,16 @@
+.greeting-header {
+  margin-bottom: 20px;
+}
+
+.greeting-header__title {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.greeting-header__date {
+  margin: 4px 0 0;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}

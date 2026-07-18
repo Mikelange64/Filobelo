@@ -1,6 +1,7 @@
 import os
 from io import BytesIO
 from pathlib import Path
+from types import SimpleNamespace
 
 import boto3
 import pytest
@@ -28,9 +29,11 @@ os.environ["MAIL_PASSWORD"] = ""
 os.environ["MAIL_FROM"] = "test@example.com"
 os.environ["MAIL_USE_TLS"] = "False"
 os.environ["FRONTEND_URL"] = "http://localhost:3000"
+os.environ["REDIS_URL"] = "redis://localhost:6379/15"
 
 from app.database import Base, get_db
 from app.main import app
+from app.redis_client import redis_client
 from tests.auth_helpers import (
     auth_header,
     create_test_user,
@@ -68,6 +71,14 @@ def db_session(setup_database, test_engine):
     connection.close()
 
 
+@pytest.fixture(autouse=True)
+def _flush_test_redis():
+    """Isolated DB index (15) from dev/prod, flushed before every test so the
+    rate limiters (register/login/password-reset) never bleed state across tests."""
+    redis_client.flushdb()
+    yield
+
+
 @pytest.fixture
 def client(db_session):
     def override_get_db():
@@ -95,6 +106,16 @@ def user(client, db_session):
     u.is_verified = True
     db_session.flush()
     return user_data
+
+
+@pytest.fixture
+def premium_user(user, db_session):
+    """Upgrade the default test user to premium (needed for Filobelo bot access)."""
+    from app.models import User as UserModel
+    u = db_session.get(UserModel, user["id"])
+    u.is_premium = True
+    db_session.flush()
+    return user
 
 
 @pytest.fixture
@@ -151,3 +172,35 @@ def test_image() -> bytes:
     buf = BytesIO()
     img.save(buf, "JPEG")
     return buf.getvalue()
+
+
+class FakeCompletions:
+    """Stands in for client.chat.completions - records every create() call and
+    lets a test control the response (or force an error) without touching
+    the real DeepSeek API."""
+
+    def __init__(self):
+        self.output_text = "This is Filobelo's reply."
+        self.exception: Exception | None = None
+        self.calls: list[dict] = []
+
+    def create(self, **kwargs):
+        self.calls.append(kwargs)
+        if self.exception is not None:
+            raise self.exception
+        message = SimpleNamespace(content=self.output_text, tool_calls=None)
+        return SimpleNamespace(choices=[SimpleNamespace(message=message)])
+
+
+@pytest.fixture
+def fake_bot_client(monkeypatch):
+    """Swaps filobelo_bot's real OpenAI-compatible client for a fake one for
+    the duration of the test. monkeypatch reverts this automatically on
+    teardown."""
+    from app.bot_service import filobelo_bot
+
+    fake = FakeCompletions()
+    monkeypatch.setattr(
+        filobelo_bot, "client", SimpleNamespace(chat=SimpleNamespace(completions=fake))
+    )
+    return fake

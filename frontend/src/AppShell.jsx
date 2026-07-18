@@ -1,7 +1,11 @@
 import { useState, useEffect, useRef } from 'react'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
-import Topbar from './components/Topbar/Topbar'
-import Sidebar from './components/Sidebar/Sidebar'
+// Redesign in progress: Topbar removed, replaced by SidebarV2 (search, theme,
+// calendar, and notifications all moved into the sidebar). Old implementation
+// kept commented out below for a side-by-side comparison.
+// import Topbar from './components/Topbar/Topbar'
+// import Sidebar from './components/Sidebar/Sidebar'
+import SidebarV2 from './components/Sidebar/SidebarV2'
 import NewWorkspaceModal from './components/Home/NewWorkspaceModal'
 import ProfileModal from './components/Profile/ProfileModal'
 import CalendarModal from './components/Calendar/CalendarModal'
@@ -11,7 +15,7 @@ import { useAuth } from './context/AuthContext'
 import {
   authFetch,
   createWorkspace,
-  patchWorkspace,
+  patchWorkspacePreferences,
   deleteWorkspace,
   leaveWorkspace,
   getFolders,
@@ -59,12 +63,14 @@ function normalizeWorkspace(ws) {
 }
 
 function AppShell() {
+  // logout is unused while the old Topbar stays commented out below (it now lives in
+  // ProfileModal's AccountPanel) - kept here so uncommenting Topbar to compare still works.
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const [workspaces, setWorkspaces] = useState([])
   const [folders, setFolders] = useState([])
-  const [searchValue, setSearchValue] = useState('')
+  // const [searchValue, setSearchValue] = useState('') // Topbar-only; SidebarV2 filters locally
   const [showNewModal, setShowNewModal] = useState(false)
   const [showProfileModal, setShowProfileModal] = useState(false)
   const [showCalendar, setShowCalendar] = useState(false)
@@ -118,11 +124,11 @@ function AppShell() {
     (ws) => !ws.isArchived && !ws.isCompleted
   )
 
-  const searchSuggestions = searchValue.trim()
-    ? activeWorkspaces.filter((ws) =>
-        ws.title.toLowerCase().includes(searchValue.toLowerCase())
-      )
-    : []
+  // const searchSuggestions = searchValue.trim() // Topbar-only; SidebarV2 filters locally
+  //   ? activeWorkspaces.filter((ws) =>
+  //       ws.title.toLowerCase().includes(searchValue.toLowerCase())
+  //     )
+  //   : []
 
   const upcomingTasks = activeWorkspaces.flatMap((ws) =>
     ws.tasks
@@ -136,8 +142,8 @@ function AppShell() {
       }))
   )
 
-  function handleSelectWorkspace(id) {
-    navigate(`/workspaces/${id}`)
+  function handleSelectWorkspace(id, { conversationId } = {}) {
+    navigate(conversationId ? `/workspaces/${id}?convo=${conversationId}` : `/workspaces/${id}`)
   }
 
   async function handleTogglePin(id) {
@@ -148,7 +154,7 @@ function AppShell() {
       prev.map((w) => (w.id === id ? { ...w, isPinned: next } : w))
     )
     try {
-      await patchWorkspace(id, { is_pinned: next })
+      await patchWorkspacePreferences(id, { is_pinned: next })
     } catch {
       setWorkspaces((prev) =>
         prev.map((w) => (w.id === id ? { ...w, isPinned: ws.isPinned } : w))
@@ -163,7 +169,7 @@ function AppShell() {
       prev.map((w) => (w.id === id ? { ...w, isArchived: true } : w))
     )
     try {
-      await patchWorkspace(id, { is_archived: true })
+      await patchWorkspacePreferences(id, { is_archived: true })
     } catch {
       setWorkspaces((prev) =>
         prev.map((w) => (w.id === id ? { ...w, isArchived: false } : w))
@@ -200,7 +206,7 @@ function AppShell() {
     if (!ws) return
     setWorkspaces((prev) => prev.map((w) => w.id === workspaceId ? { ...w, folderId } : w))
     try {
-      await patchWorkspace(workspaceId, { folder_id: folderId })
+      await patchWorkspacePreferences(workspaceId, { folder_id: folderId })
     } catch {
       setWorkspaces((prev) => prev.map((w) => w.id === workspaceId ? { ...w, folderId: ws.folderId } : w))
     }
@@ -289,6 +295,7 @@ function AppShell() {
 
   return (
     <div className="app-shell">
+      {/* Old sidebar + topbar — kept for side-by-side comparison with SidebarV2 below.
       <Sidebar
         workspaces={activeWorkspaces}
         completedCount={completedTotal}
@@ -308,8 +315,33 @@ function AppShell() {
         onMoveToFolder={handleMoveToFolder}
         onProfileClick={() => setShowProfileModal(true)}
       />
+      */}
+
+      <SidebarV2
+        workspaces={activeWorkspaces}
+        completedCount={completedTotal}
+        folders={folders}
+        currentUser={currentUser}
+        onNewWorkspace={() => setShowNewModal(true)}
+        onOpenInbox={showComingSoon}
+        onOpenCompleted={() => setShowCompletedModal(true)}
+        onSelectWorkspace={handleSelectWorkspace}
+        onTogglePin={handleTogglePin}
+        onArchive={handleArchive}
+        onLeave={handleLeave}
+        onDelete={handleDelete}
+        onCreateFolder={handleCreateFolder}
+        onUpdateFolder={handleUpdateFolder}
+        onDeleteFolder={handleDeleteFolder}
+        onMoveToFolder={handleMoveToFolder}
+        onProfileClick={() => setShowProfileModal(true)}
+        onCalendarToggle={() => setShowCalendar((v) => !v)}
+        onNotificationsClick={showComingSoon}
+        onLogoClick={() => navigate('/')}
+      />
 
       <div className="app-shell__main">
+        {/* Old topbar — logo/search/calendar/notifications/profile now live in SidebarV2.
         <Topbar
           logoSlot={
             <button type="button" className="topbar__logo-btn" onClick={() => navigate('/')} aria-label="Go to home">
@@ -330,6 +362,7 @@ function AppShell() {
             else if (action === 'account') setShowProfileModal(true)
           }}
         />
+        */}
         <div className="app-shell__content">
           <Outlet context={outletCtx} />
         </div>

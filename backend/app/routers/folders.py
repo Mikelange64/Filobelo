@@ -4,7 +4,7 @@ from sqlalchemy import update as sql_update
 
 from app.auth import CurrentUser
 from app.database import DbSession
-from app.models import Folder, Workspace
+from app.models import Folder, WorkspaceMember
 from app.schemas import FolderCreate, FolderResponse, FolderUpdate
 
 router = APIRouter(tags=["folders"])
@@ -46,8 +46,8 @@ def delete_folder(folder_id: int, current_user: CurrentUser, db: DbSession):
     folder = _get_owned_folder(folder_id, current_user.id, db)
 
     db.execute(
-        sql_update(Workspace)
-        .where(Workspace.folder_id == folder_id)
+        sql_update(WorkspaceMember)
+        .where(WorkspaceMember.folder_id == folder_id)
         .values(folder_id=None)
     )
     db.delete(folder)

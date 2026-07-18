@@ -30,11 +30,22 @@ def create_task(
     db: DbSession,
     member: Annotated[WorkspaceMember, Depends(require_membership)],
 ):
+    owner_id = member.user_id
+    if task.owner_id is not None:
+        target = get_target_membership(workspace_id, task.owner_id, db)
+        if not target:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="User is not a member of this workspace",
+            )
+        owner_id = target.user_id
+
     new_task = Task(
         title=task.title,
         content=task.content,
+        color=task.color,
         creator_id=member.user_id,
-        owner_id=member.user_id,
+        owner_id=owner_id,
         workspace_id=workspace_id,
         due_date=task.due_date,
     )
@@ -59,7 +70,7 @@ def list_tasks(
     tasks = db.execute(base.offset(skip).limit(limit)).scalars().all()
 
     return PaginatedTaskResponse(
-        tasks=tasks,
+        tasks=tasks, # type: ignore[return-value]
         total=total,
         skip=skip,
         limit=limit,
@@ -106,6 +117,7 @@ def update_task_full(
 
     task.title = task_data.title
     task.content = task_data.content
+    task.color = task_data.color
     task.due_date = task_data.due_date
 
     db.commit()

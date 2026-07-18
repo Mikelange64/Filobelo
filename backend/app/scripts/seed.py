@@ -52,7 +52,6 @@ def populate_db():
             description="Plan and execute the Q2 marketing push across all channels",
             max_number=5,
             due_date=dt(5),
-            folder_id=work_folder.id,
         )
 
         # Active — overdue
@@ -62,7 +61,6 @@ def populate_db():
             description="Rebuild the internal analytics dashboard",
             max_number=3,
             due_date=dt(-3),
-            folder_id=work_folder.id,
         )
 
         # Active — no deadline, pinned
@@ -71,7 +69,6 @@ def populate_db():
             title="Mobile App MVP",
             description="Ship the first version of the mobile app",
             max_number=4,
-            is_pinned=True,
         )
 
         # Active — shared with alice
@@ -81,7 +78,6 @@ def populate_db():
             description="Redesign and relaunch the portfolio site",
             max_number=2,
             due_date=dt(14),
-            folder_id=personal_folder.id,
         )
 
         # Completed workspace
@@ -110,7 +106,6 @@ def populate_db():
             title="Old API Integration",
             description="Legacy API integration project — paused",
             max_number=2,
-            is_archived=True,
         )
 
         db.add_all([
@@ -120,17 +115,25 @@ def populate_db():
         db.flush()
 
         # ── Members ───────────────────────────────────────────────────────────
+        # Pin/archive/folder are per-member preferences on a shared workspace,
+        # so they're set here on mike's own membership row, not on the
+        # Workspace itself.
         db.add_all([
-            WorkspaceMember(user_id=mike.id,  workspace_id=ws_marketing.id,  role="admin"),
+            WorkspaceMember(user_id=mike.id,  workspace_id=ws_marketing.id,  role="admin",
+                             folder_id=work_folder.id),
             WorkspaceMember(user_id=alice.id, workspace_id=ws_marketing.id,  role="member"),
-            WorkspaceMember(user_id=mike.id,  workspace_id=ws_dashboard.id,  role="admin"),
+            WorkspaceMember(user_id=mike.id,  workspace_id=ws_dashboard.id,  role="admin",
+                             folder_id=work_folder.id),
             WorkspaceMember(user_id=bob.id,   workspace_id=ws_dashboard.id,  role="member"),
-            WorkspaceMember(user_id=mike.id,  workspace_id=ws_mobile.id,     role="admin"),
+            WorkspaceMember(user_id=mike.id,  workspace_id=ws_mobile.id,     role="admin",
+                             is_pinned=True),
             WorkspaceMember(user_id=alice.id, workspace_id=ws_portfolio.id,  role="admin"),
-            WorkspaceMember(user_id=mike.id,  workspace_id=ws_portfolio.id,  role="member"),
+            WorkspaceMember(user_id=mike.id,  workspace_id=ws_portfolio.id,  role="member",
+                             folder_id=personal_folder.id),
             WorkspaceMember(user_id=mike.id,  workspace_id=ws_onboarding.id, role="admin"),
             WorkspaceMember(user_id=mike.id,  workspace_id=ws_rebrand.id,    role="admin"),
-            WorkspaceMember(user_id=mike.id,  workspace_id=ws_archived.id,   role="admin"),
+            WorkspaceMember(user_id=mike.id,  workspace_id=ws_archived.id,   role="admin",
+                             is_archived=True),
         ])
         db.flush()
 

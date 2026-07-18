@@ -19,13 +19,13 @@
      Sidebar uses the deeper shade; canvas is the brighter, lighter version. */
   --color-bg-sidebar: hsl(40 38% 94%);
   --color-bg-canvas: hsl(40 28% 97%);
-  --color-bg-card: hsl(40 38% 94%);
+  --color-bg-card: hsl(40 28% 97%);
   --color-bg-overlay: hsl(0 0% 100%);
 
   /* Hover — darker than base in light mode */
   --color-bg-sidebar-hover: hsl(40 35% 87%);
   --color-bg-canvas-hover: hsl(40 26% 91%);
-  --color-bg-card-hover: hsl(40 35% 87%);
+  --color-bg-card-hover: hsl(40 26% 91%);
 
   /* Text — warm-toned to complement sandy surfaces */
   --color-text-primary: hsl(30 20% 12%);
@@ -92,13 +92,13 @@
     --color-bg-card-hover: hsl(0 0% 27%);
 
     --color-text-primary: hsl(0 0% 92%);
-    --color-text-secondary: hsl(0 0% 65%);
-    --color-text-muted: hsl(0 0% 45%);
+    --color-text-secondary: hsl(0 0% 72%);
+    --color-text-muted: hsl(0 0% 58%);
     --color-text-on-brand: hsl(184 80% 10%);
 
-    --color-border: hsl(0 0% 42%);
-    --color-border-strong: hsl(0 0% 55%);
-    --color-card-top-border: hsl(0 0% 44%);
+    --color-border: hsl(0 0% 50%);
+    --color-border-strong: hsl(0 0% 62%);
+    --color-card-top-border: hsl(0 0% 52%);
 
     --color-error: hsl(8 75% 62%);
     --color-error-bg: hsl(8 45% 16%);
@@ -136,12 +136,12 @@
 
   --color-bg-sidebar: hsl(40 38% 94%);
   --color-bg-canvas: hsl(40 28% 97%);
-  --color-bg-card: hsl(40 38% 94%);
+  --color-bg-card: hsl(40 28% 97%);
   --color-bg-overlay: hsl(0 0% 100%);
 
   --color-bg-sidebar-hover: hsl(40 35% 87%);
   --color-bg-canvas-hover: hsl(40 26% 91%);
-  --color-bg-card-hover: hsl(40 35% 87%);
+  --color-bg-card-hover: hsl(40 26% 91%);
 
   --color-text-primary: hsl(30 20% 12%);
   --color-text-secondary: hsl(30 14% 28%);
@@ -195,13 +195,13 @@
   --color-bg-card-hover: hsl(0 0% 27%);
 
   --color-text-primary: hsl(0 0% 92%);
-  --color-text-secondary: hsl(0 0% 65%);
-  --color-text-muted: hsl(0 0% 45%);
+  --color-text-secondary: hsl(0 0% 72%);
+  --color-text-muted: hsl(0 0% 58%);
   --color-text-on-brand: hsl(184 80% 10%);
 
-  --color-border: hsl(0 0% 42%);
-  --color-border-strong: hsl(0 0% 55%);
-  --color-card-top-border: hsl(0 0% 44%);
+  --color-border: hsl(0 0% 50%);
+  --color-border-strong: hsl(0 0% 62%);
+  --color-card-top-border: hsl(0 0% 52%);
 
   --color-error: hsl(8 75% 62%);
   --color-error-bg: hsl(8 45% 16%);

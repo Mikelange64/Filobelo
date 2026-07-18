@@ -19,6 +19,7 @@ class LinkCreate(BaseModel):
 
 
 class LinkResponse(ResourceBase):
+    type          : str
     url           : HttpUrl
     thumbnail_url : str | None = None
 
@@ -35,6 +36,7 @@ class NoteCreate(BaseModel):
 
 
 class NoteResponse(ResourceBase):
+    type    : str
     content : str
 
 
@@ -45,6 +47,7 @@ class NoteUpdate(BaseModel):
 # =============================================== FILES ======================================================
 
 class FileResponse(ResourceBase):
+    type      : str
     file_path : str | None
     mime_type : str
 

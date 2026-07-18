@@ -13,10 +13,11 @@ class Settings(BaseSettings):
         extra="ignore"
     )
     database_url : str = "postgresql://localhost/workspaceapp_db"
+    redis_url   : str = "redis://localhost:6379/0"
 
     # JWT INFO
     secret_key : SecretStr
-    algorithm : str = "HS256"
+    algorithm  : str = "HS256"
     access_token_expire_minutes : int = 30
 
     # AWS S3 BUCKET INFO
@@ -27,13 +28,13 @@ class Settings(BaseSettings):
     s3_endpoint_url      : str | None = None
 
     # PROFILE PIC UPLOAD INFO
-    max_upload_size_bytes: int = 5 * 1024 * 1024
+    max_upload_size_bytes : int = 5 * 1024 * 1024
 
     # FILE UPLOAD INFO
-    max_file_upload_size_bytes: int = 30 * 1024 * 1024
+    max_file_upload_size_bytes : int = 30 * 1024 * 1024
 
     # PASSWORD RESET TOKENS
-    reset_token_expire_minutes  : int = 60
+    reset_token_expire_minutes : int = 60
 
     # REFRESH TOKENS
     refresh_token_expire_days : int = 7
@@ -47,8 +48,11 @@ class Settings(BaseSettings):
     mail_use_tls  : bool = True   
     
     cors_origins  : list[str] = ["http://localhost:5173"]
-
     frontend_url  : str = "http://localhost:5173" # hardcoded for security
+
+    # API KEYS
+    deepseek_api_key : SecretStr
+    tavily_api_key   : SecretStr | None = None
 
 
 settings = Settings() # type: ignore[call-arg] # Loaded from .env

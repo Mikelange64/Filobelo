@@ -11,6 +11,7 @@ from .conversations import (
     ConversationCreate,
     ConversationResponse,
     ConversationUpdate,
+    ConversationWithWorkspace,
     MessageCreate,
     MessageResponse,
     PaginatedMessageResponse,
@@ -47,6 +48,7 @@ from .workspaces import (
     InviteExternalRequest,
     PaginatedWorkspaceResponse,
     WorkspaceCreate,
+    WorkspaceMemberPrefsUpdate,
     WorkspaceResponse,
     WorkspaceUpdate,
 )
@@ -65,6 +67,7 @@ __all__ = [
     # WORKSPACE
     "InviteExternalRequest",
     "WorkspaceCreate",
+    "WorkspaceMemberPrefsUpdate",
     "WorkspaceResponse",
     "WorkspaceUpdate",
     "PaginatedWorkspaceResponse",
@@ -96,6 +99,7 @@ __all__ = [
     "ConversationCreate",
     "ConversationResponse",
     "ConversationUpdate",
+    "ConversationWithWorkspace",
     "MessageCreate",
     "MessageResponse",
     "PaginatedMessageResponse",

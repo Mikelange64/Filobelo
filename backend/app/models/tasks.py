@@ -19,6 +19,7 @@ class Task(Base):
     id           : Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     title        : Mapped[str] = mapped_column(String(50), nullable=False)
     content      : Mapped[str] = mapped_column(Text, nullable=False)
+    color        : Mapped[str] = mapped_column(String(50), nullable=False, default="#6bc4d4")
     is_completed : Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     # Nullable + SET NULL: a task is workspace-shared data, so it outlives

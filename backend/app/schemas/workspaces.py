@@ -20,7 +20,6 @@ class WorkspaceResponse(WorkspaceBase):
 
     id                : int
     creator_id        : int | None
-    folder_id         : int | None
     title             : str
     description       : str | None
     max_number        : int | None
@@ -30,13 +29,18 @@ class WorkspaceResponse(WorkspaceBase):
     due_date          : datetime | None
     progress          : float
     time_remaining    : timedelta | None
-    is_pinned         : bool
-    is_archived       : bool
     members           : list[UserPublic]
     tasks             : list[TaskSummary]
     current_user_role : str | None = None
     is_completed      : bool = False
     completed_at      : datetime | None = None
+    # Sourced from the current user's own WorkspaceMember row, not the
+    # Workspace itself - each member has their own pin/archive/folder state
+    # for a shared workspace. Defaults here only matter until the router
+    # overwrites them with the real per-member values.
+    is_pinned         : bool = False
+    is_archived       : bool = False
+    folder_id         : int | None = None
 
 
 class PaginatedWorkspaceResponse(BaseModel):
@@ -56,6 +60,9 @@ class WorkspaceUpdate(WorkspaceBase):
     description  : str | None = Field(min_length=1, max_length=500, default=None)
     max_number   : int | None = None
     due_date     : datetime | None = None
-    is_pinned    : bool | None = None
-    is_archived  : bool | None = None
-    folder_id    : int | None = None
+
+
+class WorkspaceMemberPrefsUpdate(BaseModel):
+    is_pinned   : bool | None = None
+    is_archived : bool | None = None
+    folder_id   : int | None = None

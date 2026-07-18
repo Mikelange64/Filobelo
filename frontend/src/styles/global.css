@@ -37,8 +37,17 @@ a {
 
 button:focus-visible,
 a:focus-visible,
-input:focus-visible,
 [tabindex]:focus-visible {
   outline: none;
   box-shadow: var(--focus-ring);
+}
+
+/* Text-entry elements rely on the blinking caret as their focus indicator -
+   no glow ring, everywhere across the app. */
+input:focus-visible,
+input:focus,
+textarea:focus-visible,
+textarea:focus {
+  outline: none;
+  box-shadow: none;
 }

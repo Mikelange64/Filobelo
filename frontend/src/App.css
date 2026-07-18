@@ -1,7 +1,16 @@
+/* Redesign in progress — floating-canvas shell (Zen-inspired). Old edge-to-edge
+   Topbar + flush Sidebar layout is commented out in AppShell.jsx for a
+   side-by-side comparison; this is the new layout that replaces it.
+
+   The sidebar and the app-shell background are the same surface (no border,
+   no radius on the sidebar itself — see SidebarV2.css). Only the main canvas
+   floats: inset with margin on top/right/bottom, flush against the sidebar's
+   right edge with zero gap on the left, rounded on all four corners. */
 .app-shell {
   display: flex;
   height: 100vh;
   overflow: hidden;
+  background: var(--color-bg-sidebar);
 }
 
 .app-shell__main {
@@ -10,6 +19,9 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  background: var(--color-bg-card);
+  border-radius: 14px;
+  margin: 10px 10px 10px 0;
 }
 
 .app-shell__content {

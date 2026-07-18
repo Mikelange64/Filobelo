@@ -196,7 +196,7 @@ def test_delete_folder_nullifies_workspace_folder_id(
 ):
     """Deleting a folder should unlink any workspaces assigned to it."""
     client.patch(
-        f"/api/workspaces/{workspace['id']}",
+        f"/api/workspaces/{workspace['id']}/me",
         json={"folder_id": folder["id"]},
         headers=user_auth_headers,
     )

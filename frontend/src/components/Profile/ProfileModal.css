@@ -209,6 +209,14 @@
   margin: 0;
 }
 
+/* ── Sign out ── */
+
+.pm-signout-row {
+  border-top: 1px solid var(--color-border);
+  padding-top: 16px;
+  display: flex;
+}
+
 /* ── Danger zone ── */
 
 .pm-danger-zone {

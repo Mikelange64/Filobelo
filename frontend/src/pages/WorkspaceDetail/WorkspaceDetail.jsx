@@ -1,1284 +1,92 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
-import { useParams, Link, useNavigate, useOutletContext } from 'react-router-dom'
-import { useAuth } from '../../context/AuthContext'
-import filobeloProud from '../../assets/mascott/filobelo_proud.svg'
+import { useState, useEffect } from "react";
 import {
-  authFetch,
-  getWorkspace,
-  createTask,
-  patchTask,
-  deleteTask,
-  toggleTask,
-  patchWorkspace,
-  completeWorkspace,
-  getMembersWithRoles,
-  inviteMember,
-  inviteExternal,
-  promoteToAdmin,
-  removeMember,
-  searchUser,
-  reassignTask,
-  listResources,
-  createLink,
-  createNote,
-  deleteResource,
-  uploadResourceFile,
-} from '../../api/client'
-import { getDaysRemaining, formatDueDate } from '../../utils/date'
-import { getWorkspaceUrgency } from '../../utils/workspaceStatus'
-import useDismissableMenu from '../../hooks/useDismissableMenu'
-import './WorkspaceDetail.css'
-
-// ─── helpers ────────────────────────────────────────────────────────────────
-
-function toAvatarUrl(path) {
-  return path?.startsWith('https://') ? path : null
-}
-
-function getTaskUrgency(dueDate) {
-  if (!dueDate) return 'neutral'
-  const d = getDaysRemaining(dueDate)
-  if (d < 0) return 'error'
-  if (d <= 3) return 'warning'
-  return 'success'
-}
-
-function normalizeTask(t) {
-  return {
-    id: t.id,
-    title: t.title,
-    dueDate: t.due_date ?? null,
-    isCompleted: t.is_completed,
-    ownerId: t.owner_id,
-  }
-}
-
-function normalizeWorkspace(ws) {
-  return {
-    id: ws.id,
-    creatorId: ws.creator_id,
-    title: ws.title,
-    description: ws.description,
-    dueDate: ws.due_date ?? null,
-    currentUserRole: ws.current_user_role ?? null,
-    isCompleted: ws.is_completed ?? false,
-    members: (ws.members ?? []).map((m) => ({
-      id: m.id,
-      name: m.username,
-      avatarUrl: toAvatarUrl(m.image_path),
-    })),
-  }
-}
-
-function sortByUrgency(tasks) {
-  return [...tasks].sort((a, b) => {
-    const dA = getDaysRemaining(a.dueDate)
-    const dB = getDaysRemaining(b.dueDate)
-    if (dA === null && dB === null) return 0
-    if (dA === null) return 1
-    if (dB === null) return -1
-    return dA - dB
-  })
-}
-
-// ─── icons ──────────────────────────────────────────────────────────────────
-
-function CheckIcon() {
-  return (
-    <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="3" aria-hidden="true">
-      <polyline points="20 6 9 17 4 12" />
-    </svg>
-  )
-}
-
-function DotsIcon() {
-  return (
-    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
-      <circle cx="5" cy="12" r="1.6" fill="currentColor" />
-      <circle cx="12" cy="12" r="1.6" fill="currentColor" />
-      <circle cx="19" cy="12" r="1.6" fill="currentColor" />
-    </svg>
-  )
-}
-
-function CalIcon() {
-  return (
-    <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-      <rect x="3" y="4" width="18" height="18" rx="2" />
-      <line x1="16" y1="2" x2="16" y2="6" />
-      <line x1="8" y1="2" x2="8" y2="6" />
-      <line x1="3" y1="10" x2="21" y2="10" />
-    </svg>
-  )
-}
-
-function SparkleIcon() {
-  return (
-    <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" aria-hidden="true">
-      <path d="M12 2L13.9 9.1L21 11L13.9 12.9L12 20L10.1 12.9L3 11L10.1 9.1Z" />
-    </svg>
-  )
-}
-
-function ChatIcon() {
-  return (
-    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-    </svg>
-  )
-}
-
-function LinkIcon() {
-  return (
-    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-    </svg>
-  )
-}
-
-function NoteIcon() {
-  return (
-    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-      <polyline points="14 2 14 8 20 8" />
-    </svg>
-  )
-}
-
-function FileIcon() {
-  return (
-    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-      <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
-    </svg>
-  )
-}
-
-function TrashIcon() {
-  return (
-    <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-      <polyline points="3 6 5 6 21 6" />
-      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-    </svg>
-  )
-}
-
-// ─── sub-components ─────────────────────────────────────────────────────────
-
-function MemberAvatar({ member, size = 28 }) {
-  return (
-    <span
-      className="member-avatar"
-      style={{ width: size, height: size, fontSize: Math.round(size * 0.38) }}
-      title={member.name}
-    >
-      {member.avatarUrl
-        ? <img src={member.avatarUrl} alt={member.name} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
-        : member.name?.[0]?.toUpperCase()
-      }
-    </span>
-  )
-}
-
-function TaskRowMenu({ isCompleted, isOwner, isAdmin, onEdit, onToggle, onReassign, onDelete }) {
-  const [isOpen, setIsOpen, ref] = useDismissableMenu()
-  const canReassign = isOwner || isAdmin
-  return (
-    <div className="task-row__menu-wrap" ref={ref}>
-      <button
-        type="button"
-        className="task-row__menu-trigger"
-        onClick={(e) => { e.stopPropagation(); setIsOpen((v) => !v) }}
-        aria-label="Task actions"
-      >
-        <DotsIcon />
-      </button>
-      {isOpen && (
-        <ul className="wd-menu-list" role="menu">
-          <li role="none">
-            <button type="button" role="menuitem" className="wd-menu-item"
-              onClick={() => { onEdit(); setIsOpen(false) }}>
-              Edit
-            </button>
-          </li>
-          <li role="none">
-            <button type="button" role="menuitem" className="wd-menu-item"
-              onClick={() => { onToggle(); setIsOpen(false) }}>
-              {isCompleted ? 'Mark incomplete' : 'Mark complete'}
-            </button>
-          </li>
-          {canReassign && (
-            <li role="none">
-              <button type="button" role="menuitem" className="wd-menu-item"
-                onClick={() => { onReassign(); setIsOpen(false) }}>
-                Reassign
-              </button>
-            </li>
-          )}
-          {isAdmin && (
-            <li role="none">
-              <button type="button" role="menuitem" className="wd-menu-item wd-menu-item--danger"
-                onClick={() => { onDelete(); setIsOpen(false) }}>
-                Delete
-              </button>
-            </li>
-          )}
-        </ul>
-      )}
-    </div>
-  )
-}
-
-function TaskRow({ task, member, isAdmin, currentUserId, onSelect, onToggle, onReassign, onDelete }) {
-  const urgency = getTaskUrgency(task.dueDate)
-  const isOwner = task.ownerId === currentUserId
-  const canToggle = true
-  return (
-    <div className={`task-row${task.isCompleted ? ' task-row--completed' : ''}`}>
-      {canToggle ? (
-        <button
-          type="button"
-          className={`task-row__checkbox${task.isCompleted ? ' task-row__checkbox--checked' : ''}`}
-          onClick={onToggle}
-          aria-label={task.isCompleted ? 'Mark incomplete' : 'Mark complete'}
-        >
-          {task.isCompleted && <CheckIcon />}
-        </button>
-      ) : (
-        <span
-          className={`task-row__checkbox task-row__checkbox--readonly${task.isCompleted ? ' task-row__checkbox--checked' : ''}`}
-          aria-label={task.isCompleted ? 'Complete' : 'Incomplete'}
-        >
-          {task.isCompleted && <CheckIcon />}
-        </span>
-      )}
-
-      <button type="button" className="task-row__title" onClick={onSelect}>
-        {task.title}
-      </button>
-
-      {member && (
-        <span className="task-row__assignee">
-          <MemberAvatar member={member} size={22} />
-          <span className="task-row__name">{member.name}</span>
-        </span>
-      )}
-
-      {!task.isCompleted && (
-        task.dueDate
-          ? (
-            <span className={`task-row__due task-row__due--${urgency}`}>
-              {formatDueDate(task.dueDate)}
-            </span>
-          ) : (
-            <span className="task-row__due task-row__due--neutral">No deadline</span>
-          )
-      )}
-
-      <TaskRowMenu
-        isCompleted={task.isCompleted}
-        isOwner={isOwner}
-        isAdmin={isAdmin}
-        onEdit={onSelect}
-        onToggle={onToggle}
-        onReassign={onReassign}
-        onDelete={onDelete}
-      />
-    </div>
-  )
-}
-
-// Member picker modal — shown when reassigning a task
-function MemberPicker({ members, currentOwnerId, onSelect, onClose }) {
-  useEffect(() => {
-    function onKey(e) { if (e.key === 'Escape') onClose() }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [onClose])
-
-  return (
-    <>
-      <div className="picker-backdrop" onClick={onClose} aria-hidden="true" />
-      <div className="member-picker" role="dialog" aria-label="Reassign task">
-        <div className="member-picker__header">
-          <span className="member-picker__title">Reassign to…</span>
-          <button type="button" className="member-picker__close" onClick={onClose} aria-label="Close">✕</button>
-        </div>
-        <ul className="member-picker__list">
-          {members.map((m) => (
-            <li key={m.id}>
-              <button
-                type="button"
-                className={`member-picker__option${m.id === currentOwnerId ? ' member-picker__option--current' : ''}`}
-                onClick={() => { onSelect(m.id); onClose() }}
-              >
-                <MemberAvatar member={m} size={32} />
-                <span className="member-picker__name">{m.name}</span>
-                {m.id === currentOwnerId && <span className="member-picker__tag">current</span>}
-              </button>
-            </li>
-          ))}
-        </ul>
-      </div>
-    </>
-  )
-}
-
-// Invite panel — shown at top of Members tab for admins
-function InvitePanel({ workspaceId, onMemberAdded }) {
-  const [open, setOpen] = useState(false)
-  const [query, setQuery] = useState('')
-  const [found, setFound] = useState(null)
-  const [notFound, setNotFound] = useState(false)
-  const [inviteSent, setInviteSent] = useState(false)
-  const [error, setError] = useState('')
-  const [searching, setSearching] = useState(false)
-  const [adding, setAdding] = useState(false)
-
-  function resetState() {
-    setQuery('')
-    setFound(null)
-    setNotFound(false)
-    setInviteSent(false)
-    setError('')
-  }
-
-  async function handleSearch() {
-    const q = query.trim()
-    if (!q) return
-    setSearching(true)
-    setFound(null)
-    setNotFound(false)
-    setInviteSent(false)
-    setError('')
-    try {
-      const user = await searchUser(q)
-      setFound(user)
-    } catch (err) {
-      if (err.status === 404 && q.includes('@')) {
-        setNotFound(true)
-      } else {
-        setError(err.status === 404 ? 'No user found with that username or email.' : 'Search failed.')
-      }
-    } finally {
-      setSearching(false)
-    }
-  }
-
-  async function handleAdd() {
-    if (!found) return
-    setAdding(true)
-    try {
-      await inviteMember(workspaceId, found.id)
-      onMemberAdded()
-      resetState()
-      setOpen(false)
-    } catch (err) {
-      setError(err.status === 409 ? 'Already a member of this workspace.' : (err.detail ?? 'Could not add member.'))
-    } finally {
-      setAdding(false)
-    }
-  }
-
-  async function handleSendJoinInvite() {
-    const email = query.trim()
-    setAdding(true)
-    try {
-      await inviteExternal(workspaceId, email)
-      setInviteSent(true)
-      setNotFound(false)
-    } catch (err) {
-      setError(err.detail ?? 'Failed to send invitation.')
-    } finally {
-      setAdding(false)
-    }
-  }
-
-  if (!open) {
-    return (
-      <button type="button" className="invite-trigger" onClick={() => setOpen(true)}>
-        + Invite member
-      </button>
-    )
-  }
-
-  return (
-    <div className="invite-panel">
-      <p className="invite-panel__label">Search by username or email</p>
-      <div className="invite-panel__row">
-        <input
-          className="invite-panel__input"
-          placeholder="username or email@example.com"
-          value={query}
-          onChange={(e) => { setQuery(e.target.value); setFound(null); setNotFound(false); setError(''); setInviteSent(false) }}
-          onKeyDown={(e) => { if (e.key === 'Enter') handleSearch() }}
-          autoFocus
-        />
-        <button type="button" className="invite-panel__search-btn" onClick={handleSearch} disabled={searching}>
-          {searching ? '…' : 'Search'}
-        </button>
-        <button type="button" className="invite-panel__cancel" onClick={() => { setOpen(false); resetState() }}>
-          ✕
-        </button>
-      </div>
-
-      {found && (
-        <div className="invite-panel__result">
-          <MemberAvatar member={{ name: found.username, avatarUrl: toAvatarUrl(found.image_path) }} size={32} />
-          <span className="invite-panel__result-name">{found.username}</span>
-          <button type="button" className="invite-panel__add-btn" onClick={handleAdd} disabled={adding}>
-            {adding ? 'Adding…' : 'Add to workspace'}
-          </button>
-        </div>
-      )}
-
-      {notFound && !inviteSent && (
-        <div className="invite-panel__not-found">
-          <p className="invite-panel__not-found-msg">
-            No Filobelo account for <strong>{query.trim()}</strong>.
-          </p>
-          <button type="button" className="invite-panel__add-btn" onClick={handleSendJoinInvite} disabled={adding}>
-            {adding ? 'Sending…' : 'Send join invitation'}
-          </button>
-        </div>
-      )}
-
-      {inviteSent && (
-        <p className="invite-panel__success">Invitation sent to {query.trim()}</p>
-      )}
-
-      {error && <p className="invite-panel__error">{error}</p>}
-    </div>
-  )
-}
-
-function MemberListRow({ member, isAdmin, isSelf, onRemove, onPromote, onLeave, onMessage }) {
-  const [menuOpen, setMenuOpen, menuRef] = useDismissableMenu()
-
-  return (
-    <li className="member-list-row">
-      <MemberAvatar member={member} size={38} />
-      <div className="member-list-row__info">
-        <span className="member-list-row__name">{member.name}</span>
-        {member.role === 'admin' && <span className="member-list-row__badge">Admin</span>}
-        {isSelf && <span className="member-list-row__self">you</span>}
-      </div>
-      <div className="member-list-row__menu-wrap" ref={menuRef}>
-        <button
-          type="button"
-          className="member-list-row__menu-trigger"
-          onClick={(e) => { e.stopPropagation(); setMenuOpen((v) => !v) }}
-          aria-label="Member actions"
-        >
-          <DotsIcon />
-        </button>
-        {menuOpen && (
-          <ul className="wd-menu-list" role="menu">
-            {isSelf ? (
-              <li role="none">
-                <button type="button" role="menuitem" className="wd-menu-item wd-menu-item--danger"
-                  onClick={() => { onLeave(); setMenuOpen(false) }}>
-                  Leave workspace
-                </button>
-              </li>
-            ) : (
-              <>
-                <li role="none">
-                  <button type="button" role="menuitem" className="wd-menu-item"
-                    onClick={() => { onMessage?.(); setMenuOpen(false) }}>
-                    Message
-                  </button>
-                </li>
-                {isAdmin && member.role !== 'admin' && (
-                  <li role="none">
-                    <button type="button" role="menuitem" className="wd-menu-item"
-                      onClick={() => { onPromote(member.id); setMenuOpen(false) }}>
-                      Promote to Admin
-                    </button>
-                  </li>
-                )}
-                {isAdmin && (
-                  <li role="none">
-                    <button type="button" role="menuitem" className="wd-menu-item wd-menu-item--danger"
-                      onClick={() => { onRemove(member.id); setMenuOpen(false) }}>
-                      Remove from workspace
-                    </button>
-                  </li>
-                )}
-              </>
-            )}
-          </ul>
-        )}
-      </div>
-    </li>
-  )
-}
-
-function SettingsTab({ workspace, isAdmin, isCreator, workspaceId, onWorkspaceUpdate, onDelete, onLeave, onComplete, onReopen }) {
-  const [title, setTitle] = useState(workspace.title)
-  const [description, setDescription] = useState(workspace.description)
-  const [dueDate, setDueDate] = useState(
-    workspace.dueDate ? workspace.dueDate.split('T')[0] : ''
-  )
-  const [saving, setSaving] = useState(false)
-  const [confirmDelete, setConfirmDelete] = useState(false)
-
-  async function handleSave() {
-    const trimTitle = title.trim()
-    const trimDesc = description.trim()
-    if (!trimTitle || !trimDesc) return
-    setSaving(true)
-    try {
-      const patch = { title: trimTitle, description: trimDesc, due_date: dueDate || null }
-      await patchWorkspace(workspaceId, patch)
-      onWorkspaceUpdate({ title: trimTitle, description: trimDesc, dueDate: dueDate || null })
-    } catch (err) {
-      onToast?.(err.detail ?? 'Could not save changes')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return (
-    <div className="settings-tab">
-      <section className="settings-section">
-        <h2 className="settings-section__title">General</h2>
-
-        <div className="settings-field">
-          <label className="settings-field__label">Name</label>
-          {isAdmin
-            ? <input className="settings-field__input" value={title} onChange={(e) => setTitle(e.target.value)} />
-            : <p className="settings-field__value">{workspace.title}</p>
-          }
-        </div>
-
-        <div className="settings-field">
-          <label className="settings-field__label">Description</label>
-          {isAdmin
-            ? <textarea className="settings-field__textarea" value={description} onChange={(e) => setDescription(e.target.value)} rows={3} />
-            : <p className="settings-field__value">{workspace.description}</p>
-          }
-        </div>
-
-        <div className="settings-field">
-          <label className="settings-field__label">Due date</label>
-          {isAdmin
-            ? <input type="date" className="settings-field__input" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
-            : <p className="settings-field__value">{workspace.dueDate ? formatDueDate(workspace.dueDate) : 'No due date'}</p>
-          }
-        </div>
-
-        {isAdmin && (
-          <button type="button" className="settings-save-btn" onClick={handleSave} disabled={saving}>
-            {saving ? 'Saving…' : 'Save changes'}
-          </button>
-        )}
-      </section>
-
-      {isAdmin && (
-        <section className="settings-section">
-          <h2 className="settings-section__title">Completion</h2>
-          <div className="settings-danger-row">
-            {workspace.isCompleted ? (
-              <>
-                <div>
-                  <p className="settings-danger-label">Workspace completed</p>
-                  <p className="settings-danger-desc">Reopen this workspace to keep working on it.</p>
-                </div>
-                <button type="button" className="settings-complete-btn settings-complete-btn--reopen" onClick={onReopen}>
-                  Reopen
-                </button>
-              </>
-            ) : (
-              <>
-                <div>
-                  <p className="settings-danger-label">Mark workspace complete</p>
-                  <p className="settings-danger-desc">Closes this workspace and moves it to your completed list.</p>
-                </div>
-                <button type="button" className="settings-complete-btn" onClick={onComplete}>
-                  Mark complete
-                </button>
-              </>
-            )}
-          </div>
-        </section>
-      )}
-
-      <section className="settings-section settings-section--danger">
-        <h2 className="settings-section__title">Danger zone</h2>
-
-        <div className="settings-danger-row">
-          <div>
-            <p className="settings-danger-label">Leave workspace</p>
-            <p className="settings-danger-desc">You will lose access to all tasks and discussions.</p>
-          </div>
-          <button type="button" className="settings-danger-btn" onClick={onLeave}>Leave</button>
-        </div>
-
-        {isAdmin && (
-          <div className="settings-danger-row">
-            <div>
-              <p className="settings-danger-label">Archive workspace</p>
-              <p className="settings-danger-desc">Hides this workspace from the active list. Can be restored.</p>
-            </div>
-            <button type="button" className="settings-danger-btn"
-              onClick={() => patchWorkspace(workspaceId, { is_archived: true }).catch(() => {})}>
-              Archive
-            </button>
-          </div>
-        )}
-        {isCreator && (
-          <div className="settings-danger-row">
-            {confirmDelete ? (
-              <>
-                <div>
-                  <p className="settings-danger-label">Are you sure?</p>
-                  <p className="settings-danger-desc">This permanently deletes the workspace and all its tasks. There is no undo.</p>
-                </div>
-                <div className="settings-danger-confirm">
-                  <button type="button" className="settings-danger-btn settings-danger-btn--critical" onClick={onDelete}>
-                    Yes, delete
-                  </button>
-                  <button type="button" className="settings-danger-btn" onClick={() => setConfirmDelete(false)}>
-                    Cancel
-                  </button>
-                </div>
-              </>
-            ) : (
-              <>
-                <div>
-                  <p className="settings-danger-label">Delete workspace</p>
-                  <p className="settings-danger-desc">Permanently deletes the workspace and all tasks. Cannot be undone.</p>
-                </div>
-                <button type="button" className="settings-danger-btn settings-danger-btn--critical" onClick={() => setConfirmDelete(true)}>
-                  Delete
-                </button>
-              </>
-            )}
-          </div>
-        )}
-      </section>
-    </div>
-  )
-}
-
-function ResourceRow({ resource, onDelete, onToast }) {
-  const [expanded, setExpanded] = useState(false)
-  const [menuOpen, setMenuOpen, menuRef] = useDismissableMenu()
-  const [menuPos, setMenuPos] = useState({ x: 0, y: 0 })
-  const isImage = resource.type === 'FILE' && resource.mime_type?.startsWith('image/')
-  const hasLinkThumb = resource.type === 'LINK' && !!resource.thumbnail_url
-  const icon = resource.type === 'LINK' ? <LinkIcon /> : resource.type === 'FILE' ? <FileIcon /> : <NoteIcon />
-
-  function handleContextMenu(e) {
-    if (resource.type !== 'LINK') return
-    e.preventDefault()
-    setMenuPos({ x: e.clientX, y: e.clientY })
-    setMenuOpen(true)
-  }
-
-  async function handleCopyLink() {
-    setMenuOpen(false)
-    try {
-      await navigator.clipboard.writeText(resource.url)
-      onToast?.('Link copied')
-    } catch {
-      onToast?.('Could not copy link')
-    }
-  }
-
-  return (
-    <div className="resource-row" onContextMenu={handleContextMenu}>
-      {!isImage && !hasLinkThumb && <span className="resource-row__icon">{icon}</span>}
-      <div className="resource-row__body">
-        {resource.type === 'LINK' && (
-          <a className="resource-row__link" href={resource.url} target="_blank" rel="noreferrer">
-            {hasLinkThumb && (
-              <img className="resource-row__thumb" src={resource.thumbnail_url} alt="" />
-            )}
-            <span className="resource-row__title">{resource.title}</span>
-          </a>
-        )}
-        {menuOpen && (
-          <ul
-            ref={menuRef}
-            className="resource-row__context-menu"
-            style={{ top: menuPos.y, left: menuPos.x }}
-            role="menu"
-          >
-            <li role="none">
-              <button type="button" role="menuitem" className="wd-menu-item" onClick={handleCopyLink}>
-                Copy link
-              </button>
-            </li>
-          </ul>
-        )}
-        {resource.type === 'FILE' && isImage && (
-          <>
-            <button
-              type="button"
-              className="resource-row__thumb-btn"
-              onClick={() => setExpanded((v) => !v)}
-              aria-label={expanded ? 'Collapse image' : 'Expand image'}
-            >
-              <img className="resource-row__thumb" src={resource.file_path} alt={resource.title} />
-              <span className="resource-row__title">{resource.title}</span>
-            </button>
-            {expanded && <img className="resource-row__image-expanded" src={resource.file_path} alt={resource.title} />}
-          </>
-        )}
-        {resource.type === 'FILE' && !isImage && (
-          <a className="resource-row__title" href={resource.file_path} target="_blank" rel="noreferrer">
-            {resource.title}
-          </a>
-        )}
-        {resource.type === 'NOTE' && (
-          <>
-            <button
-              type="button"
-              className="resource-row__title resource-row__title--note"
-              onClick={() => setExpanded((v) => !v)}
-            >
-              {resource.title}
-            </button>
-            {expanded && <p className="resource-row__note-content">{resource.content}</p>}
-          </>
-        )}
-      </div>
-      <button type="button" className="resource-row__delete" onClick={onDelete} aria-label="Delete resource">
-        <TrashIcon />
-      </button>
-    </div>
-  )
-}
-
-// Fetches every resource for a task once and hands back type-filtered slices
-// plus shared add/delete handlers, so switching between the Notes/Links/Files
-// tabs doesn't re-fetch - only a task change does.
-function useTaskResources(workspaceId, taskId, onToast) {
-  const [resources, setResources] = useState([])
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    let cancelled = false
-    async function load() {
-      setLoading(true)
-      try {
-        const data = await listResources(workspaceId, taskId)
-        if (!cancelled) setResources(data)
-      } catch (err) {
-        if (!cancelled) onToast?.(err.detail ?? 'Could not load resources')
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }
-    load()
-    return () => { cancelled = true }
-  }, [workspaceId, taskId])
-
-  function handleAdded(resource) {
-    setResources((prev) => [...prev, resource])
-  }
-
-  async function handleDelete(resourceId) {
-    const prev = resources
-    setResources((r) => r.filter((res) => res.id !== resourceId))
-    try {
-      await deleteResource(workspaceId, taskId, resourceId)
-    } catch (err) {
-      setResources(prev)
-      onToast?.(err.detail ?? 'Could not delete resource')
-    }
-  }
-
-  return {
-    loading,
-    links: resources.filter((r) => r.type === 'LINK'),
-    notes: resources.filter((r) => r.type === 'NOTE'),
-    files: resources.filter((r) => r.type === 'FILE'),
-    handleAdded,
-    handleDelete,
-  }
-}
-
-function LinksPanel({ workspaceId, taskId, resources, loading, onAdded, onDelete, onToast }) {
-  const [adding, setAdding] = useState(false)
-  const [title, setTitle] = useState('')
-  const [url, setUrl] = useState('')
-  const [saving, setSaving] = useState(false)
-  const [formError, setFormError] = useState('')
-
-  function resetForm() {
-    setAdding(false)
-    setTitle('')
-    setUrl('')
-    setFormError('')
-  }
-
-  async function handleAdd() {
-    if (!title.trim() || !url.trim()) return
-    setSaving(true)
-    setFormError('')
-    try {
-      const created = await createLink(workspaceId, taskId, { title: title.trim(), url: url.trim() })
-      onAdded(created)
-      resetForm()
-    } catch (err) {
-      setFormError(err.detail ?? 'Could not add link')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return (
-    <div className="resources-panel">
-      {loading ? (
-        <p className="slide-over__muted">Loading…</p>
-      ) : resources.length === 0 && !adding ? (
-        <p className="slide-over__muted">No links yet.</p>
-      ) : (
-        <div className="resources-panel__list">
-          {resources.map((r) => (
-            <ResourceRow key={r.id} resource={r} onDelete={() => onDelete(r.id)} onToast={onToast} />
-          ))}
-        </div>
-      )}
-
-      {adding ? (
-        <div className="resources-panel__form">
-          <input
-            className="resources-panel__input"
-            placeholder="Title"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            autoFocus
-          />
-          <input
-            className="resources-panel__input"
-            placeholder="https://…"
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') handleAdd() }}
-          />
-          <div className="resources-panel__form-actions">
-            <button type="button" className="invite-panel__add-btn" onClick={handleAdd} disabled={saving}>
-              {saving ? 'Adding…' : 'Add link'}
-            </button>
-            <button type="button" className="invite-panel__cancel" onClick={resetForm}>✕</button>
-          </div>
-          {formError && <p className="invite-panel__error">{formError}</p>}
-        </div>
-      ) : (
-        <div className="resources-panel__add-row">
-          <button type="button" className="resources-panel__add-btn" onClick={() => setAdding(true)}>+ Link</button>
-        </div>
-      )}
-    </div>
-  )
-}
-
-function NotesPanel({ workspaceId, taskId, resources, loading, onAdded, onDelete, onToast }) {
-  const [adding, setAdding] = useState(false)
-  const [title, setTitle] = useState('')
-  const [content, setContent] = useState('')
-  const [saving, setSaving] = useState(false)
-  const [formError, setFormError] = useState('')
-
-  function resetForm() {
-    setAdding(false)
-    setTitle('')
-    setContent('')
-    setFormError('')
-  }
-
-  async function handleAdd() {
-    if (!title.trim()) return
-    setSaving(true)
-    setFormError('')
-    try {
-      const created = await createNote(workspaceId, taskId, { title: title.trim(), content })
-      onAdded(created)
-      resetForm()
-    } catch (err) {
-      setFormError(err.detail ?? 'Could not add note')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return (
-    <div className="resources-panel">
-      {loading ? (
-        <p className="slide-over__muted">Loading…</p>
-      ) : resources.length === 0 && !adding ? (
-        <p className="slide-over__muted">No notes yet.</p>
-      ) : (
-        <div className="resources-panel__list">
-          {resources.map((r) => (
-            <ResourceRow key={r.id} resource={r} onDelete={() => onDelete(r.id)} onToast={onToast} />
-          ))}
-        </div>
-      )}
-
-      {adding ? (
-        <div className="resources-panel__form">
-          <input
-            className="resources-panel__input"
-            placeholder="Title"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            autoFocus
-          />
-          <textarea
-            className="slide-over__content-input"
-            placeholder="Note content…"
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            rows={3}
-          />
-          <div className="resources-panel__form-actions">
-            <button type="button" className="invite-panel__add-btn" onClick={handleAdd} disabled={saving}>
-              {saving ? 'Adding…' : 'Add note'}
-            </button>
-            <button type="button" className="invite-panel__cancel" onClick={resetForm}>✕</button>
-          </div>
-          {formError && <p className="invite-panel__error">{formError}</p>}
-        </div>
-      ) : (
-        <div className="resources-panel__add-row">
-          <button type="button" className="resources-panel__add-btn" onClick={() => setAdding(true)}>+ Note</button>
-        </div>
-      )}
-    </div>
-  )
-}
-
-function FilesPanel({ workspaceId, taskId, resources, loading, onAdded, onToast, onDelete }) {
-  const [uploading, setUploading] = useState(false)
-  const fileRef = useRef(null)
-
-  async function handleFileChange(e) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setUploading(true)
-    try {
-      const created = await uploadResourceFile(workspaceId, taskId, file)
-      onAdded(created)
-    } catch (err) {
-      onToast?.(err.detail ?? 'Could not upload file')
-    } finally {
-      setUploading(false)
-      e.target.value = ''
-    }
-  }
-
-  return (
-    <div className="resources-panel">
-      {loading ? (
-        <p className="slide-over__muted">Loading…</p>
-      ) : resources.length === 0 ? (
-        <p className="slide-over__muted">No files yet.</p>
-      ) : (
-        <div className="resources-panel__list">
-          {resources.map((r) => (
-            <ResourceRow key={r.id} resource={r} onDelete={() => onDelete(r.id)} onToast={onToast} />
-          ))}
-        </div>
-      )}
-
-      <div className="resources-panel__add-row">
-        <input ref={fileRef} type="file" className="resources-panel__file-input" onChange={handleFileChange} tabIndex={-1} />
-        <button
-          type="button"
-          className="resources-panel__add-btn"
-          onClick={() => fileRef.current?.click()}
-          disabled={uploading}
-        >
-          {uploading ? 'Uploading…' : '+ File'}
-        </button>
-      </div>
-    </div>
-  )
-}
-
-function SlideOver({ task, fullTask, slideOverLoading, workspace, memberById, members, isAdmin, currentUserId, workspaceId, width, onResize, onClose, onToggle, onDelete, onSave, onReassign, onComingSoon, onToast }) {
-  const [editTitle, setEditTitle] = useState(task.title)
-  const [editContent, setEditContent] = useState('')
-  const [menuOpen, setMenuOpen, menuRef] = useDismissableMenu()
-  const [activeSlideTab, setActiveSlideTab] = useState('files')
-  const taskResources = useTaskResources(workspaceId, task.id, onToast)
-
-  const widthRef = useRef(width)
-  useEffect(() => { widthRef.current = width }, [width])
-
-  useEffect(() => { setEditTitle(task.title) }, [task.id])
-  useEffect(() => { setEditContent(fullTask?.content ?? '') }, [fullTask])
-  useEffect(() => { setActiveSlideTab('files') }, [task.id])
-
-  useEffect(() => {
-    function onKey(e) { if (e.key === 'Escape') onClose() }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [onClose])
-
-  const handleResizeStart = useCallback((e) => {
-    e.preventDefault()
-    const startX = e.clientX
-    const startW = widthRef.current
-    function onMove(ev) {
-      const newW = Math.max(320, Math.min(800, startW + (startX - ev.clientX)))
-      onResize(newW)
-    }
-    function onUp() {
-      document.removeEventListener('mousemove', onMove)
-      document.removeEventListener('mouseup', onUp)
-    }
-    document.addEventListener('mousemove', onMove)
-    document.addEventListener('mouseup', onUp)
-  }, [onResize])
-
-  const owner = memberById.get(task.ownerId)
-  const isOwner = task.ownerId === currentUserId
-  const canToggle = true
-  const canReassign = isOwner || isAdmin
-
-  async function handleTitleBlur() {
-    const trimmed = editTitle.trim()
-    if (!trimmed || trimmed === task.title) return
-    await onSave(task.id, { title: trimmed })
-  }
-
-  async function handleContentBlur() {
-    if (editContent === (fullTask?.content ?? '')) return
-    await onSave(task.id, { content: editContent })
-  }
-
-  return (
-    <>
-      <div className="slide-over-backdrop" onClick={onClose} aria-hidden="true" />
-      <aside className="slide-over" style={{ width }} aria-label="Task details">
-        <div className="slide-over__resize-handle" onMouseDown={handleResizeStart} />
-
-        <div className="slide-over__header">
-          <span className="slide-over__workspace-name">{workspace.title}</span>
-          <div ref={menuRef} className="slide-over__menu-wrap">
-            <button type="button" className="slide-over__icon-btn" onClick={() => setMenuOpen((v) => !v)} aria-label="Task actions">
-              <DotsIcon />
-            </button>
-            {menuOpen && (
-              <ul className="wd-menu-list" role="menu">
-                {canToggle && (
-                  <li role="none">
-                    <button type="button" role="menuitem" className="wd-menu-item"
-                      onClick={() => { onToggle(task.id); setMenuOpen(false) }}>
-                      {task.isCompleted ? 'Mark incomplete' : 'Mark complete'}
-                    </button>
-                  </li>
-                )}
-                {canReassign && (
-                  <li role="none">
-                    <button type="button" role="menuitem" className="wd-menu-item"
-                      onClick={() => { onReassign(task.id); setMenuOpen(false) }}>
-                      Reassign
-                    </button>
-                  </li>
-                )}
-                {isAdmin && (
-                  <li role="none">
-                    <button type="button" role="menuitem" className="wd-menu-item wd-menu-item--danger"
-                      onClick={() => { onDelete(task.id); setMenuOpen(false); onClose() }}>
-                      Delete
-                    </button>
-                  </li>
-                )}
-              </ul>
-            )}
-          </div>
-          <button type="button" className="slide-over__icon-btn" onClick={onClose} aria-label="Close">✕</button>
-        </div>
-
-        <div className="slide-over__body">
-          <div className="slide-over__title-row">
-            {canToggle ? (
-              <button
-                type="button"
-                className={`slide-over__checkbox${task.isCompleted ? ' slide-over__checkbox--checked' : ''}`}
-                onClick={() => onToggle(task.id)}
-                aria-label={task.isCompleted ? 'Mark incomplete' : 'Mark complete'}
-              >
-                {task.isCompleted && <CheckIcon />}
-              </button>
-            ) : (
-              <span className={`slide-over__checkbox slide-over__checkbox--readonly${task.isCompleted ? ' slide-over__checkbox--checked' : ''}`}>
-                {task.isCompleted && <CheckIcon />}
-              </span>
-            )}
-            <input
-              className={`slide-over__title${task.isCompleted ? ' slide-over__title--completed' : ''}`}
-              value={editTitle}
-              onChange={(e) => setEditTitle(e.target.value)}
-              onBlur={handleTitleBlur}
-              onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur() }}
-            />
-          </div>
-
-          <dl className="slide-over__fields">
-            <div className="slide-over__field">
-              <dt className="slide-over__field-label">Owner</dt>
-              <dd className="slide-over__field-value">
-                {owner
-                  ? <><MemberAvatar member={owner} size={20} /><span>{owner.name}</span></>
-                  : 'Unassigned'
-                }
-              </dd>
-            </div>
-            <div className="slide-over__field">
-              <dt className="slide-over__field-label">Due date</dt>
-              <dd className="slide-over__field-value">
-                <CalIcon />
-                <span className={task.dueDate ? `wd-due-text--${getTaskUrgency(task.dueDate)}` : ''}>
-                  {task.dueDate ? formatDueDate(task.dueDate) : 'No due date'}
-                </span>
-              </dd>
-            </div>
-            <div className="slide-over__field">
-              <dt className="slide-over__field-label">Workspace</dt>
-              <dd className="slide-over__field-value">{workspace.title}</dd>
-            </div>
-          </dl>
-
-          <div className="slide-over__section">
-            <p className="slide-over__section-label">Description</p>
-            {slideOverLoading
-              ? <p className="slide-over__muted">Loading…</p>
-              : (
-                <textarea
-                  className="slide-over__content-input"
-                  placeholder="Add a description…"
-                  value={editContent}
-                  onChange={(e) => setEditContent(e.target.value)}
-                  onBlur={handleContentBlur}
-                  rows={4}
-                />
-              )
-            }
-          </div>
-
-          <div className="slide-over__comment-tabs">
-            <button
-              type="button"
-              className={`wd-tab${activeSlideTab === 'files' ? ' wd-tab--active' : ''}`}
-              style={{ paddingLeft: 0 }}
-              onClick={() => setActiveSlideTab('files')}
-            >
-              Files
-            </button>
-            <button
-              type="button"
-              className={`wd-tab${activeSlideTab === 'links' ? ' wd-tab--active' : ''}`}
-              onClick={() => setActiveSlideTab('links')}
-            >
-              Links
-            </button>
-            <button
-              type="button"
-              className={`wd-tab${activeSlideTab === 'notes' ? ' wd-tab--active' : ''}`}
-              onClick={() => setActiveSlideTab('notes')}
-            >
-              Notes
-            </button>
-            <button
-              type="button"
-              className={`wd-tab${activeSlideTab === 'comments' ? ' wd-tab--active' : ''}`}
-              onClick={() => setActiveSlideTab('comments')}
-            >
-              Comments
-            </button>
-          </div>
-
-          {activeSlideTab === 'files' && (
-            <FilesPanel
-              workspaceId={workspaceId}
-              taskId={task.id}
-              resources={taskResources.files}
-              loading={taskResources.loading}
-              onAdded={taskResources.handleAdded}
-              onDelete={taskResources.handleDelete}
-              onToast={onToast}
-            />
-          )}
-          {activeSlideTab === 'links' && (
-            <LinksPanel
-              workspaceId={workspaceId}
-              taskId={task.id}
-              resources={taskResources.links}
-              loading={taskResources.loading}
-              onAdded={taskResources.handleAdded}
-              onDelete={taskResources.handleDelete}
-              onToast={onToast}
-            />
-          )}
-          {activeSlideTab === 'notes' && (
-            <NotesPanel
-              workspaceId={workspaceId}
-              taskId={task.id}
-              resources={taskResources.notes}
-              loading={taskResources.loading}
-              onAdded={taskResources.handleAdded}
-              onDelete={taskResources.handleDelete}
-              onToast={onToast}
-            />
-          )}
-          {activeSlideTab === 'comments' && (
-            <div className="slide-over__comments-empty">
-              <ChatIcon />
-              <p>Comments coming soon</p>
-            </div>
-          )}
-        </div>
-      </aside>
-    </>
-  )
-}
-
-function FloatingActions({ onComingSoon }) {
-  return (
-    <div className="floating-actions">
-      <button type="button" className="floating-actions__btn floating-actions__btn--filobelo" onClick={onComingSoon} aria-label="Ask Filobelo AI assistant">
-        <SparkleIcon />
-        <span className="floating-actions__label">Ask Filobelo</span>
-      </button>
-      <button type="button" className="floating-actions__btn floating-actions__btn--chat" onClick={onComingSoon} aria-label="Chat">
-        <ChatIcon />
-        <span className="floating-actions__label">Chat</span>
-      </button>
-    </div>
-  )
-}
+    useParams,
+    Link,
+    useNavigate,
+    useOutletContext,
+    useSearchParams,
+} from "react-router-dom";
+import { useAuth } from "../../context/AuthContext";
+import filobeloProud from "../../assets/mascott/filobelo_proud.svg";
+import {
+    authFetch,
+    getWorkspace,
+    createTask,
+    patchTask,
+    patchWorkspacePreferences,
+    deleteTask,
+    toggleTask,
+    getMembersWithRoles,
+    promoteToAdmin,
+    removeMember,
+    reassignTask,
+    listConversations,
+    createConversation,
+    createLink,
+    uploadResourceFile,
+} from "../../api/client";
+import { getDaysRemaining, formatDueDate } from "../../utils/date";
+import { getWorkspaceUrgency } from "../../utils/workspaceStatus";
+import {
+    toAvatarUrl,
+    normalizeTask,
+    normalizeWorkspace,
+    sortByUrgency,
+} from "../../components/WorkspaceDetail/helpers";
+import {
+    DotsIcon,
+    DownloadIcon,
+    StarIcon,
+} from "../../components/WorkspaceDetail/icons";
+import useDismissableMenu from "../../hooks/useDismissableMenu";
+import MemberAvatar from "../../components/WorkspaceDetail/MemberAvatar";
+import TaskRow from "../../components/WorkspaceDetail/TaskRow";
+import MemberPicker from "../../components/WorkspaceDetail/MemberPicker";
+import InvitePanel from "../../components/WorkspaceDetail/InvitePanel";
+import MemberListRow from "../../components/WorkspaceDetail/MemberListRow";
+import ConversationsPanel from "../../components/WorkspaceDetail/ConversationsPanel";
+import SettingsTab from "../../components/WorkspaceDetail/SettingsTab";
+import SlideOver from "../../components/WorkspaceDetail/SlideOver";
+import FloatingActions from "../../components/WorkspaceDetail/FloatingActions";
+import NewTaskModal from "../../components/WorkspaceDetail/NewTaskModal";
+import "./WorkspaceDetail.css";
 
 // ─── main component ─────────────────────────────────────────────────────────
 
 const URGENCY_COLOR = {
-  error:   'var(--color-error)',
-  warning: 'var(--color-warning)',
-  success: 'var(--color-success)',
-  neutral: 'var(--color-neutral)',
-}
+    error: "var(--color-error)",
+    warning: "var(--color-warning)",
+    success: "var(--color-success)",
+    neutral: "var(--color-neutral)",
+};
 
 const TABS = [
-  { id: 'tasks',    label: 'Tasks' },
-  { id: 'members',  label: 'Members' },
-  { id: 'kanban',   label: 'Kanban',  soon: true },
-  { id: 'settings', label: 'Settings' },
-]
+    { id: "tasks", label: "Tasks" },
+    { id: "kanban", label: "Kanban", soon: true },
+    { id: "members", label: "Members" },
+    { id: "settings", label: "Settings" },
+];
 
 function WorkspaceDetail() {
-  const { id } = useParams()
-  const workspaceId = parseInt(id, 10)
-  const { user } = useAuth()
-  const navigate = useNavigate()
-  const { onDelete: shellDelete, onLeave: shellLeave, onComingSoon, onTaskToggled, onWorkspaceTasksChanged, onWorkspaceCompleted, onWorkspaceReopened, onToast } = useOutletContext()
-  const currentUserId = user?.id
+    const { id } = useParams();
+    const workspaceId = parseInt(id, 10);
+    const { user } = useAuth();
+    const navigate = useNavigate();
+    const [searchParams, setSearchParams] = useSearchParams();
+    const {
+        onDelete: shellDelete,
+        onLeave: shellLeave,
+        onTogglePin,
+        onComingSoon,
+        onTaskToggled,
+        onWorkspaceTasksChanged,
+        onWorkspaceCompleted,
+        onWorkspaceReopened,
+        onToast,
+    } = useOutletContext();
+    const currentUserId = user?.id;
+    const [headerMenuOpen, setHeaderMenuOpen, headerMenuRef] =
+        useDismissableMenu();
 
   const [workspace, setWorkspace]               = useState(null)
   const [tasks, setTasks]                       = useState([])
@@ -1290,36 +98,48 @@ function WorkspaceDetail() {
   const [slideOverTask, setSlideOverTask]       = useState(null)
   const [slideOverLoading, setSlideOverLoading] = useState(false)
   const [slideOverWidth, setSlideOverWidth]     = useState(420)
-  const [showInlineAdd, setShowInlineAdd]       = useState(false)
-  const [inlineAddTitle, setInlineAddTitle]     = useState('')
+  const [showNewTaskModal, setShowNewTaskModal] = useState(false)
   const [detailMembers, setDetailMembers]       = useState(null)
   const [membersLoading, setMembersLoading]     = useState(false)
-  const [reassignTaskId, setReassignTaskId]     = useState(null)
+  const [conversations, setConversations]       = useState(null)
+  const [conversationsLoading, setConversationsLoading]       = useState(false)
+  const [conversationsPanelOpen, setConversationsPanelOpen]   = useState(false)
+  const [conversationsPanelWidth, setConversationsPanelWidth] = useState(880)
+  const [conversationsRailWidth, setConversationsRailWidth]   = useState(280)
+  const [conversationsRailCollapsed, setConversationsRailCollapsed] = useState(false)
+  const [selectedConversationId, setSelectedConversationId]   = useState(null)
+  const [conversationsMode, setConversationsMode]             = useState('WORKSPACE')
+  const [justCreatedConversationId, setJustCreatedConversationId] = useState(null)
+  const [reassignTaskId, setReassignTaskId]                   = useState(null)
   const [showCompletionModal, setShowCompletionModal] = useState(false)
   const [showConfirmComplete, setShowConfirmComplete] = useState(false)
   const [completingWorkspace, setCompletingWorkspace] = useState(false)
-  const [showReopenModal, setShowReopenModal] = useState(false)
-  const [pendingAddTitle, setPendingAddTitle] = useState('')
+  const [showReopenModal, setShowReopenModal]         = useState(false)
+  const [pendingTaskData, setPendingTaskData]         = useState(null)
 
-  useEffect(() => {
-    async function load() {
-      setLoading(true)
-      setError(null)
-      setSelectedTaskId(null)
-      setSlideOverTask(null)
-      setDetailMembers(null)
-      try {
-        const data = await getWorkspace(workspaceId)
-        setWorkspace(normalizeWorkspace(data))
-        setTasks((data.tasks ?? []).map(normalizeTask))
-      } catch (err) {
-        setError(err.detail ?? 'Could not load workspace')
-      } finally {
-        setLoading(false)
-      }
-    }
-    load()
-  }, [workspaceId])
+    useEffect(() => {
+        async function load() {
+            setLoading(true);
+            setError(null);
+            setSelectedTaskId(null);
+            setSlideOverTask(null);
+            setDetailMembers(null);
+            setConversations(null);
+            setSelectedConversationId(null);
+            setConversationsMode('WORKSPACE');
+            setConversationsPanelOpen(false);
+            try {
+                const data = await getWorkspace(workspaceId);
+                setWorkspace(normalizeWorkspace(data));
+                setTasks((data.tasks ?? []).map(normalizeTask));
+            } catch (err) {
+                setError(err.detail ?? "Could not load workspace");
+            } finally {
+                setLoading(false);
+            }
+        }
+        load();
+    }, [workspaceId]);
 
   async function loadDetailMembers() {
     if (detailMembers !== null || membersLoading) return
@@ -1339,569 +159,984 @@ function WorkspaceDetail() {
     }
   }
 
+  async function ensureConversationsLoaded() {
+    if (conversations !== null) return conversations
+    setConversationsLoading(true)
+    try {
+      const data = await listConversations(workspaceId)
+      setConversations(data)
+      return data
+    } finally {
+      setConversationsLoading(false)
+    }
+  }
+
+  function lastOpenedConversationId(list) {
+    if (!list || list.length === 0) return null
+    return list.reduce((best, c) => (
+      new Date(c.last_opened_at) > new Date(best.last_opened_at) ? c : best
+    )).id
+  }
+
+  function handleSelectConversation(id) {
+    setSelectedConversationId(id)
+  }
+
+  async function handleStartNewConversation() {
+    const isBot = conversationsMode === 'BOT'
+    try {
+      const created = await createConversation(workspaceId, {
+        title: isBot ? 'New chat' : 'Untitled conversation',
+        ...(isBot ? { type: 'BOT' } : {}),
+      })
+      setConversations((prev) => [created, ...(prev ?? [])])
+      setSelectedConversationId(created.id)
+      setJustCreatedConversationId(created.id)
+    } catch (err) {
+      onToast?.(err.detail ?? 'Could not create conversation')
+    }
+  }
+
+  function sortConversations(list) {
+    return [...list].sort((a, b) => {
+      if (a.is_pinned !== b.is_pinned) return a.is_pinned ? -1 : 1
+      return new Date(b.last_message_at) - new Date(a.last_message_at)
+    })
+  }
+
+  function handleConversationUpdated(updated) {
+    setConversations((prev) =>
+      sortConversations((prev ?? []).map((c) => (c.id === updated.id ? updated : c)))
+    )
+  }
+
+  function handleConversationDeleted(conversationId) {
+    setConversations((prev) => (prev ?? []).filter((c) => c.id !== conversationId))
+    setSelectedConversationId((prev) => (prev === conversationId ? null : prev))
+  }
+
   function handleTabChange(tabId) {
     if (tabId === 'kanban') { onComingSoon?.(); return }
     setActiveTab(tabId)
     if (tabId === 'members') loadDetailMembers()
   }
 
-  async function handleSelectTask(taskId) {
-    setSelectedTaskId(taskId)
-    setSlideOverTask(null)
-    setSlideOverLoading(true)
+  // Each of the two entry points (the floating "Ask Filobelo" button and the
+  // "Conversations" button) owns its own rail: switching modes re-selects a
+  // conversation of the matching type, so the rail and the open thread never
+  // show mismatched types.
+  async function handleOpenConversations() {
+    setConversationsMode('WORKSPACE')
+    setConversationsPanelOpen(true)
+    let list
     try {
-      const data = await authFetch(`/workspaces/${workspaceId}/tasks/${taskId}`)
-      setSlideOverTask(data)
-    } catch {
-      // slide-over opens without description
-    } finally {
-      setSlideOverLoading(false)
-    }
-  }
-
-  function handleCloseSlideOver() {
-    setSelectedTaskId(null)
-    setSlideOverTask(null)
-  }
-
-  async function handleToggleTask(taskId) {
-    const task = tasks.find((t) => t.id === taskId)
-    if (!task) return
-    const next = !task.isCompleted
-    setTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, isCompleted: next } : t))
-    onTaskToggled?.(workspaceId, taskId, next)
-    if (next && tasks.length > 0 && tasks.filter((t) => t.id !== taskId && !t.isCompleted).length === 0) {
-      setShowCompletionModal(true)
-    }
-    try {
-      await toggleTask(workspaceId, taskId)
-    } catch {
-      setTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, isCompleted: task.isCompleted } : t))
-      onTaskToggled?.(workspaceId, taskId, task.isCompleted)
-    }
-  }
-
-  async function handleAddTask() {
-    const title = inlineAddTitle.trim()
-    if (!title) return
-    if (workspace.isCompleted) {
-      setPendingAddTitle(title)
-      setShowReopenModal(true)
+      list = await ensureConversationsLoaded()
+    } catch (err) {
+      onToast?.(err.detail ?? 'Could not load conversations')
       return
     }
-    await doAddTask(title)
+    const workspaceConvos = list.filter((c) => c.type === 'WORKSPACE')
+    setSelectedConversationId((prev) =>
+      workspaceConvos.some((c) => c.id === prev) ? prev : lastOpenedConversationId(workspaceConvos)
+    )
   }
 
-  async function doAddTask(title) {
-    setInlineAddTitle('')
-    setShowInlineAdd(false)
+  // Deep-link support: /workspaces/:id?convo=123 (used by the Home page
+  // conversations widget) opens straight into that conversation.
+  useEffect(() => {
+    const convoParam = searchParams.get('convo')
+    if (!convoParam || loading || !workspace) return
+    const targetId = parseInt(convoParam, 10)
+    setConversationsPanelOpen(true)
+    setSelectedConversationId(targetId)
+    ensureConversationsLoaded().then((list) => {
+      const target = list.find((c) => c.id === targetId)
+      setConversationsMode(target?.type === 'BOT' ? 'BOT' : 'WORKSPACE')
+    })
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev)
+      next.delete('convo')
+      return next
+    }, { replace: true })
+  }, [loading, workspace])
+
+  async function handleAskFilobelo() {
+    setConversationsMode('BOT')
+    setConversationsPanelOpen(true)
+    let list
     try {
-      const data = await createTask(workspaceId, { title })
-      const newTasks = [normalizeTask(data), ...tasks]
-      setTasks(newTasks)
-      onWorkspaceTasksChanged?.(workspaceId, newTasks)
+      list = await ensureConversationsLoaded()
     } catch (err) {
-      onToast?.(err.detail ?? 'Could not create task')
+      onToast?.(err.detail ?? 'Could not load conversations')
+      return
     }
+    const botConvos = list.filter((c) => c.type === 'BOT')
+    setSelectedConversationId((prev) =>
+      botConvos.some((c) => c.id === prev) ? prev : lastOpenedConversationId(botConvos)
+    )
   }
 
-  async function handleReopenAndAdd() {
-    setShowReopenModal(false)
-    try {
-      await onWorkspaceReopened?.(workspaceId)
-      setWorkspace((prev) => ({ ...prev, isCompleted: false }))
-      await doAddTask(pendingAddTitle)
-    } catch (err) {
-      onToast?.(err.message ?? 'Could not reopen workspace')
-    } finally {
-      setPendingAddTitle('')
+    async function handleSelectTask(taskId) {
+        setSelectedTaskId(taskId);
+        setSlideOverTask(null);
+        setSlideOverLoading(true);
+        try {
+            const data = await authFetch(
+                `/workspaces/${workspaceId}/tasks/${taskId}`,
+            );
+            setSlideOverTask(data);
+        } catch {
+            // slide-over opens without description
+        } finally {
+            setSlideOverLoading(false);
+        }
     }
-  }
 
-  async function handleReopenWorkspace() {
-    try {
-      await onWorkspaceReopened?.(workspaceId)
-      setWorkspace((prev) => ({ ...prev, isCompleted: false }))
-    } catch (err) {
-      onToast?.(err.message ?? 'Could not reopen workspace')
+    function handleCloseSlideOver() {
+        setSelectedTaskId(null);
+        setSlideOverTask(null);
     }
-  }
 
-  async function handleDeleteTask(taskId) {
-    const prevTasks = tasks
-    const newTasks = tasks.filter((t) => t.id !== taskId)
-    setTasks(newTasks)
-    onWorkspaceTasksChanged?.(workspaceId, newTasks)
-    if (selectedTaskId === taskId) handleCloseSlideOver()
-    try {
-      await deleteTask(workspaceId, taskId)
-    } catch (err) {
-      onToast?.(err.detail ?? 'Could not delete task')
-      setTasks(prevTasks)
-      onWorkspaceTasksChanged?.(workspaceId, prevTasks)
+    async function handleToggleTask(taskId) {
+        const task = tasks.find((t) => t.id === taskId);
+        if (!task) return;
+        const next = !task.isCompleted;
+        setTasks((prev) =>
+            prev.map((t) =>
+                t.id === taskId ? { ...t, isCompleted: next } : t,
+            ),
+        );
+        onTaskToggled?.(workspaceId, taskId, next);
+        if (
+            next &&
+            tasks.length > 0 &&
+            tasks.filter((t) => t.id !== taskId && !t.isCompleted).length === 0
+        ) {
+            setShowCompletionModal(true);
+        }
+        try {
+            await toggleTask(workspaceId, taskId);
+        } catch {
+            setTasks((prev) =>
+                prev.map((t) =>
+                    t.id === taskId
+                        ? { ...t, isCompleted: task.isCompleted }
+                        : t,
+                ),
+            );
+            onTaskToggled?.(workspaceId, taskId, task.isCompleted);
+        }
     }
-  }
 
-  async function handleSaveTask(taskId, patch) {
-    try {
-      await patchTask(workspaceId, taskId, patch)
-      const newTasks = tasks.map((t) => t.id === taskId ? { ...t, ...patch } : t)
-      setTasks(newTasks)
-      onWorkspaceTasksChanged?.(workspaceId, newTasks)
-      if (patch.content !== undefined) {
-        setSlideOverTask((prev) => prev ? { ...prev, content: patch.content } : prev)
-      }
-    } catch (err) {
-      onToast?.(err.detail ?? 'Could not save task')
+    async function handleCreateTask(payload) {
+        if (workspace.isCompleted) {
+            setPendingTaskData(payload);
+            setShowNewTaskModal(false);
+            setShowReopenModal(true);
+            return;
+        }
+        await doCreateTask(payload);
     }
-  }
 
-  async function handleReassignTask(taskId, userId) {
-    setReassignTaskId(null)
-    try {
-      await reassignTask(workspaceId, taskId, userId)
-      setTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, ownerId: userId } : t))
-    } catch (err) {
-      onToast?.(err.detail ?? 'Could not reassign task')
+    async function doCreateTask(payload) {
+        const { links, files, ...taskFields } = payload;
+        const data = await createTask(workspaceId, taskFields);
+        const newTasks = [normalizeTask(data), ...tasks];
+        setTasks(newTasks);
+        onWorkspaceTasksChanged?.(workspaceId, newTasks);
+        setShowNewTaskModal(false);
+
+        for (const link of links) {
+            try {
+                await createLink(workspaceId, data.id, link);
+            } catch (err) {
+                onToast?.(
+                    err.detail ?? `Could not attach link "${link.title}"`,
+                );
+            }
+        }
+        for (const file of files) {
+            try {
+                await uploadResourceFile(workspaceId, data.id, file);
+            } catch (err) {
+                onToast?.(err.detail ?? `Could not upload "${file.name}"`);
+            }
+        }
     }
-  }
 
-  async function handleRemoveMember(userId) {
-    const prev = detailMembers
-    setDetailMembers((m) => m?.filter((mb) => mb.id !== userId) ?? null)
-    try {
-      await removeMember(workspaceId, userId)
-    } catch (err) {
-      setDetailMembers(prev)
-      onToast?.(err.detail ?? 'Could not remove member')
+    async function handleReopenAndAdd() {
+        setShowReopenModal(false);
+        try {
+            await onWorkspaceReopened?.(workspaceId);
+            setWorkspace((prev) => ({ ...prev, isCompleted: false }));
+            await doCreateTask(pendingTaskData);
+        } catch (err) {
+            onToast?.(err.message ?? "Could not reopen workspace");
+        } finally {
+            setPendingTaskData(null);
+        }
     }
-  }
 
-  async function handlePromoteToAdmin(userId) {
-    try {
-      await promoteToAdmin(workspaceId, userId)
-      setDetailMembers((prev) => prev?.map((m) => m.id === userId ? { ...m, role: 'admin' } : m) ?? null)
-    } catch (err) {
-      onToast?.(err.detail ?? 'Could not promote member')
+    async function handleReopenWorkspace() {
+        try {
+            await onWorkspaceReopened?.(workspaceId);
+            setWorkspace((prev) => ({ ...prev, isCompleted: false }));
+        } catch (err) {
+            onToast?.(err.message ?? "Could not reopen workspace");
+        }
     }
-  }
 
-  function handleMemberAdded() {
-    // Reload enriched member list after invite
-    setDetailMembers(null)
-    setMembersLoading(false)
-    loadDetailMembers()
-  }
-
-  function handleWorkspaceUpdate({ title, description, dueDate }) {
-    setWorkspace((prev) => ({ ...prev, title, description, dueDate }))
-  }
-
-  async function handleDeleteWorkspace() {
-    await shellDelete(workspaceId)
-    navigate('/')
-  }
-
-  async function handleMarkWorkspaceComplete() {
-    setCompletingWorkspace(true)
-    try {
-      await onWorkspaceCompleted(workspaceId)
-      navigate('/')
-    } catch (err) {
-      onToast?.(err.message ?? 'Could not complete workspace')
-    } finally {
-      setCompletingWorkspace(false)
+    async function handleDeleteTask(taskId) {
+        const prevTasks = tasks;
+        const newTasks = tasks.filter((t) => t.id !== taskId);
+        setTasks(newTasks);
+        onWorkspaceTasksChanged?.(workspaceId, newTasks);
+        if (selectedTaskId === taskId) handleCloseSlideOver();
+        try {
+            await deleteTask(workspaceId, taskId);
+        } catch (err) {
+            onToast?.(err.detail ?? "Could not delete task");
+            setTasks(prevTasks);
+            onWorkspaceTasksChanged?.(workspaceId, prevTasks);
+        }
     }
-  }
 
-  function handleRequestComplete() {
-    const openCount = tasks.filter((t) => !t.isCompleted).length
-    if (openCount > 0) {
-      setShowConfirmComplete(true)
-    } else {
-      handleMarkWorkspaceComplete()
+    async function handleSaveTask(taskId, patch) {
+        try {
+            await patchTask(workspaceId, taskId, patch);
+            const newTasks = tasks.map((t) =>
+                t.id === taskId ? { ...t, ...patch } : t,
+            );
+            setTasks(newTasks);
+            onWorkspaceTasksChanged?.(workspaceId, newTasks);
+            if (patch.content !== undefined) {
+                setSlideOverTask((prev) =>
+                    prev ? { ...prev, content: patch.content } : prev,
+                );
+            }
+        } catch (err) {
+            onToast?.(err.detail ?? "Could not save task");
+        }
     }
-  }
 
-  async function handleLeaveWorkspace() {
-    await shellLeave(workspaceId)
-    navigate('/')
-  }
+    async function handleReassignTask(taskId, userId) {
+        setReassignTaskId(null);
+        try {
+            await reassignTask(workspaceId, taskId, userId);
+            setTasks((prev) =>
+                prev.map((t) =>
+                    t.id === taskId ? { ...t, ownerId: userId } : t,
+                ),
+            );
+        } catch (err) {
+            onToast?.(err.detail ?? "Could not reassign task");
+        }
+    }
 
-  if (loading) {
-    return <div className="workspace-detail workspace-detail--state"><p>Loading workspace…</p></div>
-  }
-  if (error) {
-    return <div className="workspace-detail workspace-detail--state workspace-detail--error"><p>{error}</p></div>
-  }
-  if (!workspace) return null
+    async function handleRemoveMember(userId) {
+        const prev = detailMembers;
+        setDetailMembers((m) => m?.filter((mb) => mb.id !== userId) ?? null);
+        try {
+            await removeMember(workspaceId, userId);
+        } catch (err) {
+            setDetailMembers(prev);
+            onToast?.(err.detail ?? "Could not remove member");
+        }
+    }
 
-  // Derived
-  const activeTasks       = tasks.filter((t) => !t.isCompleted)
-  const completedTasks    = tasks.filter((t) => t.isCompleted)
-  const overdueCount      = activeTasks.filter((t) => getDaysRemaining(t.dueDate) < 0).length
-  const dueThisWeekCount  = activeTasks.filter((t) => {
-    const d = getDaysRemaining(t.dueDate)
-    return d !== null && d >= 0 && d <= 7
-  }).length
-  const localProgress     = tasks.length > 0
-    ? Math.round((completedTasks.length / tasks.length) * 100)
-    : 0
-  const urgency           = getWorkspaceUrgency({ dueDate: workspace.dueDate, progress: localProgress })
-  const progressColor     = URGENCY_COLOR[urgency] ?? 'var(--color-brand-primary)'
-  const memberById        = new Map(workspace.members.map((m) => [m.id, m]))
-  const isAdmin           = workspace.currentUserRole === 'admin'
-  const isCreator         = workspace.creatorId === currentUserId
-  const sortedActiveTasks = sortByUrgency(activeTasks)
-  const selectedTask      = tasks.find((t) => t.id === selectedTaskId) ?? null
-  const displayMembers    = detailMembers ?? workspace.members.map((m) => ({ ...m, role: null }))
-  const reassignTask_     = tasks.find((t) => t.id === reassignTaskId) ?? null
+    async function handlePromoteToAdmin(userId) {
+        try {
+            await promoteToAdmin(workspaceId, userId);
+            setDetailMembers(
+                (prev) =>
+                    prev?.map((m) =>
+                        m.id === userId ? { ...m, role: "admin" } : m,
+                    ) ?? null,
+            );
+        } catch (err) {
+            onToast?.(err.detail ?? "Could not promote member");
+        }
+    }
 
-  const initials = workspace.title
-    .split(' ')
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((w) => w[0].toUpperCase())
-    .join('')
+    function handleMemberAdded() {
+        // Reload enriched member list after invite
+        setDetailMembers(null);
+        setMembersLoading(false);
+        loadDetailMembers();
+    }
 
-  return (
-    <div className="workspace-detail">
-      {/* ── Header ── */}
-      <header className="wd-header">
-        <nav className="wd-breadcrumb" aria-label="Breadcrumb">
-          <Link to="/" className="wd-breadcrumb__link">All workspaces</Link>
-          <span className="wd-breadcrumb__sep" aria-hidden="true">›</span>
-          <span className="wd-breadcrumb__current">{workspace.title}</span>
-        </nav>
+    function handleWorkspaceUpdate({ title, description, dueDate }) {
+        setWorkspace((prev) => ({ ...prev, title, description, dueDate }));
+    }
 
-        <div className="wd-header__main">
-          <div className="wd-header__avatar" aria-hidden="true">{initials}</div>
+    async function handleDeleteWorkspace() {
+        await shellDelete(workspaceId);
+        navigate("/");
+    }
 
-          <div className="wd-header__info">
-            <div className="wd-header__title-row">
-              <h1 className="wd-header__title">{workspace.title}</h1>
-              {workspace.dueDate && localProgress < 100 && (
-                <span className={`wd-urgency-badge wd-urgency-badge--${urgency}`}>
-                  {formatDueDate(workspace.dueDate)}
-                </span>
-              )}
+    function handleTogglePinWorkspace() {
+        setWorkspace((prev) => ({ ...prev, isPinned: !prev.isPinned }));
+        onTogglePin?.(workspaceId);
+    }
+
+    async function handleArchiveWorkspace() {
+        try {
+            await patchWorkspacePreferences(workspaceId, { is_archived: true });
+            navigate("/");
+        } catch (err) {
+            onToast?.(err.detail ?? "Could not archive workspace");
+        }
+    }
+
+    async function handleMarkWorkspaceComplete() {
+        setCompletingWorkspace(true);
+        try {
+            await onWorkspaceCompleted(workspaceId);
+            navigate("/");
+        } catch (err) {
+            onToast?.(err.message ?? "Could not complete workspace");
+        } finally {
+            setCompletingWorkspace(false);
+        }
+    }
+
+    function handleRequestComplete() {
+        const openCount = tasks.filter((t) => !t.isCompleted).length;
+        if (openCount > 0) {
+            setShowConfirmComplete(true);
+        } else {
+            handleMarkWorkspaceComplete();
+        }
+    }
+
+    async function handleLeaveWorkspace() {
+        await shellLeave(workspaceId);
+        navigate("/");
+    }
+
+    if (loading) {
+        return (
+            <div className="workspace-detail workspace-detail--state">
+                <p>Loading workspace…</p>
             </div>
-            <p className="wd-header__description">{workspace.description}</p>
-          </div>
-
-          <div className="wd-header__side">
-            <div className="wd-header__member-stack">
-              {workspace.members.slice(0, 3).map((m) => (
-                <MemberAvatar key={m.id} member={m} size={30} />
-              ))}
-              {workspace.members.length > 3 && (
-                <span className="member-avatar member-avatar--overflow" style={{ width: 30, height: 30, fontSize: 11 }}>
-                  +{workspace.members.length - 3}
-                </span>
-              )}
+        );
+    }
+    if (error) {
+        return (
+            <div className="workspace-detail workspace-detail--state workspace-detail--error">
+                <p>{error}</p>
             </div>
-            {isAdmin && (
-              workspace.isCompleted ? (
-                <span className="wd-header__completed-badge">✓ Completed</span>
-              ) : (
-                <button
-                  type="button"
-                  className="settings-complete-btn"
-                  onClick={handleRequestComplete}
-                  disabled={completingWorkspace}
-                >
-                  Mark complete
-                </button>
-              )
-            )}
-          </div>
-        </div>
+        );
+    }
+    if (!workspace) return null;
 
-        <div className="wd-header__progress">
-          <div className="wd-header__progress-track">
-            <div
-              className="wd-header__progress-fill"
-              style={{ width: `${localProgress}%`, backgroundColor: progressColor }}
-            />
-          </div>
-          <span className="wd-header__progress-pct">{localProgress}%</span>
-        </div>
-      </header>
+    // Derived
+    const activeTasks = tasks.filter((t) => !t.isCompleted);
+    const completedTasks = tasks.filter((t) => t.isCompleted);
+    const overdueCount = activeTasks.filter(
+        (t) => getDaysRemaining(t.dueDate) < 0,
+    ).length;
+    const dueThisWeekCount = activeTasks.filter((t) => {
+        const d = getDaysRemaining(t.dueDate);
+        return d !== null && d >= 0 && d <= 7;
+    }).length;
+    const localProgress =
+        tasks.length > 0
+            ? Math.round((completedTasks.length / tasks.length) * 100)
+            : 0;
+    const urgency = getWorkspaceUrgency({
+        dueDate: workspace.dueDate,
+        progress: localProgress,
+    });
+    const progressColor =
+        URGENCY_COLOR[urgency] ?? "var(--color-brand-primary)";
+    const memberById = new Map(workspace.members.map((m) => [m.id, m]));
+    const isAdmin = workspace.currentUserRole === "admin";
+    const isCreator = workspace.creatorId === currentUserId;
+    const sortedActiveTasks = sortByUrgency(activeTasks);
+    const selectedTask = tasks.find((t) => t.id === selectedTaskId) ?? null;
+    const displayMembers =
+        detailMembers ?? workspace.members.map((m) => ({ ...m, role: null }));
+    const reassignTask_ = tasks.find((t) => t.id === reassignTaskId) ?? null;
 
-      {/* ── Tabs ── */}
-      <div className="wd-tabs" role="tablist">
-        {TABS.map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            role="tab"
-            aria-selected={activeTab === tab.id}
-            className={`wd-tab${activeTab === tab.id ? ' wd-tab--active' : ''}`}
-            onClick={() => handleTabChange(tab.id)}
-          >
-            {tab.label}
-            {tab.soon && <span className="wd-tab__soon">SOON</span>}
-          </button>
-        ))}
-      </div>
+    return (
+        <div className="workspace-detail">
+            {/* ── Header ── */}
+            <header className="wd-header">
+                <nav className="wd-breadcrumb" aria-label="Breadcrumb">
+                    <Link to="/" className="wd-breadcrumb__link">
+                        All workspaces
+                    </Link>
+                    <span className="wd-breadcrumb__sep" aria-hidden="true">
+                        ›
+                    </span>
+                    <span className="wd-breadcrumb__current">
+                        {workspace.title}
+                    </span>
+                </nav>
 
-      {/* ── Tab content ── */}
-      <div className="wd-content">
+                <div className="wd-header__main">
+                    <div className="wd-header__info">
+                        <div className="wd-header__title-row">
+                            <h1 className="wd-header__title">
+                                {workspace.title}
+                            </h1>
+                            {workspace.isPinned && (
+                                <span className="wd-header__pin-indicator" aria-label="Pinned">
+                                    <StarIcon filled />
+                                </span>
+                            )}
+                            {workspace.dueDate && localProgress < 100 && (
+                                <span
+                                    className={`wd-urgency-badge wd-urgency-badge--${urgency}`}
+                                >
+                                    <span
+                                        className="wd-urgency-badge__dot"
+                                        aria-hidden="true"
+                                    />
+                                    {formatDueDate(workspace.dueDate)}
+                                </span>
+                            )}
+                        </div>
+                        <p className="wd-header__description">
+                            {workspace.description}
+                        </p>
+                    </div>
 
-        {/* Tasks tab */}
-        {activeTab === 'tasks' && (
-          <div className="tasks-tab">
-            <div className="tasks-tab__summary">
-              <span className="tasks-tab__count">
-                {completedTasks.length} of {tasks.length} task{tasks.length !== 1 ? 's' : ''} complete
-              </span>
-              {overdueCount > 0 && (
-                <span className="task-pill task-pill--error">● {overdueCount} overdue</span>
-              )}
-              {dueThisWeekCount > 0 && (
-                <span className="task-pill task-pill--warning">● {dueThisWeekCount} due this week</span>
-              )}
-              <button type="button" className="tasks-tab__add-btn" onClick={() => setShowInlineAdd(true)}>
-                + Add task
-              </button>
-            </div>
+                    <div className="wd-header__side">
+                        <div className="wd-header__member-stack">
+                            {workspace.members.slice(0, 3).map((m) => (
+                                <MemberAvatar key={m.id} member={m} size={30} />
+                            ))}
+                            {workspace.members.length > 3 && (
+                                <span
+                                    className="member-avatar member-avatar--overflow"
+                                    style={{
+                                        width: 30,
+                                        height: 30,
+                                        fontSize: 11,
+                                    }}
+                                >
+                                    +{workspace.members.length - 3}
+                                </span>
+                            )}
+                        </div>
 
-            <div className="task-list">
-              {sortedActiveTasks.map((task) => (
-                <TaskRow
-                  key={task.id}
-                  task={task}
-                  member={memberById.get(task.ownerId)}
-                  isAdmin={isAdmin}
-                  currentUserId={currentUserId}
-                  onSelect={() => handleSelectTask(task.id)}
-                  onToggle={() => handleToggleTask(task.id)}
-                  onReassign={() => setReassignTaskId(task.id)}
-                  onDelete={() => handleDeleteTask(task.id)}
-                />
-              ))}
+                        <button
+                            type="button"
+                            className="wd-header__icon-btn"
+                            onClick={() => onComingSoon?.()}
+                            aria-label="Export workspace"
+                            data-tooltip="Export"
+                        >
+                            <DownloadIcon />
+                        </button>
 
-              {showInlineAdd ? (
-                <div className="inline-add">
-                  <span className="inline-add__checkbox" aria-hidden="true" />
-                  <input
-                    className="inline-add__input"
-                    placeholder="Task title…"
-                    value={inlineAddTitle}
-                    onChange={(e) => setInlineAddTitle(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') handleAddTask()
-                      if (e.key === 'Escape') { setShowInlineAdd(false); setInlineAddTitle('') }
-                    }}
-                    onBlur={() => {
-                      if (!inlineAddTitle.trim()) { setShowInlineAdd(false); setInlineAddTitle('') }
-                    }}
-                    autoFocus
-                  />
-                  <button type="button" className="inline-add__submit" onClick={handleAddTask}>Add</button>
-                  <button type="button" className="inline-add__cancel"
-                    onClick={() => { setShowInlineAdd(false); setInlineAddTitle('') }}>✕</button>
+                        <div
+                            className="wd-header__menu-wrap"
+                            ref={headerMenuRef}
+                        >
+                            <button
+                                type="button"
+                                className="wd-header__icon-btn"
+                                onClick={() => setHeaderMenuOpen((v) => !v)}
+                                aria-label="More options"
+                            >
+                                <DotsIcon />
+                            </button>
+                            {headerMenuOpen && (
+                                <ul
+                                    className="wd-menu-list wd-menu-list--header"
+                                    role="menu"
+                                >
+                                    <li role="none">
+                                        <button
+                                            type="button"
+                                            role="menuitem"
+                                            className="wd-menu-item"
+                                            onClick={() => {
+                                                setHeaderMenuOpen(false);
+                                                handleTogglePinWorkspace();
+                                            }}
+                                        >
+                                            {workspace.isPinned ? "Unpin" : "Pin"}
+                                        </button>
+                                    </li>
+                                    <li role="none">
+                                        <button
+                                            type="button"
+                                            role="menuitem"
+                                            className="wd-menu-item"
+                                            onClick={() => {
+                                                setHeaderMenuOpen(false);
+                                                handleArchiveWorkspace();
+                                            }}
+                                        >
+                                            Archive
+                                        </button>
+                                    </li>
+                                    {isAdmin && (
+                                        <li role="none">
+                                            <button
+                                                type="button"
+                                                role="menuitem"
+                                                className="wd-menu-item"
+                                                disabled={completingWorkspace}
+                                                onClick={() => {
+                                                    setHeaderMenuOpen(false);
+                                                    if (workspace.isCompleted) {
+                                                        handleReopenWorkspace();
+                                                    } else {
+                                                        handleRequestComplete();
+                                                    }
+                                                }}
+                                            >
+                                                {workspace.isCompleted ? "Reopen workspace" : "Mark complete"}
+                                            </button>
+                                        </li>
+                                    )}
+                                </ul>
+                            )}
+                        </div>
+                    </div>
                 </div>
-              ) : (
-                <button type="button" className="inline-add-trigger" onClick={() => setShowInlineAdd(true)}>
-                  + Add a task…
-                </button>
-              )}
+
+                <div className="wd-header__progress">
+                    <div className="wd-header__progress-track">
+                        <div
+                            className="wd-header__progress-fill"
+                            style={{
+                                width: `${localProgress}%`,
+                                backgroundColor: progressColor,
+                            }}
+                        />
+                    </div>
+                    <span className="wd-header__progress-pct">
+                        {localProgress}%
+                    </span>
+                </div>
+            </header>
+
+            {/* ── Tabs ── */}
+            <div className="wd-tabs" role="tablist">
+                {TABS.map((tab) => {
+                    const isActive = activeTab === tab.id;
+                    return (
+                        <button
+                            key={tab.id}
+                            type="button"
+                            role="tab"
+                            aria-selected={isActive}
+                            className={`wd-tab${isActive ? " wd-tab--active" : ""}`}
+                            onClick={() => handleTabChange(tab.id)}
+                        >
+                            {tab.label}
+                            {tab.soon && (
+                                <span className="wd-tab__soon">SOON</span>
+                            )}
+                        </button>
+                    );
+                })}
             </div>
 
-            {completedTasks.length > 0 && (
-              <div className="completed-section">
-                <button type="button" className="completed-section__toggle"
-                  onClick={() => setCompletedOpen((v) => !v)}>
-                  <span className="completed-section__arrow">{completedOpen ? '▼' : '▶'}</span>
-                  COMPLETED {completedTasks.length}
-                </button>
-                {completedOpen && (
-                  <div className="task-list task-list--completed">
-                    {completedTasks.map((task) => (
-                      <TaskRow
-                        key={task.id}
-                        task={task}
-                        member={memberById.get(task.ownerId)}
-                        isAdmin={isAdmin}
-                        currentUserId={currentUserId}
-                        onSelect={() => handleSelectTask(task.id)}
-                        onToggle={() => handleToggleTask(task.id)}
-                        onReassign={() => setReassignTaskId(task.id)}
-                        onDelete={() => handleDeleteTask(task.id)}
-                      />
-                    ))}
-                  </div>
+            {/* ── Tab content ── */}
+            <div className="wd-content">
+                {/* Tasks tab */}
+                {activeTab === "tasks" && (
+                    <div className="tasks-tab">
+                        <div className="tasks-tab__summary">
+                            <span className="tasks-tab__count">
+                                {completedTasks.length} of {tasks.length} task
+                                {tasks.length !== 1 ? "s" : ""} complete
+                            </span>
+                            {overdueCount > 0 && (
+                                <span className="task-pill task-pill--error">
+                                    {overdueCount} overdue
+                                </span>
+                            )}
+                            {dueThisWeekCount > 0 && (
+                                <span className="task-pill task-pill--warning">
+                                    {dueThisWeekCount} due this week
+                                </span>
+                            )}
+                            <button
+                                type="button"
+                                className="tasks-tab__add-btn"
+                                onClick={() => setShowNewTaskModal(true)}
+                            >
+                                <span aria-hidden="true">+</span> Add task
+                            </button>
+                        </div>
+
+                        {sortedActiveTasks.length > 0 && (
+                            <div className="task-list">
+                                {sortedActiveTasks.map((task) => (
+                                    <TaskRow
+                                        key={task.id}
+                                        task={task}
+                                        member={memberById.get(task.ownerId)}
+                                        isAdmin={isAdmin}
+                                        currentUserId={currentUserId}
+                                        onSelect={() =>
+                                            handleSelectTask(task.id)
+                                        }
+                                        onToggle={() =>
+                                            handleToggleTask(task.id)
+                                        }
+                                        onReassign={() =>
+                                            setReassignTaskId(task.id)
+                                        }
+                                        onDelete={() =>
+                                            handleDeleteTask(task.id)
+                                        }
+                                    />
+                                ))}
+                            </div>
+                        )}
+
+                        <button
+                            type="button"
+                            className="inline-add-trigger"
+                            onClick={() => setShowNewTaskModal(true)}
+                        >
+                            <span
+                                className="inline-add-trigger__icon"
+                                aria-hidden="true"
+                            >
+                                +
+                            </span>
+                            Add a task…
+                        </button>
+
+                        {completedTasks.length > 0 && (
+                            <div className="completed-section">
+                                <button
+                                    type="button"
+                                    className="completed-section__toggle"
+                                    onClick={() => setCompletedOpen((v) => !v)}
+                                >
+                                    <span className="completed-section__arrow">
+                                        {completedOpen ? "▼" : "▶"}
+                                    </span>
+                                    COMPLETED
+                                    <span className="completed-section__count">
+                                        {completedTasks.length}
+                                    </span>
+                                </button>
+                                {completedOpen && (
+                                    <div className="task-list task-list--completed">
+                                        {completedTasks.map((task) => (
+                                            <TaskRow
+                                                key={task.id}
+                                                task={task}
+                                                member={memberById.get(
+                                                    task.ownerId,
+                                                )}
+                                                isAdmin={isAdmin}
+                                                currentUserId={currentUserId}
+                                                onSelect={() =>
+                                                    handleSelectTask(task.id)
+                                                }
+                                                onToggle={() =>
+                                                    handleToggleTask(task.id)
+                                                }
+                                                onReassign={() =>
+                                                    setReassignTaskId(task.id)
+                                                }
+                                                onDelete={() =>
+                                                    handleDeleteTask(task.id)
+                                                }
+                                            />
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
                 )}
-              </div>
-            )}
-          </div>
-        )}
 
-        {/* Members tab */}
-        {activeTab === 'members' && (
-          <div className="members-tab">
-            {isAdmin && (
-              <InvitePanel workspaceId={workspaceId} onMemberAdded={handleMemberAdded} />
-            )}
-            {membersLoading && !detailMembers && (
-              <p className="members-tab__loading">Loading members…</p>
-            )}
-            <ul className="members-list">
-              {displayMembers.map((m) => (
-                <MemberListRow
-                  key={m.id}
-                  member={m}
-                  isAdmin={isAdmin}
-                  isSelf={m.id === currentUserId}
-                  onRemove={handleRemoveMember}
-                  onPromote={handlePromoteToAdmin}
-                  onLeave={handleLeaveWorkspace}
-                  onMessage={onComingSoon}
+                {/* Members tab */}
+                {activeTab === "members" && (
+                    <div className="members-tab">
+                        {isAdmin && (
+                            <InvitePanel
+                                workspaceId={workspaceId}
+                                onMemberAdded={handleMemberAdded}
+                            />
+                        )}
+                        {membersLoading && !detailMembers && (
+                            <p className="members-tab__loading">
+                                Loading members…
+                            </p>
+                        )}
+                        <ul className="members-list">
+                            {displayMembers.map((m) => (
+                                <MemberListRow
+                                    key={m.id}
+                                    member={m}
+                                    isAdmin={isAdmin}
+                                    isSelf={m.id === currentUserId}
+                                    onRemove={handleRemoveMember}
+                                    onPromote={handlePromoteToAdmin}
+                                    onLeave={handleLeaveWorkspace}
+                                    onMessage={onComingSoon}
+                                />
+                            ))}
+                        </ul>
+                    </div>
+                )}
+
+                {activeTab === "kanban" && (
+                    <div className="soon-placeholder">
+                        <p>Kanban view coming soon</p>
+                    </div>
+                )}
+
+                {/* Settings tab */}
+                {activeTab === "settings" && (
+                    <SettingsTab
+                        workspace={workspace}
+                        isAdmin={isAdmin}
+                        isCreator={isCreator}
+                        workspaceId={workspaceId}
+                        onWorkspaceUpdate={handleWorkspaceUpdate}
+                        onDelete={handleDeleteWorkspace}
+                        onLeave={handleLeaveWorkspace}
+                        onComplete={handleRequestComplete}
+                        onReopen={handleReopenWorkspace}
+                        onToast={onToast}
+                    />
+                )}
+            </div>
+
+            {/* ── Slide-over ── */}
+            {selectedTask && (
+                <SlideOver
+                    task={selectedTask}
+                    fullTask={slideOverTask}
+                    slideOverLoading={slideOverLoading}
+                    workspace={workspace}
+                    memberById={memberById}
+                    members={workspace.members}
+                    isAdmin={isAdmin}
+                    currentUserId={currentUserId}
+                    workspaceId={workspaceId}
+                    width={slideOverWidth}
+                    onResize={setSlideOverWidth}
+                    onClose={handleCloseSlideOver}
+                    onToggle={handleToggleTask}
+                    onDelete={handleDeleteTask}
+                    onSave={handleSaveTask}
+                    onReassign={(taskId) => setReassignTaskId(taskId)}
+                    onComingSoon={onComingSoon}
+                    onToast={onToast}
                 />
-              ))}
-            </ul>
-          </div>
-        )}
+            )}
 
-        {activeTab === 'kanban' && (
-          <div className="soon-placeholder"><p>Kanban view coming soon</p></div>
-        )}
+            {/* ── Conversations panel ── */}
+            {conversationsPanelOpen && (
+                <ConversationsPanel
+                    workspaceId={workspaceId}
+                    conversations={conversations}
+                    mode={conversationsMode}
+                    conversationsLoading={conversationsLoading}
+                    selectedConversationId={selectedConversationId}
+                    onSelectConversation={handleSelectConversation}
+                    onStartCreate={handleStartNewConversation}
+                    justCreatedConversationId={justCreatedConversationId}
+                    onAutoRenameConsumed={() =>
+                        setJustCreatedConversationId(null)
+                    }
+                    memberById={memberById}
+                    currentUserId={currentUserId}
+                    isAdmin={isAdmin}
+                    width={conversationsPanelWidth}
+                    onResize={setConversationsPanelWidth}
+                    railWidth={conversationsRailWidth}
+                    onRailResize={setConversationsRailWidth}
+                    railCollapsed={conversationsRailCollapsed}
+                    onToggleRailCollapse={() =>
+                        setConversationsRailCollapsed((v) => !v)
+                    }
+                    onClose={() => setConversationsPanelOpen(false)}
+                    onToast={onToast}
+                    onComingSoon={onComingSoon}
+                    onConversationUpdated={handleConversationUpdated}
+                    onConversationDeleted={handleConversationDeleted}
+                />
+            )}
 
-        {activeTab === 'settings' && (
-          <SettingsTab
-            workspace={workspace}
-            isAdmin={isAdmin}
-            isCreator={isCreator}
-            workspaceId={workspaceId}
-            onWorkspaceUpdate={handleWorkspaceUpdate}
-            onDelete={handleDeleteWorkspace}
-            onLeave={handleLeaveWorkspace}
-            onComplete={handleRequestComplete}
-            onReopen={handleReopenWorkspace}
-          />
-        )}
-      </div>
+            {/* ── Member picker (reassign) ── */}
+            {reassignTask_ && (
+                <MemberPicker
+                    members={workspace.members}
+                    currentOwnerId={reassignTask_.ownerId}
+                    onSelect={(userId) =>
+                        handleReassignTask(reassignTaskId, userId)
+                    }
+                    onClose={() => setReassignTaskId(null)}
+                />
+            )}
 
-      {/* ── Slide-over ── */}
-      {selectedTask && (
-        <SlideOver
-          task={selectedTask}
-          fullTask={slideOverTask}
-          slideOverLoading={slideOverLoading}
-          workspace={workspace}
-          memberById={memberById}
-          members={workspace.members}
-          isAdmin={isAdmin}
-          currentUserId={currentUserId}
-          workspaceId={workspaceId}
-          width={slideOverWidth}
-          onResize={setSlideOverWidth}
-          onClose={handleCloseSlideOver}
-          onToggle={handleToggleTask}
-          onDelete={handleDeleteTask}
-          onSave={handleSaveTask}
-          onReassign={(taskId) => setReassignTaskId(taskId)}
-          onComingSoon={onComingSoon}
-          onToast={onToast}
-        />
-      )}
+            {/* ── New task modal ── */}
+            {showNewTaskModal && (
+                <NewTaskModal
+                    workspace={workspace}
+                    currentUserId={currentUserId}
+                    onClose={() => setShowNewTaskModal(false)}
+                    onCreate={handleCreateTask}
+                />
+            )}
 
-      {/* ── Member picker (reassign) ── */}
-      {reassignTask_ && (
-        <MemberPicker
-          members={workspace.members}
-          currentOwnerId={reassignTask_.ownerId}
-          onSelect={(userId) => handleReassignTask(reassignTaskId, userId)}
-          onClose={() => setReassignTaskId(null)}
-        />
-      )}
+            {/* ── Floating actions ── */}
+            <FloatingActions
+                onAskFilobelo={handleAskFilobelo}
+                onOpenConversations={handleOpenConversations}
+                isPremium={user?.is_premium}
+            />
 
-      {/* ── Floating actions ── */}
-      <FloatingActions onComingSoon={onComingSoon} />
+            {/* ── Workspace completion modal ── */}
+            {showCompletionModal && (
+                <div
+                    className="completion-overlay"
+                    onClick={() => setShowCompletionModal(false)}
+                >
+                    <div
+                        className="completion-modal"
+                        role="dialog"
+                        aria-label="All tasks done"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <img
+                            src={filobeloProud}
+                            alt=""
+                            className="completion-modal__img"
+                        />
+                        <h2 className="completion-modal__heading">
+                            All tasks done!
+                        </h2>
+                        <p className="completion-modal__sub">
+                            Ready to close this workspace?
+                        </p>
+                        <div className="completion-modal__actions">
+                            <button
+                                type="button"
+                                className="completion-modal__btn completion-modal__btn--primary"
+                                onClick={() => {
+                                    setShowCompletionModal(false);
+                                    handleMarkWorkspaceComplete();
+                                }}
+                                disabled={completingWorkspace}
+                            >
+                                Mark complete
+                            </button>
+                            <button
+                                type="button"
+                                className="completion-modal__btn completion-modal__btn--ghost"
+                                onClick={() => setShowCompletionModal(false)}
+                            >
+                                Keep working
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
-      {/* ── Workspace completion modal ── */}
-      {showCompletionModal && (
-        <div className="completion-overlay" onClick={() => setShowCompletionModal(false)}>
-          <div className="completion-modal" role="dialog" aria-label="All tasks done" onClick={(e) => e.stopPropagation()}>
-            <img src={filobeloProud} alt="" className="completion-modal__img" />
-            <h2 className="completion-modal__heading">All tasks done!</h2>
-            <p className="completion-modal__sub">Ready to close this workspace?</p>
-            <div className="completion-modal__actions">
-              <button
-                type="button"
-                className="completion-modal__btn completion-modal__btn--primary"
-                onClick={() => { setShowCompletionModal(false); handleMarkWorkspaceComplete() }}
-                disabled={completingWorkspace}
-              >
-                Mark complete
-              </button>
-              <button
-                type="button"
-                className="completion-modal__btn completion-modal__btn--ghost"
-                onClick={() => setShowCompletionModal(false)}
-              >
-                Keep working
-              </button>
-            </div>
-          </div>
+            {showConfirmComplete && (
+                <div
+                    className="completion-overlay"
+                    onClick={() => setShowConfirmComplete(false)}
+                >
+                    <div
+                        className="completion-modal"
+                        role="dialog"
+                        aria-label="Confirm completion"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <h2
+                            className="completion-modal__heading"
+                            style={{ fontSize: "1.25rem" }}
+                        >
+                            {tasks.filter((t) => !t.isCompleted).length} task
+                            {tasks.filter((t) => !t.isCompleted).length !== 1
+                                ? "s"
+                                : ""}{" "}
+                            still open
+                        </h2>
+                        <p className="completion-modal__sub">
+                            Mark this workspace complete anyway?
+                        </p>
+                        <div className="completion-modal__actions">
+                            <button
+                                type="button"
+                                className="completion-modal__btn completion-modal__btn--primary"
+                                onClick={() => {
+                                    setShowConfirmComplete(false);
+                                    handleMarkWorkspaceComplete();
+                                }}
+                                disabled={completingWorkspace}
+                            >
+                                Complete anyway
+                            </button>
+                            <button
+                                type="button"
+                                className="completion-modal__btn completion-modal__btn--ghost"
+                                onClick={() => setShowConfirmComplete(false)}
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {showReopenModal && (
+                <div
+                    className="completion-overlay"
+                    onClick={() => {
+                        setShowReopenModal(false);
+                        setPendingTaskData(null);
+                    }}
+                >
+                    <div
+                        className="completion-modal"
+                        role="dialog"
+                        aria-label="Reopen workspace"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <h2
+                            className="completion-modal__heading"
+                            style={{ fontSize: "1.25rem" }}
+                        >
+                            This workspace is completed
+                        </h2>
+                        <p className="completion-modal__sub">
+                            Would you like to reopen it and keep working?
+                        </p>
+                        <div className="completion-modal__actions">
+                            <button
+                                type="button"
+                                className="completion-modal__btn completion-modal__btn--primary"
+                                onClick={handleReopenAndAdd}
+                            >
+                                Reopen &amp; keep working
+                            </button>
+                            <button
+                                type="button"
+                                className="completion-modal__btn completion-modal__btn--ghost"
+                                onClick={() => {
+                                    setShowReopenModal(false);
+                                    setPendingTaskData(null);
+                                }}
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
-      )}
-
-      {showConfirmComplete && (
-        <div className="completion-overlay" onClick={() => setShowConfirmComplete(false)}>
-          <div className="completion-modal" role="dialog" aria-label="Confirm completion" onClick={(e) => e.stopPropagation()}>
-            <h2 className="completion-modal__heading" style={{ fontSize: '1.25rem' }}>
-              {tasks.filter((t) => !t.isCompleted).length} task{tasks.filter((t) => !t.isCompleted).length !== 1 ? 's' : ''} still open
-            </h2>
-            <p className="completion-modal__sub">Mark this workspace complete anyway?</p>
-            <div className="completion-modal__actions">
-              <button
-                type="button"
-                className="completion-modal__btn completion-modal__btn--primary"
-                onClick={() => { setShowConfirmComplete(false); handleMarkWorkspaceComplete() }}
-                disabled={completingWorkspace}
-              >
-                Complete anyway
-              </button>
-              <button
-                type="button"
-                className="completion-modal__btn completion-modal__btn--ghost"
-                onClick={() => setShowConfirmComplete(false)}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showReopenModal && (
-        <div className="completion-overlay" onClick={() => { setShowReopenModal(false); setPendingAddTitle('') }}>
-          <div className="completion-modal" role="dialog" aria-label="Reopen workspace" onClick={(e) => e.stopPropagation()}>
-            <h2 className="completion-modal__heading" style={{ fontSize: '1.25rem' }}>This workspace is completed</h2>
-            <p className="completion-modal__sub">Would you like to reopen it and keep working?</p>
-            <div className="completion-modal__actions">
-              <button
-                type="button"
-                className="completion-modal__btn completion-modal__btn--primary"
-                onClick={handleReopenAndAdd}
-              >
-                Reopen &amp; keep working
-              </button>
-              <button
-                type="button"
-                className="completion-modal__btn completion-modal__btn--ghost"
-                onClick={() => { setShowReopenModal(false); setPendingAddTitle('') }}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  )
+    );
 }
 
-export default WorkspaceDetail
+export default WorkspaceDetail;

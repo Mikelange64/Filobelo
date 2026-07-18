@@ -100,6 +100,7 @@ def test_create_link_success(client: TestClient, user_auth_headers, workspace, t
     data = response.json()
     assert data["title"] == "Docs"
     assert data["url"] == "https://example.com/docs"
+    assert data["type"] == "LINK"
     assert "id" in data
     assert "created_at" in data
 
@@ -358,6 +359,7 @@ def test_create_note_success(client: TestClient, user_auth_headers, workspace, t
     data = response.json()
     assert data["title"] == "Meeting Notes"
     assert data["content"] == "Discussed X and Y."
+    assert data["type"] == "NOTE"
 
 
 def test_create_note_empty_content_allowed(client: TestClient, user_auth_headers, workspace, task):
@@ -446,6 +448,7 @@ def test_upload_file_success(
     data = response.json()
     assert data["title"] == "report.pdf"
     assert data["mime_type"] == "application/pdf"
+    assert data["type"] == "FILE"
     assert data["file_path"].startswith("https://")
     # Forces a download instead of the browser rendering the object inline.
     assert "response-content-disposition=attachment" in data["file_path"]

@@ -1,7 +1,7 @@
 
 
 from .association import WorkspaceMember
-from .conversations import Conversation, ConversationType, Message
+from .conversations import Conversation, ConversationType, Message, SenderType
 from .resources import Resource, ResourceType
 from .tasks import Task
 from .users import PasswordResetToken, RefreshToken, User, VerificationToken
@@ -23,4 +23,5 @@ __all__ = [
 
     "ResourceType",
     "ConversationType",
+    "SenderType"
 ]
