@@ -78,31 +78,6 @@
   gap: 18px;
 }
 
-.ntm-color-dots {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-.ntm-color-dot {
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  border: none;
-  padding: 0;
-  cursor: pointer;
-  transition: transform 0.12s;
-}
-
-.ntm-color-dot:hover {
-  transform: scale(1.1);
-}
-
-.ntm-color-dot--active {
-  box-shadow: 0 0 0 2px var(--color-bg-overlay), 0 0 0 3.5px var(--color-text-primary);
-}
-
 .ntm-title-input {
   flex: 1;
   min-width: 0;

@@ -4,57 +4,77 @@ import { formatDueDate } from '../../utils/date'
 import { getTaskUrgency } from './helpers'
 import { DotsIcon, CheckIcon } from './icons'
 import MemberAvatar from './MemberAvatar'
+import ColorDots from '../shared/ColorDots'
 
-function TaskRowMenu({ isDone, isOwner, isAdmin, onRename, onToggle, onReassign, onDelete }) {
+function TaskRowMenu({ isDone, isOwner, isAdmin, taskColor, onRename, onToggle, onReassign, onColorChange, onDelete }) {
   const [isOpen, setIsOpen, ref] = useDismissableMenu()
-  const canReassign = isOwner || isAdmin
+  const [pickingColor, setPickingColor] = useState(false)
+  const canManage = isOwner || isAdmin
+
+  function closeMenu() {
+    setIsOpen(false)
+    setPickingColor(false)
+  }
+
   return (
     <div className="task-row__menu-wrap" ref={ref}>
       <button
         type="button"
         className="task-row__menu-trigger"
-        onClick={(e) => { e.stopPropagation(); setIsOpen((v) => !v) }}
+        onClick={(e) => { e.stopPropagation(); setPickingColor(false); setIsOpen((v) => !v) }}
         aria-label="Task actions"
       >
         <DotsIcon />
       </button>
       {isOpen && (
-        <ul className="wd-menu-list" role="menu">
-          <li role="none">
-            <button type="button" role="menuitem" className="wd-menu-item"
-              onClick={() => { onRename(); setIsOpen(false) }}>
-              Rename
-            </button>
-          </li>
-          <li role="none">
-            <button type="button" role="menuitem" className="wd-menu-item"
-              onClick={() => { onToggle(); setIsOpen(false) }}>
-              {isDone ? 'Mark incomplete' : 'Mark complete'}
-            </button>
-          </li>
-          {canReassign && (
+        pickingColor ? (
+          <div className="wd-menu-list" role="menu">
+            <ColorDots value={taskColor} onChange={(c) => { onColorChange(c); closeMenu() }} />
+          </div>
+        ) : (
+          <ul className="wd-menu-list" role="menu">
             <li role="none">
               <button type="button" role="menuitem" className="wd-menu-item"
-                onClick={() => { onReassign(); setIsOpen(false) }}>
-                Reassign
+                onClick={() => { onRename(); setIsOpen(false) }}>
+                Rename
               </button>
             </li>
-          )}
-          {isAdmin && (
             <li role="none">
-              <button type="button" role="menuitem" className="wd-menu-item wd-menu-item--danger"
-                onClick={() => { onDelete(); setIsOpen(false) }}>
-                Delete
+              <button type="button" role="menuitem" className="wd-menu-item"
+                onClick={() => setPickingColor(true)}>
+                Change color
               </button>
             </li>
-          )}
-        </ul>
+            <li role="none">
+              <button type="button" role="menuitem" className="wd-menu-item"
+                onClick={() => { onToggle(); setIsOpen(false) }}>
+                {isDone ? 'Mark incomplete' : 'Mark complete'}
+              </button>
+            </li>
+            {canManage && (
+              <li role="none">
+                <button type="button" role="menuitem" className="wd-menu-item"
+                  onClick={() => { onReassign(); setIsOpen(false) }}>
+                  Reassign
+                </button>
+              </li>
+            )}
+            {canManage && (
+              <li role="none">
+                <button type="button" role="menuitem" className="wd-menu-item wd-menu-item--danger"
+                  onClick={() => { onDelete(); setIsOpen(false) }}>
+                  Delete
+                </button>
+              </li>
+            )}
+          </ul>
+        )
       )}
     </div>
   )
 }
 
-export default function TaskRow({ task, member, isAdmin, currentUserId, onSelect, onToggle, onReassign, onDelete, onRename }) {
+export default function TaskRow({ task, member, isAdmin, currentUserId, onSelect, onToggle, onReassign, onDelete, onRename, onColorChange }) {
   const urgency = getTaskUrgency(task.dueDate)
   const isOwner = task.ownerId === currentUserId
   const isDone = task.status === 'DONE'
@@ -137,9 +157,11 @@ export default function TaskRow({ task, member, isAdmin, currentUserId, onSelect
         isDone={isDone}
         isOwner={isOwner}
         isAdmin={isAdmin}
+        taskColor={task.color}
         onRename={() => setIsRenaming(true)}
         onToggle={onToggle}
         onReassign={onReassign}
+        onColorChange={(color) => onColorChange(task.id, color)}
         onDelete={onDelete}
       />
     </div>

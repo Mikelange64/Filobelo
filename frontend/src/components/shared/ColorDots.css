@@ -1,0 +1,24 @@
+.color-dots {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.color-dot {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  transition: transform 0.12s;
+}
+
+.color-dot:hover {
+  transform: scale(1.1);
+}
+
+.color-dot--active {
+  box-shadow: 0 0 0 2px var(--color-bg-overlay), 0 0 0 3.5px var(--color-text-primary);
+}

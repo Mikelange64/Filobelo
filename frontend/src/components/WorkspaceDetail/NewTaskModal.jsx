@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { WORKSPACE_COLORS } from '../../constants/colors'
 import { LinkIcon, FileIcon, TrashIcon } from './icons'
 import MemberAvatar from './MemberAvatar'
+import ColorDots from '../shared/ColorDots'
 import './NewTaskModal.css'
 
 const MONTH_NAMES = [
@@ -208,19 +209,7 @@ function NewTaskModal({ workspace, currentUserId, onClose, onCreate }) {
 
         <form className="ntm-body" onSubmit={handleSubmit} onKeyDown={handleFormKeyDown} noValidate>
           <div className="ntm-title-row">
-            <div className="ntm-color-dots">
-              {WORKSPACE_COLORS.map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  className={`ntm-color-dot${color === c ? ' ntm-color-dot--active' : ''}`}
-                  style={{ backgroundColor: c }}
-                  onClick={() => setColor(c)}
-                  aria-label={`Set task color to ${c}`}
-                  aria-pressed={color === c}
-                />
-              ))}
-            </div>
+            <ColorDots value={color} onChange={setColor} colors={WORKSPACE_COLORS} />
             <input
               ref={titleRef}
               type="text"

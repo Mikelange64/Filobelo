@@ -500,6 +500,19 @@ def test_delete_task_as_non_admin_member(
     assert_forbidden(response)
 
 
+def test_delete_task_as_owner_non_admin(
+    client: TestClient, user_token, workspace, second_user
+):
+    add_workspace_member(client, user_token, workspace["id"], second_user["id"])
+    member_token = login_user(client, email="user2@example.com")
+    own_task = create_task(client, member_token, workspace["id"])
+    response = client.delete(
+        f"{taskprefix}/{workspace['id']}/tasks/{own_task['id']}",
+        headers=auth_header(member_token),
+    )
+    assert response.status_code == 204
+
+
 @pytest.mark.parametrize(
     "token,expected_status",
     [

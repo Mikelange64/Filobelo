@@ -15,7 +15,6 @@ from app.schemas import (
 )
 from app.dependencies import (
     get_target_membership,
-    require_admin,
     require_membership,
 )
 from app.utils import get_task_by_id
@@ -130,11 +129,18 @@ def update_task_full(
     return task
 
 
-@router.delete(
-    "/{task_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_admin)]
-)
-def delete_task(task_id: int, db: DbSession):
+@router.delete("/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_task(
+    task_id: int,
+    db: DbSession,
+    member: Annotated[WorkspaceMember, Depends(require_membership)],
+):
     task = get_task_by_id(task_id, db)
+    if task.owner_id != member.user_id and member.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the task owner or an admin can delete this task",
+        )
     db.delete(task)
     db.commit()
 

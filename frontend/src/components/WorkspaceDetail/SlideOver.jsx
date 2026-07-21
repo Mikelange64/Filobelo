@@ -53,7 +53,7 @@ export default function SlideOver({ task, fullTask, slideOverLoading, workspace,
   const isOwner = task.ownerId === currentUserId
   const isDone = task.status === 'DONE'
   const canToggle = true
-  const canReassign = isOwner || isAdmin
+  const canManage = isOwner || isAdmin
 
   async function handleTitleBlur() {
     const trimmed = editTitle.trim()
@@ -89,7 +89,7 @@ export default function SlideOver({ task, fullTask, slideOverLoading, workspace,
                     </button>
                   </li>
                 )}
-                {canReassign && (
+                {canManage && (
                   <li role="none">
                     <button type="button" role="menuitem" className="wd-menu-item"
                       onClick={() => { onReassign(task.id); setMenuOpen(false) }}>
@@ -97,7 +97,7 @@ export default function SlideOver({ task, fullTask, slideOverLoading, workspace,
                     </button>
                   </li>
                 )}
-                {isAdmin && (
+                {canManage && (
                   <li role="none">
                     <button type="button" role="menuitem" className="wd-menu-item wd-menu-item--danger"
                       onClick={() => { onDelete(task.id); setMenuOpen(false); onClose() }}>

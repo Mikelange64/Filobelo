@@ -814,6 +814,9 @@ function WorkspaceDetail() {
                                         onRename={(taskId, title) =>
                                             handleSaveTask(taskId, { title })
                                         }
+                                        onColorChange={(taskId, color) =>
+                                            handleSaveTask(taskId, { color })
+                                        }
                                     />
                                 ))}
                             </div>
@@ -874,6 +877,11 @@ function WorkspaceDetail() {
                                                 onRename={(taskId, title) =>
                                                     handleSaveTask(taskId, {
                                                         title,
+                                                    })
+                                                }
+                                                onColorChange={(taskId, color) =>
+                                                    handleSaveTask(taskId, {
+                                                        color,
                                                     })
                                                 }
                                             />
