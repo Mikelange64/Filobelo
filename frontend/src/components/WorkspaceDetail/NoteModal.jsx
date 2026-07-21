@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
+import DOMPurify from 'dompurify'
 import './NoteModal.css'
 
 const COMMANDS = [
@@ -27,7 +28,7 @@ export default function NoteModal({ initialTitle = '', initialContent = '', acce
   const bodyRef = useRef(null)
 
   useEffect(() => {
-    if (bodyRef.current) bodyRef.current.innerHTML = initialContent
+    if (bodyRef.current) bodyRef.current.innerHTML = DOMPurify.sanitize(initialContent)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 

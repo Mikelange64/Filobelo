@@ -463,6 +463,25 @@
     color: var(--color-brand-primary);
 }
 
+.task-row__title-input {
+    flex: 1;
+    min-width: 0;
+    padding: 0;
+    border: none;
+    background: transparent;
+    font-size: 0.92rem;
+    font-weight: 600;
+    font-family: inherit;
+    color: var(--color-text-primary);
+    outline: none;
+}
+
+.task-row__title-input:focus,
+.task-row__title-input:focus-visible {
+    outline: none;
+    box-shadow: none;
+}
+
 /* Assignee */
 .task-row__assignee {
     display: flex;
@@ -1002,19 +1021,6 @@ a.resource-row__title:hover {
 
 .resource-row__title--note:hover {
     color: var(--color-brand-primary);
-}
-
-.resource-row__note-content {
-    margin: 6px 0 0;
-    font-size: 0.82rem;
-    color: var(--color-text-muted);
-    white-space: pre-wrap;
-}
-
-.resource-row__note-content ul,
-.resource-row__note-content ol {
-    margin: 4px 0;
-    padding-left: 20px;
 }
 
 .resource-row__link {

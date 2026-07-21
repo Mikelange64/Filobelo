@@ -32,6 +32,10 @@ class Resource(Base):
     created_at   : Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default= lambda : datetime.now(UTC)
     )
+    updated_at   : Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False,
+        default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC),
+    )
     task : Mapped["Task"] = relationship(
         "Task", foreign_keys=[task_id], back_populates="resources"
     )

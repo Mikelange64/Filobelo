@@ -14,6 +14,19 @@ export function formatAbsoluteDate(dateStr) {
     : `${month} ${day}, ${year}`
 }
 
+/** Returns "Just now", "5 minutes ago", "2 hours ago", "3 days ago", falling back to formatAbsoluteDate past a week. */
+export function formatRelativeTime(dateStr) {
+  if (!dateStr) return ''
+  const minutes = Math.floor((Date.now() - new Date(dateStr).getTime()) / 60000)
+  if (minutes < 1) return 'Just now'
+  if (minutes < 60) return `${minutes} minute${minutes === 1 ? '' : 's'} ago`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`
+  const days = Math.floor(hours / 24)
+  if (days < 7) return `${days} day${days === 1 ? '' : 's'} ago`
+  return formatAbsoluteDate(dateStr)
+}
+
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 
 /** Whole days remaining until dueDate; negative if overdue. */

@@ -9,6 +9,7 @@ class ResourceBase(BaseModel):
     task_id    : int
     title      : str
     created_at : datetime
+    updated_at : datetime
 
 
 # =============================================== LINKS ======================================================

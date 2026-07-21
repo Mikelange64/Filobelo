@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, HTTPException, status
 from sqlalchemy import select, func
 
 from app.database import DbSession
@@ -10,7 +10,7 @@ from app.dependencies import require_superuser
 from app.utils import get_user_by_id
 
 
-router = APIRouter(tags=["admin_users"])
+router = APIRouter(tags=["superusers"])
 
 
 @router.get(
@@ -48,4 +48,34 @@ def get_all_users(
 )
 def get_user(user_id: int, db: DbSession):
     user = get_user_by_id(user_id, db)
+    return user
+
+
+@router.patch(
+    "/{user_id}/make-superuser", response_model=SuperUserResponse, dependencies=[Depends(require_superuser)]
+)
+def make_superuser(user_id: int, db: DbSession):
+    user = get_user_by_id(user_id, db)
+    user.is_superuser = True
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+@router.patch(
+    "/{user_id}/remove-superuser", response_model=SuperUserResponse, dependencies=[Depends(require_superuser)]
+)
+def remove_superuser(
+    user_id      : int, 
+    db           : DbSession, 
+    current_user : Annotated[User, Depends(require_superuser)]
+):
+    if current_user.id == user_id :
+        raise HTTPException(
+            status_code = status.HTTP_409_CONFLICT, detail = "Cannot demote self"
+        )
+    user = get_user_by_id(user_id, db)
+    user.is_superuser = False
+    db.commit()
+    db.refresh(user)
     return user

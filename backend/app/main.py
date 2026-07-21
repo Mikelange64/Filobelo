@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.admin import admin_users
+from app.superusers import superusers
 from app.routers import folders, tasks, users, workspaces, resources, conversations
 from app.database import DbSession
 from app.config import settings
@@ -36,7 +36,7 @@ app.include_router(conversations.recent_router, prefix="/api")
 app.include_router(tasks.router, prefix="/api/workspaces")
 app.include_router(resources.router, prefix="/api/workspaces")
 app.include_router(folders.router, prefix="/api/folders")
-app.include_router(admin_users.router, prefix="/api/admin-users")
+app.include_router(superusers.router, prefix="/api/superusers")
 
 
 # ======================================================================================================================

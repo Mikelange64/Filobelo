@@ -1,9 +1,8 @@
 import { useState } from 'react'
-import DOMPurify from 'dompurify'
 import useDismissableMenu from '../../hooks/useDismissableMenu'
 import { LinkIcon, FileIcon, NoteIcon, EditIcon, TrashIcon } from './icons'
 
-export default function ResourceRow({ resource, onDelete, onUpdate, onEditNote, onToast }) {
+export default function ResourceRow({ resource, onDelete, onUpdate, onOpenNote, onEditNote, onToast }) {
   const [expanded, setExpanded] = useState(false)
   const [menuOpen, setMenuOpen, menuRef] = useDismissableMenu()
   const [menuPos, setMenuPos] = useState({ x: 0, y: 0 })
@@ -136,21 +135,13 @@ export default function ResourceRow({ resource, onDelete, onUpdate, onEditNote, 
           </a>
         )}
         {isNote && (
-          <>
-            <button
-              type="button"
-              className="resource-row__title resource-row__title--note"
-              onClick={() => setExpanded((v) => !v)}
-            >
-              {resource.title}
-            </button>
-            {expanded && (
-              <div
-                className="resource-row__note-content"
-                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(resource.content ?? '') }}
-              />
-            )}
-          </>
+          <button
+            type="button"
+            className="resource-row__title resource-row__title--note"
+            onClick={() => onOpenNote?.()}
+          >
+            {resource.title}
+          </button>
         )}
       </div>
       {canEdit && (

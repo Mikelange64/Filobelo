@@ -811,6 +811,9 @@ function WorkspaceDetail() {
                                         onDelete={() =>
                                             handleDeleteTask(task.id)
                                         }
+                                        onRename={(taskId, title) =>
+                                            handleSaveTask(taskId, { title })
+                                        }
                                     />
                                 ))}
                             </div>
@@ -867,6 +870,11 @@ function WorkspaceDetail() {
                                                 }
                                                 onDelete={() =>
                                                     handleDeleteTask(task.id)
+                                                }
+                                                onRename={(taskId, title) =>
+                                                    handleSaveTask(taskId, {
+                                                        title,
+                                                    })
                                                 }
                                             />
                                         ))}

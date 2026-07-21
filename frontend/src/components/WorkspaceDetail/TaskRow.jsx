@@ -1,10 +1,11 @@
+import { useState } from 'react'
 import useDismissableMenu from '../../hooks/useDismissableMenu'
 import { formatDueDate } from '../../utils/date'
 import { getTaskUrgency } from './helpers'
 import { DotsIcon, CheckIcon } from './icons'
 import MemberAvatar from './MemberAvatar'
 
-function TaskRowMenu({ isDone, isOwner, isAdmin, onEdit, onToggle, onReassign, onDelete }) {
+function TaskRowMenu({ isDone, isOwner, isAdmin, onRename, onToggle, onReassign, onDelete }) {
   const [isOpen, setIsOpen, ref] = useDismissableMenu()
   const canReassign = isOwner || isAdmin
   return (
@@ -21,8 +22,8 @@ function TaskRowMenu({ isDone, isOwner, isAdmin, onEdit, onToggle, onReassign, o
         <ul className="wd-menu-list" role="menu">
           <li role="none">
             <button type="button" role="menuitem" className="wd-menu-item"
-              onClick={() => { onEdit(); setIsOpen(false) }}>
-              Edit
+              onClick={() => { onRename(); setIsOpen(false) }}>
+              Rename
             </button>
           </li>
           <li role="none">
@@ -53,11 +54,21 @@ function TaskRowMenu({ isDone, isOwner, isAdmin, onEdit, onToggle, onReassign, o
   )
 }
 
-export default function TaskRow({ task, member, isAdmin, currentUserId, onSelect, onToggle, onReassign, onDelete }) {
+export default function TaskRow({ task, member, isAdmin, currentUserId, onSelect, onToggle, onReassign, onDelete, onRename }) {
   const urgency = getTaskUrgency(task.dueDate)
   const isOwner = task.ownerId === currentUserId
   const isDone = task.status === 'DONE'
   const canToggle = true
+  const [isRenaming, setIsRenaming] = useState(false)
+  const [renameValue, setRenameValue] = useState(task.title)
+
+  async function handleRenameSave() {
+    const trimmed = renameValue.trim()
+    setIsRenaming(false)
+    if (!trimmed || trimmed === task.title) return
+    await onRename(task.id, trimmed)
+  }
+
   return (
     <div className={`task-row${isDone ? ' task-row--completed' : ''}`}>
       {canToggle ? (
@@ -78,9 +89,25 @@ export default function TaskRow({ task, member, isAdmin, currentUserId, onSelect
         </span>
       )}
 
-      <button type="button" className="task-row__title" onClick={onSelect}>
-        {task.title}
-      </button>
+      {isRenaming ? (
+        <input
+          className="task-row__title-input"
+          value={renameValue}
+          onChange={(e) => setRenameValue(e.target.value)}
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') handleRenameSave()
+            if (e.key === 'Escape') { setIsRenaming(false); setRenameValue(task.title) }
+          }}
+          onBlur={handleRenameSave}
+          onFocus={(e) => e.target.select()}
+          autoFocus
+        />
+      ) : (
+        <button type="button" className="task-row__title" onClick={onSelect}>
+          {task.title}
+        </button>
+      )}
 
       {member && (
         isDone ? (
@@ -110,7 +137,7 @@ export default function TaskRow({ task, member, isAdmin, currentUserId, onSelect
         isDone={isDone}
         isOwner={isOwner}
         isAdmin={isAdmin}
-        onEdit={onSelect}
+        onRename={() => setIsRenaming(true)}
         onToggle={onToggle}
         onReassign={onReassign}
         onDelete={onDelete}

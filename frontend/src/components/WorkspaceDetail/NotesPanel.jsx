@@ -2,9 +2,11 @@ import { useState } from 'react'
 import { createNote } from '../../api/client'
 import ResourceRow from './ResourceRow'
 import NoteModal from './NoteModal'
+import NoteViewer from './NoteViewer'
 
 export default function NotesPanel({ workspaceId, taskId, taskColor, resources, loading, onAdded, onDelete, onUpdate, onToast }) {
   const [modalTarget, setModalTarget] = useState(null) // null | 'new' | resource
+  const [viewingNote, setViewingNote] = useState(null) // null | resource
 
   async function handleSave(title, content) {
     if (modalTarget === 'new') {
@@ -29,6 +31,7 @@ export default function NotesPanel({ workspaceId, taskId, taskColor, resources, 
               key={r.id}
               resource={r}
               onDelete={() => onDelete(r.id)}
+              onOpenNote={() => setViewingNote(r)}
               onEditNote={() => setModalTarget(r)}
               onToast={onToast}
             />
@@ -39,6 +42,14 @@ export default function NotesPanel({ workspaceId, taskId, taskColor, resources, 
       <div className="resources-panel__add-row">
         <button type="button" className="resources-panel__add-btn" onClick={() => setModalTarget('new')}>+ Note</button>
       </div>
+
+      {viewingNote && (
+        <NoteViewer
+          note={viewingNote}
+          onEdit={() => { setModalTarget(viewingNote); setViewingNote(null) }}
+          onClose={() => setViewingNote(null)}
+        />
+      )}
 
       {modalTarget && (
         <NoteModal
