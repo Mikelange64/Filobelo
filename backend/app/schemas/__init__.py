@@ -32,6 +32,7 @@ from .tasks import (
     TaskCreate,
     TaskFullUpdate,
     TaskResponse,
+    TaskStatusUpdate,
     TaskSummary,
     TaskUpdate,
 )
@@ -76,6 +77,7 @@ __all__ = [
     "TaskCreate",
     "TaskFullUpdate",
     "TaskResponse",
+    "TaskStatusUpdate",
     "TaskSummary",
     "PaginatedTaskResponse",
     "TaskUpdate",

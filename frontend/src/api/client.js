@@ -247,9 +247,10 @@ export function deleteTask(workspaceId, taskId) {
   })
 }
 
-export function toggleTask(workspaceId, taskId) {
-  return authFetch(`/workspaces/${workspaceId}/tasks/${taskId}/complete`, {
+export function updateTaskStatus(workspaceId, taskId, status) {
+  return authFetch(`/workspaces/${workspaceId}/tasks/${taskId}/status`, {
     method: 'PATCH',
+    body: JSON.stringify({ status }),
   })
 }
 
@@ -355,6 +356,20 @@ export function createLink(workspaceId, taskId, data) {
 export function createNote(workspaceId, taskId, data) {
   return authFetch(`/workspaces/${workspaceId}/tasks/${taskId}/resource/notes`, {
     method: 'POST',
+    body: JSON.stringify(data),
+  })
+}
+
+export function updateLink(workspaceId, taskId, linkId, data) {
+  return authFetch(`/workspaces/${workspaceId}/tasks/${taskId}/resource/links/${linkId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  })
+}
+
+export function updateNote(workspaceId, taskId, noteId, data) {
+  return authFetch(`/workspaces/${workspaceId}/tasks/${taskId}/resource/notes/${noteId}`, {
+    method: 'PATCH',
     body: JSON.stringify(data),
   })
 }

@@ -407,17 +407,18 @@ def test_update_note_content(client: TestClient, user_auth_headers, user_token, 
     assert response.json()["content"] == "Updated content"
 
 
-def test_update_note_empty_content_rejected(
+def test_update_note_empty_content_allowed(
     client: TestClient, user_auth_headers, user_token, workspace, task
 ):
-    """Unlike creation, NoteUpdate requires min_length=1 when content is explicitly sent."""
+    """Clearing a note's content back to empty is a legitimate edit, not a validation error."""
     note = create_note(client, user_token, workspace["id"], task["id"])
     response = client.patch(
         resource_path(workspace["id"], task["id"], f"/notes/{note['id']}"),
         json={"content": ""},
         headers=user_auth_headers,
     )
-    assert response.status_code == 422
+    assert response.status_code == 200
+    assert response.json()["content"] == ""
 
 
 def test_get_link_through_note_getter_returns_404(

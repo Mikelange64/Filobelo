@@ -1,5 +1,11 @@
 import { getDaysRemaining } from '../../utils/date'
 
+export const TASK_STATUS = {
+  TODO: 'TODO',
+  IN_PROGRESS: 'IN_PROGRESS',
+  DONE: 'DONE',
+}
+
 export function toAvatarUrl(path) {
   return path?.startsWith('https://') ? path : null
 }
@@ -18,7 +24,7 @@ export function normalizeTask(t) {
     title: t.title,
     color: t.color ?? '#6bc4d4',
     dueDate: t.due_date ?? null,
-    isCompleted: t.is_completed,
+    status: t.status ?? TASK_STATUS.TODO,
     ownerId: t.owner_id,
   }
 }

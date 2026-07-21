@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { listResources, deleteResource } from '../../api/client'
+import { listResources, deleteResource, updateLink, updateNote } from '../../api/client'
 
 // Fetches every resource for a task once and hands back type-filtered slices
 // plus shared add/delete handlers, so switching between the Notes/Links/Files
@@ -40,6 +40,14 @@ export default function useTaskResources(workspaceId, taskId, onToast) {
     }
   }
 
+  async function handleUpdate(resourceId, patch) {
+    const resource = resources.find((r) => r.id === resourceId)
+    const updateFn = resource?.type === 'LINK' ? updateLink : updateNote
+    const updated = await updateFn(workspaceId, taskId, resourceId, patch)
+    setResources((prev) => prev.map((r) => (r.id === resourceId ? updated : r)))
+    return updated
+  }
+
   return {
     loading,
     links: resources.filter((r) => r.type === 'LINK'),
@@ -47,5 +55,6 @@ export default function useTaskResources(workspaceId, taskId, onToast) {
     files: resources.filter((r) => r.type === 'FILE'),
     handleAdded,
     handleDelete,
+    handleUpdate,
   }
 }

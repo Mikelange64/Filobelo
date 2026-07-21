@@ -1,7 +1,7 @@
 from datetime import UTC, datetime, timedelta
 
 from app.database import SessionLocal
-from app.models import Folder, Task, User, Workspace, WorkspaceMember
+from app.models import Folder, Task, TaskStatus, User, Workspace, WorkspaceMember
 from app.auth import hash_password
 
 
@@ -142,7 +142,7 @@ def populate_db():
         # Q2 Marketing — mixed completion
         db.add_all([
             Task(title="Define target audience segments", content="", workspace_id=ws_marketing.id,
-                 creator_id=mike.id, owner_id=mike.id, is_completed=True,
+                 creator_id=mike.id, owner_id=mike.id, status=TaskStatus.DONE,
                  completed_at=dt(-2)),
             Task(title="Draft email campaign copy", content="", workspace_id=ws_marketing.id,
                  creator_id=mike.id, owner_id=alice.id, due_date=dt(3)),
@@ -155,10 +155,10 @@ def populate_db():
         # Internal Dashboard — mostly incomplete, overdue
         db.add_all([
             Task(title="Audit current dashboard metrics", content="", workspace_id=ws_dashboard.id,
-                 creator_id=mike.id, owner_id=mike.id, is_completed=True,
+                 creator_id=mike.id, owner_id=mike.id, status=TaskStatus.DONE,
                  completed_at=dt(-7)),
             Task(title="Design new chart components", content="", workspace_id=ws_dashboard.id,
-                 creator_id=mike.id, owner_id=bob.id, due_date=dt(-1)),
+                 creator_id=mike.id, owner_id=bob.id, due_date=dt(-1), status=TaskStatus.IN_PROGRESS),
             Task(title="Connect to data pipeline", content="", workspace_id=ws_dashboard.id,
                  creator_id=mike.id, owner_id=mike.id, due_date=dt(-2)),
         ])
@@ -176,7 +176,7 @@ def populate_db():
         # Portfolio Website — shared
         db.add_all([
             Task(title="Write case studies", content="", workspace_id=ws_portfolio.id,
-                 creator_id=alice.id, owner_id=alice.id, due_date=dt(10)),
+                 creator_id=alice.id, owner_id=alice.id, due_date=dt(10), status=TaskStatus.IN_PROGRESS),
             Task(title="Redesign hero section", content="", workspace_id=ws_portfolio.id,
                  creator_id=alice.id, owner_id=mike.id, due_date=dt(12)),
         ])
@@ -184,23 +184,23 @@ def populate_db():
         # User Onboarding — all completed (it's a completed workspace)
         db.add_all([
             Task(title="Map out onboarding steps", content="", workspace_id=ws_onboarding.id,
-                 creator_id=mike.id, owner_id=mike.id, is_completed=True,
+                 creator_id=mike.id, owner_id=mike.id, status=TaskStatus.DONE,
                  completed_at=dt(-20)),
             Task(title="Build welcome email sequence", content="", workspace_id=ws_onboarding.id,
-                 creator_id=mike.id, owner_id=mike.id, is_completed=True,
+                 creator_id=mike.id, owner_id=mike.id, status=TaskStatus.DONE,
                  completed_at=dt(-15)),
             Task(title="Implement tooltip tour", content="", workspace_id=ws_onboarding.id,
-                 creator_id=mike.id, owner_id=mike.id, is_completed=True,
+                 creator_id=mike.id, owner_id=mike.id, status=TaskStatus.DONE,
                  completed_at=dt(-12)),
         ])
 
         # Brand Refresh — all completed (it's a completed workspace)
         db.add_all([
             Task(title="Update color palette", content="", workspace_id=ws_rebrand.id,
-                 creator_id=mike.id, owner_id=mike.id, is_completed=True,
+                 creator_id=mike.id, owner_id=mike.id, status=TaskStatus.DONE,
                  completed_at=dt(-35)),
             Task(title="Redesign logo variants", content="", workspace_id=ws_rebrand.id,
-                 creator_id=mike.id, owner_id=mike.id, is_completed=True,
+                 creator_id=mike.id, owner_id=mike.id, status=TaskStatus.DONE,
                  completed_at=dt(-32)),
         ])
 

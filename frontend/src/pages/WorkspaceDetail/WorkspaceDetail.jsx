@@ -15,7 +15,7 @@ import {
     patchTask,
     patchWorkspacePreferences,
     deleteTask,
-    toggleTask,
+    updateTaskStatus,
     getMembersWithRoles,
     promoteToAdmin,
     removeMember,
@@ -49,6 +49,7 @@ import SettingsTab from "../../components/WorkspaceDetail/SettingsTab";
 import SlideOver from "../../components/WorkspaceDetail/SlideOver";
 import FloatingActions from "../../components/WorkspaceDetail/FloatingActions";
 import NewTaskModal from "../../components/WorkspaceDetail/NewTaskModal";
+import KanbanBoard from "../../components/WorkspaceDetail/KanbanBoard";
 import "./WorkspaceDetail.css";
 
 // ─── main component ─────────────────────────────────────────────────────────
@@ -62,7 +63,7 @@ const URGENCY_COLOR = {
 
 const TABS = [
     { id: "tasks", label: "Tasks" },
-    { id: "kanban", label: "Kanban", soon: true },
+    { id: "kanban", label: "Kanban" },
     { id: "members", label: "Members" },
     { id: "settings", label: "Settings" },
 ];
@@ -97,7 +98,7 @@ function WorkspaceDetail() {
   const [selectedTaskId, setSelectedTaskId]     = useState(null)
   const [slideOverTask, setSlideOverTask]       = useState(null)
   const [slideOverLoading, setSlideOverLoading] = useState(false)
-  const [slideOverWidth, setSlideOverWidth]     = useState(420)
+  const [slideOverWidth, setSlideOverWidth]     = useState(760)
   const [showNewTaskModal, setShowNewTaskModal] = useState(false)
   const [detailMembers, setDetailMembers]       = useState(null)
   const [membersLoading, setMembersLoading]     = useState(false)
@@ -216,7 +217,6 @@ function WorkspaceDetail() {
   }
 
   function handleTabChange(tabId) {
-    if (tabId === 'kanban') { onComingSoon?.(); return }
     setActiveTab(tabId)
     if (tabId === 'members') loadDetailMembers()
   }
@@ -300,31 +300,53 @@ function WorkspaceDetail() {
     async function handleToggleTask(taskId) {
         const task = tasks.find((t) => t.id === taskId);
         if (!task) return;
-        const next = !task.isCompleted;
+        const prevStatus = task.status;
+        const next = prevStatus === "DONE" ? "TODO" : "DONE";
         setTasks((prev) =>
             prev.map((t) =>
-                t.id === taskId ? { ...t, isCompleted: next } : t,
+                t.id === taskId ? { ...t, status: next } : t,
             ),
         );
         onTaskToggled?.(workspaceId, taskId, next);
         if (
-            next &&
+            next === "DONE" &&
             tasks.length > 0 &&
-            tasks.filter((t) => t.id !== taskId && !t.isCompleted).length === 0
+            tasks.filter((t) => t.id !== taskId && t.status !== "DONE").length === 0
         ) {
             setShowCompletionModal(true);
         }
         try {
-            await toggleTask(workspaceId, taskId);
+            await updateTaskStatus(workspaceId, taskId, next);
         } catch {
             setTasks((prev) =>
                 prev.map((t) =>
                     t.id === taskId
-                        ? { ...t, isCompleted: task.isCompleted }
+                        ? { ...t, status: prevStatus }
                         : t,
                 ),
             );
-            onTaskToggled?.(workspaceId, taskId, task.isCompleted);
+            onTaskToggled?.(workspaceId, taskId, prevStatus);
+        }
+    }
+
+    async function handleTaskStatusChange(taskId, status) {
+        const task = tasks.find((t) => t.id === taskId);
+        if (!task || task.status === status) return;
+        const prevStatus = task.status;
+        setTasks((prev) =>
+            prev.map((t) => (t.id === taskId ? { ...t, status } : t)),
+        );
+        onTaskToggled?.(workspaceId, taskId, status);
+        try {
+            await updateTaskStatus(workspaceId, taskId, status);
+        } catch (err) {
+            setTasks((prev) =>
+                prev.map((t) =>
+                    t.id === taskId ? { ...t, status: prevStatus } : t,
+                ),
+            );
+            onTaskToggled?.(workspaceId, taskId, prevStatus);
+            onToast?.(err.detail ?? "Could not update task status");
         }
     }
 
@@ -501,7 +523,7 @@ function WorkspaceDetail() {
     }
 
     function handleRequestComplete() {
-        const openCount = tasks.filter((t) => !t.isCompleted).length;
+        const openCount = tasks.filter((t) => t.status !== "DONE").length;
         if (openCount > 0) {
             setShowConfirmComplete(true);
         } else {
@@ -531,8 +553,8 @@ function WorkspaceDetail() {
     if (!workspace) return null;
 
     // Derived
-    const activeTasks = tasks.filter((t) => !t.isCompleted);
-    const completedTasks = tasks.filter((t) => t.isCompleted);
+    const activeTasks = tasks.filter((t) => t.status !== "DONE");
+    const completedTasks = tasks.filter((t) => t.status === "DONE");
     const overdueCount = activeTasks.filter(
         (t) => getDaysRemaining(t.dueDate) < 0,
     ).length;
@@ -887,9 +909,14 @@ function WorkspaceDetail() {
                 )}
 
                 {activeTab === "kanban" && (
-                    <div className="soon-placeholder">
-                        <p>Kanban view coming soon</p>
-                    </div>
+                    <KanbanBoard
+                        tasks={tasks}
+                        memberById={memberById}
+                        onSelect={handleSelectTask}
+                        onStatusChange={handleTaskStatusChange}
+                        onAddTask={() => setShowNewTaskModal(true)}
+                        onDelete={handleDeleteTask}
+                    />
                 )}
 
                 {/* Settings tab */}
@@ -1057,8 +1084,8 @@ function WorkspaceDetail() {
                             className="completion-modal__heading"
                             style={{ fontSize: "1.25rem" }}
                         >
-                            {tasks.filter((t) => !t.isCompleted).length} task
-                            {tasks.filter((t) => !t.isCompleted).length !== 1
+                            {tasks.filter((t) => t.status !== "DONE").length} task
+                            {tasks.filter((t) => t.status !== "DONE").length !== 1
                                 ? "s"
                                 : ""}{" "}
                             still open

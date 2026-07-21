@@ -237,7 +237,7 @@
 .wd-tabs {
     display: flex;
     align-items: center;
-    gap: 22px;
+    gap: 32px;
     margin: 0 32px;
     padding-top: 16px;
     border-bottom: 1px solid var(--color-border);
@@ -270,7 +270,7 @@
 .wd-tab--active {
     color: var(--color-text-primary);
     font-weight: 600;
-    border-bottom-color: var(--color-brand-primary);
+    border-bottom-color: var(--task-accent, var(--color-brand-primary));
 }
 
 .wd-tab__soon {
@@ -912,17 +912,9 @@
     color: var(--color-text-primary);
     font-size: 0.875rem;
     font-family: inherit;
-    resize: vertical;
+    resize: none;
     outline: none;
     box-sizing: border-box;
-    transition:
-        border-color 0.15s,
-        box-shadow 0.15s;
-}
-
-.slide-over__content-input:focus {
-    border-color: var(--color-brand-primary);
-    box-shadow: var(--focus-ring);
 }
 
 .slide-over__content-input::placeholder {
@@ -999,6 +991,7 @@
     font-size: 0.875rem;
     color: var(--color-text-primary);
     text-align: left;
+    text-decoration: none;
     cursor: pointer;
     word-break: break-word;
 }
@@ -1016,6 +1009,12 @@ a.resource-row__title:hover {
     font-size: 0.82rem;
     color: var(--color-text-muted);
     white-space: pre-wrap;
+}
+
+.resource-row__note-content ul,
+.resource-row__note-content ol {
+    margin: 4px 0;
+    padding-left: 20px;
 }
 
 .resource-row__link {
@@ -1061,7 +1060,8 @@ a.resource-row__title:hover {
     object-fit: contain;
 }
 
-.resource-row__delete {
+.resource-row__delete,
+.resource-row__edit {
     flex-shrink: 0;
     width: 24px;
     height: 24px;
@@ -1080,6 +1080,22 @@ a.resource-row__title:hover {
     color: var(--color-error-text);
 }
 
+.resource-row__edit:hover {
+    background: var(--color-neutral-bg);
+    color: var(--color-brand-primary);
+}
+
+.resource-row--editing {
+    padding: 0;
+    border: none;
+    background: transparent;
+    display: block;
+}
+
+.resource-row--editing .resources-panel__form {
+    margin-bottom: 0;
+}
+
 .resources-panel__add-row {
     display: flex;
     gap: 8px;
@@ -1087,10 +1103,10 @@ a.resource-row__title:hover {
 
 .resources-panel__add-btn {
     padding: 6px 12px;
-    border: 1px dashed var(--color-brand-primary);
+    border: 1px dashed var(--task-accent, var(--color-brand-primary));
     border-radius: var(--radius-control);
     background: transparent;
-    color: var(--color-brand-primary);
+    color: var(--task-accent, var(--color-brand-primary));
     font-size: 0.82rem;
     font-weight: 500;
     cursor: pointer;

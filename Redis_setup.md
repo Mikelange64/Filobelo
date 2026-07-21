@@ -102,7 +102,7 @@ redis://[:password@]host:port/db_number
 | Part | What it is |
 |---|---|
 | `redis` | the scheme (`rediss` for TLS) |
-| `password` | omitted entirely for local dev (no `requirepass` set) |
+| `password` | omitted  entirely for local dev (no `requirepass` set) |
 | `host` | where the server is running (`localhost` for your machine) |
 | `port` | `6379` by default |
 | `db_number` | which of the 16 numbered databases to use (`0` unless you have a reason otherwise) |

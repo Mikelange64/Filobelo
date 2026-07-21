@@ -57,7 +57,7 @@ function normalizeWorkspace(ws) {
       id: t.id,
       title: t.title,
       dueDate: t.due_date ?? null,
-      isCompleted: t.is_completed,
+      status: t.status ?? 'TODO',
     })) ?? [],
   }
 }
@@ -132,7 +132,7 @@ function AppShell() {
 
   const upcomingTasks = activeWorkspaces.flatMap((ws) =>
     ws.tasks
-      .filter((t) => !t.isCompleted)
+      .filter((t) => t.status !== 'DONE')
       .map((t) => ({
         id: t.id,
         title: t.title,
@@ -245,12 +245,12 @@ function AppShell() {
     setCompletedTotal((c) => Math.max(0, c - 1))
   }
 
-  function handleTaskToggled(wsId, taskId, isCompleted) {
+  function handleTaskToggled(wsId, taskId, status) {
     setWorkspaces((prev) =>
       prev.map((ws) => {
         if (ws.id !== wsId) return ws
-        const tasks = ws.tasks.map((t) => (t.id === taskId ? { ...t, isCompleted } : t))
-        const done = tasks.filter((t) => t.isCompleted).length
+        const tasks = ws.tasks.map((t) => (t.id === taskId ? { ...t, status } : t))
+        const done = tasks.filter((t) => t.status === 'DONE').length
         const progress = tasks.length > 0 ? Math.round((done / tasks.length) * 100) : 0
         return { ...ws, tasks, progress }
       })
@@ -261,7 +261,7 @@ function AppShell() {
     setWorkspaces((prev) =>
       prev.map((ws) => {
         if (ws.id !== wsId) return ws
-        const done = tasks.filter((t) => t.isCompleted).length
+        const done = tasks.filter((t) => t.status === 'DONE').length
         const progress = tasks.length > 0 ? Math.round((done / tasks.length) * 100) : 0
         return { ...ws, tasks, progress }
       })

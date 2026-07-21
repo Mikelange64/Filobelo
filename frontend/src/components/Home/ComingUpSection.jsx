@@ -66,12 +66,13 @@ function ComingUpSection({ tasks = [], onSelectTask }) {
   }, {})
 
   const activeBucket = BUCKETS.find((b) => b.key === expandedBucket)
+  const visibleBuckets = BUCKETS.filter(({ key }) => grouped[key].length > 0)
 
   return (
     <section className="coming-up" aria-label="Upcoming tasks">
       <h2 className="coming-up__heading">Upcoming tasks</h2>
-      <div className="coming-up__columns">
-        {BUCKETS.map(({ key, label, urgency }) => {
+      <div className={`coming-up__columns coming-up__columns--${visibleBuckets.length}`}>
+        {visibleBuckets.map(({ key, label, urgency }) => {
           const bucketTasks = grouped[key]
           const visible = bucketTasks.slice(0, VISIBLE_LIMIT)
           return (

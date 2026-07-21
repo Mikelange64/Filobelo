@@ -2,6 +2,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.models import TaskStatus
+
 
 class TaskCreate(BaseModel):
     title    : str = Field(min_length=1, max_length=100)
@@ -23,6 +25,11 @@ class TaskFullUpdate(BaseModel):
     content  : str = Field(min_length=1, max_length=300)
     color    : str = Field(min_length=1, max_length=50, default="#6bc4d4")
     due_date : datetime | None = None
+    status   : TaskStatus = TaskStatus.TODO
+
+
+class TaskStatusUpdate(BaseModel):
+    status : TaskStatus
 
 
 class TaskResponse(BaseModel):
@@ -36,7 +43,7 @@ class TaskResponse(BaseModel):
     owner_id     : int | None
     workspace_id : int
     due_date     : datetime | None
-    is_completed : bool
+    status       : TaskStatus
     completed_at : datetime | None
     date_created : datetime
 
@@ -56,6 +63,6 @@ class TaskSummary(BaseModel):
     title        : str
     color        : str
     due_date     : datetime | None
-    is_completed : bool
+    status       : TaskStatus
     owner_id     : int | None
     completed_at : datetime | None

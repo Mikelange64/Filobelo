@@ -1,19 +1,25 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import useDismissableMenu from '../../hooks/useDismissableMenu'
 import { createLink } from '../../api/client'
 import ResourceRow from './ResourceRow'
 
-export default function LinksPanel({ workspaceId, taskId, resources, loading, onAdded, onDelete, onToast }) {
-  const [adding, setAdding] = useState(false)
+export default function LinksPanel({ workspaceId, taskId, resources, loading, onAdded, onDelete, onUpdate, onToast }) {
+  const [adding, setAdding, formRef] = useDismissableMenu()
   const [title, setTitle] = useState('')
   const [url, setUrl] = useState('')
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState('')
 
+  useEffect(() => {
+    if (!adding) {
+      setTitle('')
+      setUrl('')
+      setFormError('')
+    }
+  }, [adding])
+
   function resetForm() {
     setAdding(false)
-    setTitle('')
-    setUrl('')
-    setFormError('')
   }
 
   async function handleAdd() {
@@ -40,13 +46,13 @@ export default function LinksPanel({ workspaceId, taskId, resources, loading, on
       ) : (
         <div className="resources-panel__list">
           {resources.map((r) => (
-            <ResourceRow key={r.id} resource={r} onDelete={() => onDelete(r.id)} onToast={onToast} />
+            <ResourceRow key={r.id} resource={r} onDelete={() => onDelete(r.id)} onUpdate={onUpdate} onToast={onToast} />
           ))}
         </div>
       )}
 
       {adding ? (
-        <div className="resources-panel__form">
+        <div className="resources-panel__form" ref={formRef}>
           <input
             className="resources-panel__input"
             placeholder="Title"

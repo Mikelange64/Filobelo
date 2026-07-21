@@ -38,7 +38,7 @@ export default function SlideOver({ task, fullTask, slideOverLoading, workspace,
     const startX = e.clientX
     const startW = widthRef.current
     function onMove(ev) {
-      const newW = Math.max(320, Math.min(800, startW + (startX - ev.clientX)))
+      const newW = Math.max(320, Math.min(1000, startW + (startX - ev.clientX)))
       onResize(newW)
     }
     function onUp() {
@@ -51,6 +51,7 @@ export default function SlideOver({ task, fullTask, slideOverLoading, workspace,
 
   const owner = memberById.get(task.ownerId)
   const isOwner = task.ownerId === currentUserId
+  const isDone = task.status === 'DONE'
   const canToggle = true
   const canReassign = isOwner || isAdmin
 
@@ -68,7 +69,7 @@ export default function SlideOver({ task, fullTask, slideOverLoading, workspace,
   return (
     <>
       <div className="slide-over-backdrop" onClick={onClose} aria-hidden="true" />
-      <aside className="slide-over" style={{ width }} aria-label="Task details">
+      <aside className="slide-over" style={{ width, '--task-accent': task.color }} aria-label="Task details">
         <div className="slide-over__resize-handle" onMouseDown={handleResizeStart} />
 
         <div className="slide-over__header">
@@ -84,7 +85,7 @@ export default function SlideOver({ task, fullTask, slideOverLoading, workspace,
                   <li role="none">
                     <button type="button" role="menuitem" className="wd-menu-item"
                       onClick={() => { onToggle(task.id); setMenuOpen(false) }}>
-                      {task.isCompleted ? 'Mark incomplete' : 'Mark complete'}
+                      {isDone ? 'Mark incomplete' : 'Mark complete'}
                     </button>
                   </li>
                 )}
@@ -115,19 +116,19 @@ export default function SlideOver({ task, fullTask, slideOverLoading, workspace,
             {canToggle ? (
               <button
                 type="button"
-                className={`slide-over__checkbox${task.isCompleted ? ' slide-over__checkbox--checked' : ''}`}
+                className={`slide-over__checkbox${isDone ? ' slide-over__checkbox--checked' : ''}`}
                 onClick={() => onToggle(task.id)}
-                aria-label={task.isCompleted ? 'Mark incomplete' : 'Mark complete'}
+                aria-label={isDone ? 'Mark incomplete' : 'Mark complete'}
               >
-                {task.isCompleted && <CheckIcon />}
+                {isDone && <CheckIcon />}
               </button>
             ) : (
-              <span className={`slide-over__checkbox slide-over__checkbox--readonly${task.isCompleted ? ' slide-over__checkbox--checked' : ''}`}>
-                {task.isCompleted && <CheckIcon />}
+              <span className={`slide-over__checkbox slide-over__checkbox--readonly${isDone ? ' slide-over__checkbox--checked' : ''}`}>
+                {isDone && <CheckIcon />}
               </span>
             )}
             <input
-              className={`slide-over__title${task.isCompleted ? ' slide-over__title--completed' : ''}`}
+              className={`slide-over__title${isDone ? ' slide-over__title--completed' : ''}`}
               value={editTitle}
               onChange={(e) => setEditTitle(e.target.value)}
               onBlur={handleTitleBlur}
@@ -235,6 +236,7 @@ export default function SlideOver({ task, fullTask, slideOverLoading, workspace,
               loading={taskResources.loading}
               onAdded={taskResources.handleAdded}
               onDelete={taskResources.handleDelete}
+              onUpdate={taskResources.handleUpdate}
               onToast={onToast}
             />
           )}
@@ -242,10 +244,12 @@ export default function SlideOver({ task, fullTask, slideOverLoading, workspace,
             <NotesPanel
               workspaceId={workspaceId}
               taskId={task.id}
+              taskColor={task.color}
               resources={taskResources.notes}
               loading={taskResources.loading}
               onAdded={taskResources.handleAdded}
               onDelete={taskResources.handleDelete}
+              onUpdate={taskResources.handleUpdate}
               onToast={onToast}
             />
           )}

@@ -4,12 +4,13 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select, func
 from app.database import DbSession
-from app.models import Task, WorkspaceMember
+from app.models import Task, TaskStatus, WorkspaceMember
 from app.schemas import (
     PaginatedTaskResponse,
     TaskCreate,
     TaskFullUpdate,
     TaskResponse,
+    TaskStatusUpdate,
     TaskUpdate,
 )
 from app.dependencies import (
@@ -119,6 +120,10 @@ def update_task_full(
     task.content = task_data.content
     task.color = task_data.color
     task.due_date = task_data.due_date
+    task.status = task_data.status
+    task.completed_at = (
+        datetime.now(UTC) if task_data.status == TaskStatus.DONE else None
+    )
 
     db.commit()
     db.refresh(task)
@@ -135,12 +140,14 @@ def delete_task(task_id: int, db: DbSession):
 
 
 @router.patch(
-    "/{task_id}/complete", response_model=TaskResponse, dependencies=[Depends(require_membership)]
+    "/{task_id}/status", response_model=TaskResponse, dependencies=[Depends(require_membership)]
 )
-def complete_task(task_id: int, db: DbSession):
+def update_task_status(task_id: int, status_data: TaskStatusUpdate, db: DbSession):
     task = get_task_by_id(task_id, db)
-    task.is_completed = not task.is_completed
-    task.completed_at = datetime.now(UTC) if task.is_completed else None
+    task.status = status_data.status
+    task.completed_at = (
+        datetime.now(UTC) if status_data.status == TaskStatus.DONE else None
+    )
     db.commit()
     db.refresh(task)
     return task

@@ -513,11 +513,21 @@
 /* ── Bottom: theme / calendar / notifications, then profile ── */
 
 .sidebar-v2__utility-row {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 4px;
+  justify-content: space-evenly;
   padding: 10px 12px;
-  border-top: 1px solid var(--color-border);
+}
+
+.sidebar-v2__utility-row::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 10px;
+  right: 10px;
+  height: 1px;
+  background-color: var(--color-border);
 }
 
 .sidebar-v2__utility-btn {

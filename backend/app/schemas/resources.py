@@ -42,7 +42,7 @@ class NoteResponse(ResourceBase):
 
 class NoteUpdate(BaseModel):
     title    : str | None = Field(default=None, min_length=1, max_length=100)
-    content  : str | None = Field(default=None, min_length=1, max_length=100000)
+    content  : str | None = Field(default=None, max_length=100000)
 
 # =============================================== FILES ======================================================
 

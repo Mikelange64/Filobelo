@@ -24,7 +24,7 @@ def assert_task_created(response, expected_title, expected_content):
     data = response.json()
     assert data["title"] == expected_title
     assert data["content"] == expected_content
-    assert data["is_completed"] is False
+    assert data["status"] == "TODO"
     assert "id" in data
     assert "date_created" in data
 
@@ -529,37 +529,39 @@ def test_delete_task_nonexistent(client: TestClient, user_auth_headers, workspac
 
 
 # ========================================================================================
-# COMPLETE TASK
+# UPDATE TASK STATUS
 # ========================================================================================
 
 
-def test_complete_task_as_owner_success(client: TestClient, user_auth_headers, task):
+def test_update_task_status_as_owner_success(client: TestClient, user_auth_headers, task):
     response = client.patch(
-        f"{taskprefix}/{task['workspace_id']}/tasks/{task['id']}/complete",
+        f"{taskprefix}/{task['workspace_id']}/tasks/{task['id']}/status",
+        json={"status": "DONE"},
         headers=user_auth_headers,
     )
     assert response.status_code == 200
-    assert response.json()["is_completed"] is True
+    assert response.json()["status"] == "DONE"
 
 
-def test_complete_task_as_admin_success(
+def test_update_task_status_as_admin_success(
     client: TestClient, db_session, user_token, user_auth_headers, workspace
 ):
-    """Admin (non-owner) can also toggle task completion."""
+    """Admin (non-owner) can also change task status."""
     other_user = create_test_user(client, username="other", email="other@example.com")
     add_workspace_member(client, user_token, workspace["id"], other_user["id"])
     verify_user_in_db(db_session, "other@example.com")
     other_token = login_user(client, email="other@example.com")
     task = create_task(client, other_token, workspace["id"])
     response = client.patch(
-        f"{taskprefix}/{workspace['id']}/tasks/{task['id']}/complete",
+        f"{taskprefix}/{workspace['id']}/tasks/{task['id']}/status",
+        json={"status": "DONE"},
         headers=user_auth_headers,
     )
     assert response.status_code == 200
-    assert response.json()["is_completed"] is True
+    assert response.json()["status"] == "DONE"
 
 
-def test_complete_task_any_member_allowed(
+def test_update_task_status_any_member_allowed(
     client: TestClient, db_session, user_token, user_auth_headers, task
 ):
     other_user = create_test_user(client, username="other", email="other@example.com")
@@ -567,16 +569,18 @@ def test_complete_task_any_member_allowed(
     verify_user_in_db(db_session, "other@example.com")
     other_token = login_user(client, email="other@example.com")
     response = client.patch(
-        f"{taskprefix}/{task['workspace_id']}/tasks/{task['id']}/complete",
+        f"{taskprefix}/{task['workspace_id']}/tasks/{task['id']}/status",
+        json={"status": "IN_PROGRESS"},
         headers=auth_header(other_token),
     )
     assert response.status_code == 200
-    assert response.json()["is_completed"] is True
+    assert response.json()["status"] == "IN_PROGRESS"
 
 
-def test_complete_task_nonexistent(client: TestClient, user_auth_headers, workspace):
+def test_update_task_status_nonexistent(client: TestClient, user_auth_headers, workspace):
     response = client.patch(
-        f"{taskprefix}/{workspace['id']}/tasks/99999/complete",
+        f"{taskprefix}/{workspace['id']}/tasks/99999/status",
+        json={"status": "DONE"},
         headers=user_auth_headers,
     )
     assert response.status_code == 404
@@ -589,7 +593,7 @@ def test_complete_task_nonexistent(client: TestClient, user_auth_headers, worksp
         pytest.param(None, 401, id="no_auth"),
     ],
 )
-def test_complete_task_auth_failures(client: TestClient, db_session, task, token, expected_status):
+def test_update_task_status_auth_failures(client: TestClient, db_session, task, token, expected_status):
     headers = None
     if token == "outsider":
         create_test_user(client, username="outsider", email="outsider@example.com")
@@ -598,7 +602,9 @@ def test_complete_task_auth_failures(client: TestClient, db_session, task, token
         headers = auth_header(token)
     kwargs = {"headers": headers} if headers else {}
     response = client.patch(
-        f"{taskprefix}/{task['workspace_id']}/tasks/{task['id']}/complete", **kwargs
+        f"{taskprefix}/{task['workspace_id']}/tasks/{task['id']}/status",
+        json={"status": "DONE"},
+        **kwargs,
     )
     assert response.status_code == expected_status
 

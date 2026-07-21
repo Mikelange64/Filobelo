@@ -10,6 +10,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+from app.models.tasks import TaskStatus
 
 
 class Workspace(Base):
@@ -64,7 +65,7 @@ class Workspace(Base):
         if not self.tasks:
             return 0.0
 
-        completed = [t for t in self.tasks if t.is_completed]
+        completed = [t for t in self.tasks if t.status == TaskStatus.DONE]
         return (len(completed) / len(self.tasks)) * 100
 
     @property

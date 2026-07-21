@@ -15,6 +15,14 @@
   gap: 16px;
 }
 
+.coming-up__columns--1 {
+  grid-template-columns: 1fr;
+}
+
+.coming-up__columns--2 {
+  grid-template-columns: repeat(2, 1fr);
+}
+
 .coming-up__column {
   display: flex;
   flex-direction: column;

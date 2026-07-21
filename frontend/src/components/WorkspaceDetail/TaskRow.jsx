@@ -4,7 +4,7 @@ import { getTaskUrgency } from './helpers'
 import { DotsIcon, CheckIcon } from './icons'
 import MemberAvatar from './MemberAvatar'
 
-function TaskRowMenu({ isCompleted, isOwner, isAdmin, onEdit, onToggle, onReassign, onDelete }) {
+function TaskRowMenu({ isDone, isOwner, isAdmin, onEdit, onToggle, onReassign, onDelete }) {
   const [isOpen, setIsOpen, ref] = useDismissableMenu()
   const canReassign = isOwner || isAdmin
   return (
@@ -28,7 +28,7 @@ function TaskRowMenu({ isCompleted, isOwner, isAdmin, onEdit, onToggle, onReassi
           <li role="none">
             <button type="button" role="menuitem" className="wd-menu-item"
               onClick={() => { onToggle(); setIsOpen(false) }}>
-              {isCompleted ? 'Mark incomplete' : 'Mark complete'}
+              {isDone ? 'Mark incomplete' : 'Mark complete'}
             </button>
           </li>
           {canReassign && (
@@ -56,24 +56,25 @@ function TaskRowMenu({ isCompleted, isOwner, isAdmin, onEdit, onToggle, onReassi
 export default function TaskRow({ task, member, isAdmin, currentUserId, onSelect, onToggle, onReassign, onDelete }) {
   const urgency = getTaskUrgency(task.dueDate)
   const isOwner = task.ownerId === currentUserId
+  const isDone = task.status === 'DONE'
   const canToggle = true
   return (
-    <div className={`task-row${task.isCompleted ? ' task-row--completed' : ''}`}>
+    <div className={`task-row${isDone ? ' task-row--completed' : ''}`}>
       {canToggle ? (
         <button
           type="button"
-          className={`task-row__checkbox${task.isCompleted ? ' task-row__checkbox--checked' : ''}`}
+          className={`task-row__checkbox${isDone ? ' task-row__checkbox--checked' : ''}`}
           onClick={onToggle}
-          aria-label={task.isCompleted ? 'Mark incomplete' : 'Mark complete'}
+          aria-label={isDone ? 'Mark incomplete' : 'Mark complete'}
         >
-          {task.isCompleted && <CheckIcon />}
+          {isDone && <CheckIcon />}
         </button>
       ) : (
         <span
-          className={`task-row__checkbox task-row__checkbox--readonly${task.isCompleted ? ' task-row__checkbox--checked' : ''}`}
-          aria-label={task.isCompleted ? 'Complete' : 'Incomplete'}
+          className={`task-row__checkbox task-row__checkbox--readonly${isDone ? ' task-row__checkbox--checked' : ''}`}
+          aria-label={isDone ? 'Complete' : 'Incomplete'}
         >
-          {task.isCompleted && <CheckIcon />}
+          {isDone && <CheckIcon />}
         </span>
       )}
 
@@ -82,7 +83,7 @@ export default function TaskRow({ task, member, isAdmin, currentUserId, onSelect
       </button>
 
       {member && (
-        task.isCompleted ? (
+        isDone ? (
           <span className="task-row__name task-row__name--muted">{member.name}</span>
         ) : (
           <span className="task-row__assignee">
@@ -92,7 +93,7 @@ export default function TaskRow({ task, member, isAdmin, currentUserId, onSelect
         )
       )}
 
-      {task.isCompleted ? (
+      {isDone ? (
         <span className="task-row__completed-label">Completed</span>
       ) : (
         task.dueDate
@@ -106,7 +107,7 @@ export default function TaskRow({ task, member, isAdmin, currentUserId, onSelect
       )}
 
       <TaskRowMenu
-        isCompleted={task.isCompleted}
+        isDone={isDone}
         isOwner={isOwner}
         isAdmin={isAdmin}
         onEdit={onSelect}

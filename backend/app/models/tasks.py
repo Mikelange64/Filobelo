@@ -1,8 +1,9 @@
 from datetime import UTC, datetime
+from enum import Enum
 
 from sqlalchemy import (
-    Boolean,
     DateTime,
+    Enum as sqlEnum,
     ForeignKey,
     Integer,
     String,
@@ -13,6 +14,12 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
 
 
+class TaskStatus(str, Enum):
+    TODO        = "TODO"
+    IN_PROGRESS = "IN_PROGRESS"
+    DONE        = "DONE"
+
+
 class Task(Base):
     __tablename__ = "tasks"
 
@@ -20,7 +27,9 @@ class Task(Base):
     title        : Mapped[str] = mapped_column(String(50), nullable=False)
     content      : Mapped[str] = mapped_column(Text, nullable=False)
     color        : Mapped[str] = mapped_column(String(50), nullable=False, default="#6bc4d4")
-    is_completed : Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    status       : Mapped[TaskStatus] = mapped_column(
+        sqlEnum(TaskStatus), nullable=False, default=TaskStatus.TODO
+    )
 
     # Nullable + SET NULL: a task is workspace-shared data, so it outlives
     # whoever created/owned it, same as Workspace.creator_id and
