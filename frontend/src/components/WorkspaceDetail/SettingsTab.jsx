@@ -2,14 +2,15 @@ import { useState } from 'react'
 import { patchWorkspace, patchWorkspacePreferences } from '../../api/client'
 import { formatDueDate } from '../../utils/date'
 
-export default function SettingsTab({ workspace, isAdmin, isCreator, workspaceId, onWorkspaceUpdate, onDelete, onLeave, onComplete, onReopen, onToast }) {
+export default function SettingsTab({ workspace, isAdmin, workspaceId, onWorkspaceUpdate, onLeave, onComplete, onReopen, onToast }) {
   const [title, setTitle] = useState(workspace.title)
   const [description, setDescription] = useState(workspace.description)
   const [dueDate, setDueDate] = useState(
     workspace.dueDate ? workspace.dueDate.split('T')[0] : ''
   )
   const [saving, setSaving] = useState(false)
-  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [confirmLeave, setConfirmLeave] = useState(false)
+  const isSoleMember = workspace.members?.length === 1
 
   async function handleSave() {
     const trimTitle = title.trim()
@@ -96,11 +97,40 @@ export default function SettingsTab({ workspace, isAdmin, isCreator, workspaceId
         <h2 className="settings-section__title">Danger zone</h2>
 
         <div className="settings-danger-row">
-          <div>
-            <p className="settings-danger-label">Leave workspace</p>
-            <p className="settings-danger-desc">You will lose access to all tasks and discussions.</p>
-          </div>
-          <button type="button" className="settings-danger-btn" onClick={onLeave}>Leave</button>
+          {isSoleMember && confirmLeave ? (
+            <>
+              <div>
+                <p className="settings-danger-label">Are you sure?</p>
+                <p className="settings-danger-desc">You're the last member — leaving permanently deletes the workspace and all its tasks. There is no undo.</p>
+              </div>
+              <div className="settings-danger-confirm">
+                <button type="button" className="settings-danger-btn settings-danger-btn--critical" onClick={onLeave}>
+                  Yes, delete
+                </button>
+                <button type="button" className="settings-danger-btn" onClick={() => setConfirmLeave(false)}>
+                  Cancel
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div>
+                <p className="settings-danger-label">{isSoleMember ? 'Delete workspace' : 'Leave workspace'}</p>
+                <p className="settings-danger-desc">
+                  {isSoleMember
+                    ? "You're the only member — this permanently deletes the workspace and all its tasks."
+                    : 'You will lose access to all tasks and discussions.'}
+                </p>
+              </div>
+              <button
+                type="button"
+                className={`settings-danger-btn${isSoleMember ? ' settings-danger-btn--critical' : ''}`}
+                onClick={() => (isSoleMember ? setConfirmLeave(true) : onLeave())}
+              >
+                {isSoleMember ? 'Delete' : 'Leave'}
+              </button>
+            </>
+          )}
         </div>
 
         {isAdmin && (
@@ -113,36 +143,6 @@ export default function SettingsTab({ workspace, isAdmin, isCreator, workspaceId
               onClick={() => patchWorkspacePreferences(workspaceId, { is_archived: true }).catch(() => {})}>
               Archive
             </button>
-          </div>
-        )}
-        {isCreator && (
-          <div className="settings-danger-row">
-            {confirmDelete ? (
-              <>
-                <div>
-                  <p className="settings-danger-label">Are you sure?</p>
-                  <p className="settings-danger-desc">This permanently deletes the workspace and all its tasks. There is no undo.</p>
-                </div>
-                <div className="settings-danger-confirm">
-                  <button type="button" className="settings-danger-btn settings-danger-btn--critical" onClick={onDelete}>
-                    Yes, delete
-                  </button>
-                  <button type="button" className="settings-danger-btn" onClick={() => setConfirmDelete(false)}>
-                    Cancel
-                  </button>
-                </div>
-              </>
-            ) : (
-              <>
-                <div>
-                  <p className="settings-danger-label">Delete workspace</p>
-                  <p className="settings-danger-desc">Permanently deletes the workspace and all tasks. Cannot be undone.</p>
-                </div>
-                <button type="button" className="settings-danger-btn settings-danger-btn--critical" onClick={() => setConfirmDelete(true)}>
-                  Delete
-                </button>
-              </>
-            )}
           </div>
         )}
       </section>

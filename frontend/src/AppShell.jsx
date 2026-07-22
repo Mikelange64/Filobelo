@@ -16,7 +16,6 @@ import {
   authFetch,
   createWorkspace,
   patchWorkspacePreferences,
-  deleteWorkspace,
   leaveWorkspace,
   getFolders,
   createFolder,
@@ -177,18 +176,6 @@ function AppShell() {
     }
   }
 
-  async function handleDelete(id) {
-    const ws = workspaces.find((w) => w.id === id)
-    if (!ws) return
-    setWorkspaces((prev) => prev.filter((w) => w.id !== id))
-    try {
-      await deleteWorkspace(id)
-    } catch (err) {
-      setWorkspaces((prev) => [ws, ...prev])
-      setToast(err.message ?? 'Could not delete workspace')
-    }
-  }
-
   async function handleLeave(id) {
     const ws = workspaces.find((w) => w.id === id)
     if (!ws) return
@@ -283,7 +270,6 @@ function AppShell() {
     onNewWorkspace: () => setShowNewModal(true),
     onTogglePin: handleTogglePin,
     onArchive: handleArchive,
-    onDelete: handleDelete,
     onLeave: handleLeave,
     onComingSoon: showComingSoon,
     onTaskToggled: handleTaskToggled,
@@ -329,7 +315,6 @@ function AppShell() {
         onTogglePin={handleTogglePin}
         onArchive={handleArchive}
         onLeave={handleLeave}
-        onDelete={handleDelete}
         onCreateFolder={handleCreateFolder}
         onUpdateFolder={handleUpdateFolder}
         onDeleteFolder={handleDeleteFolder}

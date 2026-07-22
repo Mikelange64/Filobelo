@@ -168,7 +168,7 @@ function FolderCreateRow({ onCreate, onCancel }) {
   )
 }
 
-function FolderItem({ folder, workspaces, folders, onDelete, onSelectWorkspace, onTogglePin, onArchive, onLeave, onDeleteWorkspace, onMoveToFolder }) {
+function FolderItem({ folder, workspaces, folders, onDelete, onSelectWorkspace, onTogglePin, onArchive, onLeave, onMoveToFolder }) {
   const [expanded, setExpanded] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef(null)
@@ -229,7 +229,6 @@ function FolderItem({ folder, workspaces, folders, onDelete, onSelectWorkspace, 
               onTogglePin={onTogglePin}
               onArchive={onArchive}
               onLeave={onLeave}
-              onDelete={onDeleteWorkspace}
               onMoveToFolder={onMoveToFolder}
             />
           ))}
@@ -322,7 +321,6 @@ function SidebarV2({
   onTogglePin,
   onArchive,
   onLeave,
-  onDelete,
   onCreateFolder,
   onDeleteFolder,
   onMoveToFolder,
@@ -412,7 +410,6 @@ function SidebarV2({
                 onTogglePin={onTogglePin}
                 onArchive={onArchive}
                 onLeave={onLeave}
-                onDeleteWorkspace={onDelete}
                 onMoveToFolder={onMoveToFolder}
               />
             ))}
@@ -438,7 +435,6 @@ function SidebarV2({
                         onTogglePin={onTogglePin}
                         onArchive={onArchive}
                         onLeave={onLeave}
-                        onDelete={onDelete}
                         onMoveToFolder={onMoveToFolder}
                       />
                     ))}
@@ -459,7 +455,6 @@ function SidebarV2({
                     onTogglePin={onTogglePin}
                     onArchive={onArchive}
                     onLeave={onLeave}
-                    onDelete={onDelete}
                     onMoveToFolder={onMoveToFolder}
                   />
                 ))}

@@ -75,7 +75,6 @@ function WorkspaceDetail() {
     const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
     const {
-        onDelete: shellDelete,
         onLeave: shellLeave,
         onTogglePin,
         onComingSoon,
@@ -491,11 +490,6 @@ function WorkspaceDetail() {
         setWorkspace((prev) => ({ ...prev, title, description, dueDate }));
     }
 
-    async function handleDeleteWorkspace() {
-        await shellDelete(workspaceId);
-        navigate("/");
-    }
-
     function handleTogglePinWorkspace() {
         setWorkspace((prev) => ({ ...prev, isPinned: !prev.isPinned }));
         onTogglePin?.(workspaceId);
@@ -574,7 +568,6 @@ function WorkspaceDetail() {
         URGENCY_COLOR[urgency] ?? "var(--color-brand-primary)";
     const memberById = new Map(workspace.members.map((m) => [m.id, m]));
     const isAdmin = workspace.currentUserRole === "admin";
-    const isCreator = workspace.creatorId === currentUserId;
     const sortedActiveTasks = sortByUrgency(activeTasks);
     const selectedTask = tasks.find((t) => t.id === selectedTaskId) ?? null;
     const displayMembers =
@@ -940,10 +933,8 @@ function WorkspaceDetail() {
                     <SettingsTab
                         workspace={workspace}
                         isAdmin={isAdmin}
-                        isCreator={isCreator}
                         workspaceId={workspaceId}
                         onWorkspaceUpdate={handleWorkspaceUpdate}
-                        onDelete={handleDeleteWorkspace}
                         onLeave={handleLeaveWorkspace}
                         onComplete={handleRequestComplete}
                         onReopen={handleReopenWorkspace}

@@ -169,10 +169,6 @@ export function patchWorkspacePreferences(id, data) {
   return authFetch(`/workspaces/${id}/me`, { method: 'PATCH', body: JSON.stringify(data) })
 }
 
-export function deleteWorkspace(id) {
-  return authFetch(`/workspaces/${id}/`, { method: 'DELETE' })
-}
-
 export function completeWorkspace(id) {
   return authFetch(`/workspaces/${id}/complete`, { method: 'PATCH' })
 }

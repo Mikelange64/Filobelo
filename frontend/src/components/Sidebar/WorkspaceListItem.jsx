@@ -12,13 +12,12 @@ function WorkspaceListItem({
   onTogglePin,
   onArchive,
   onLeave,
-  onDelete,
   onMoveToFolder,
 }) {
   const [menuOpen, setMenuOpen, menuRef] = useDismissableMenu()
   const [folderPicker, setFolderPicker] = useState(false)
   const urgency = getWorkspaceUrgency(workspace)
-  const isAdmin = workspace.currentUserRole === 'admin'
+  const isSoleMember = workspace.numOfMembers === 1
 
   useEffect(() => {
     if (!menuOpen) setFolderPicker(false)
@@ -95,17 +94,9 @@ function WorkspaceListItem({
             <li role="none">
               <button type="button" role="menuitem" className="workspace-item__menu-item workspace-item__menu-item--danger"
                 onClick={() => handleMenuAction(onLeave)}>
-                Leave
+                {isSoleMember ? 'Delete' : 'Leave'}
               </button>
             </li>
-            {isAdmin && (
-              <li role="none">
-                <button type="button" role="menuitem" className="workspace-item__menu-item workspace-item__menu-item--danger"
-                  onClick={() => handleMenuAction(onDelete)}>
-                  Delete
-                </button>
-              </li>
-            )}
           </ul>
         )}
 
