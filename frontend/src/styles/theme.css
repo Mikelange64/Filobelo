@@ -9,6 +9,11 @@
 
 /* ===== LIGHT MODE (default) ===== */
 :root {
+  /* Native controls (date/time picker popups, scrollbars, selects) follow
+     color-scheme, not our --color-* vars — without this they render using
+     the OS/browser preference even when data-theme says otherwise. */
+  color-scheme: light;
+
   /* Brand — teal is the sole decorative accent */
   --color-brand-primary: hsl(184 76% 34%);
   --color-brand-primary-hover: hsl(184 76% 26%);
@@ -76,6 +81,8 @@
 /* Pure neutral gray — no hue in backgrounds. Teal is the only accent. */
 @media (prefers-color-scheme: dark) {
   :root {
+    color-scheme: dark;
+
     --color-brand-primary: hsl(184 74% 66%);
     --color-brand-primary-hover: hsl(184 74% 74%);
     --color-brand-secondary: hsl(184 60% 55%);
@@ -129,6 +136,8 @@
 
 /* ===== Manual toggle — light (duplicates :root, wins on specificity) ===== */
 :root[data-theme='light'] {
+  color-scheme: light;
+
   --color-brand-primary: hsl(184 76% 34%);
   --color-brand-primary-hover: hsl(184 76% 26%);
   --color-brand-secondary: hsl(184 50% 50%);
@@ -180,6 +189,8 @@
 
 /* ===== Manual toggle — dark (neutral gray) ===== */
 :root[data-theme='dark'] {
+  color-scheme: dark;
+
   --color-brand-primary: hsl(184 74% 66%);
   --color-brand-primary-hover: hsl(184 74% 74%);
   --color-brand-secondary: hsl(184 60% 55%);
@@ -231,6 +242,8 @@
 
 /* ===== Manual toggle — midnight (blue-tinted navy) ===== */
 :root[data-theme='midnight'] {
+  color-scheme: dark;
+
   --color-brand-primary: hsl(184 74% 66%);
   --color-brand-primary-hover: hsl(184 74% 74%);
   --color-brand-secondary: hsl(184 60% 55%);

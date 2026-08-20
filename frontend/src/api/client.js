@@ -51,7 +51,12 @@ async function attemptRefresh() {
     }
 
     if (!res.ok) {
-      clearTokens()
+      // Only a genuine 401 means the server is telling us this refresh token
+      // is actually invalid/expired - anything else (502/503 from a proxy
+      // hiccup, a transient 500) is a backend blip, not a verdict on the
+      // token, so treat it like a network error rather than wiping an
+      // otherwise-valid session over it.
+      if (res.status !== 401) throw new NetworkError('Refresh service unavailable')
       throw new Error('Refresh failed')
     }
 

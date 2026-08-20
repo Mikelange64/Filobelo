@@ -6,6 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import joinedload
 
 from app.auth import CurrentUser
+from app.config import settings
 from app.database import DbSession
 from app.dependencies import (
     get_target_membership,
@@ -14,7 +15,6 @@ from app.dependencies import (
     require_membership,
 )
 from app.models import Folder, User, Workspace, WorkspaceMember
-from app.config import settings
 from app.schemas import (
     InviteExternalRequest,
     PaginatedWorkspaceResponse,
@@ -152,7 +152,9 @@ def get_completed_workspaces(
             .offset(skip)
             .limit(limit)
         )
-        .scalars().unique().all()
+        .scalars()
+        .unique()
+        .all()
     )
 
     workspace_ids = [ws.id for ws in workspaces]
@@ -183,14 +185,20 @@ def complete_workspace(
     db: DbSession,
     member: Annotated[WorkspaceMember, Depends(require_admin)],
 ):
-    workspace = db.execute(
-        select(Workspace)
-        .options(joinedload(Workspace.members), joinedload(Workspace.tasks))
-        .where(Workspace.id == workspace_id)
-    ).scalars().first()
+    workspace = (
+        db.execute(
+            select(Workspace)
+            .options(joinedload(Workspace.members), joinedload(Workspace.tasks))
+            .where(Workspace.id == workspace_id)
+        )
+        .scalars()
+        .first()
+    )
 
     if not workspace:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workspace not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Workspace not found"
+        )
 
     workspace.is_completed = True
     workspace.completed_at = datetime.now(UTC)
@@ -205,27 +213,6 @@ def reopen_workspace(
     workspace_id: int,
     db: DbSession,
     member: Annotated[WorkspaceMember, Depends(require_admin)],
-):
-    workspace = db.execute(
-        select(Workspace)
-        .options(joinedload(Workspace.members), joinedload(Workspace.tasks))
-        .where(Workspace.id == workspace_id)
-    ).scalars().first()
-
-    if not workspace:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workspace not found")
-
-    workspace.is_completed = False
-    workspace.completed_at = None
-    db.commit()
-    db.refresh(workspace)
-
-    return _workspace_response(workspace, member)
-
-
-@router.get("/{workspace_id}", response_model=WorkspaceResponse)
-def get_workspace(
-    workspace_id: int, db: DbSession, current_user: CurrentUser
 ):
     workspace = (
         db.execute(
@@ -242,12 +229,41 @@ def get_workspace(
             status_code=status.HTTP_404_NOT_FOUND, detail="Workspace not found"
         )
 
-    member = db.execute(
-        select(WorkspaceMember).where(
-            WorkspaceMember.workspace_id == workspace_id,
-            WorkspaceMember.user_id == current_user.id,
+    workspace.is_completed = False
+    workspace.completed_at = None
+    db.commit()
+    db.refresh(workspace)
+
+    return _workspace_response(workspace, member)
+
+
+@router.get("/{workspace_id}", response_model=WorkspaceResponse)
+def get_workspace(workspace_id: int, db: DbSession, current_user: CurrentUser):
+    workspace = (
+        db.execute(
+            select(Workspace)
+            .options(joinedload(Workspace.members), joinedload(Workspace.tasks))
+            .where(Workspace.id == workspace_id)
         )
-    ).scalars().first()
+        .scalars()
+        .first()
+    )
+
+    if not workspace:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Workspace not found"
+        )
+
+    member = (
+        db.execute(
+            select(WorkspaceMember).where(
+                WorkspaceMember.workspace_id == workspace_id,
+                WorkspaceMember.user_id == current_user.id,
+            )
+        )
+        .scalars()
+        .first()
+    )
 
     return _workspace_response(workspace, member)
 
@@ -357,9 +373,13 @@ def add_user(
             status_code=status.HTTP_409_CONFLICT, detail="User already in the workspace"
         )
 
-    target_user = db.execute(select(User).where(User.id == user_id)).scalar_one_or_none()
+    target_user = db.execute(
+        select(User).where(User.id == user_id)
+    ).scalar_one_or_none()
     if not target_user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+        )
 
     workspace = get_workspace_by_id(workspace_id, db)
 
@@ -418,7 +438,9 @@ def invite_external(
     return {"message": f"Invitation sent to {body.email}"}
 
 
-@router.patch("/{workspace_id}/members/{user_id}/admin", response_model=WorkspaceResponse)
+@router.patch(
+    "/{workspace_id}/members/{user_id}/admin", response_model=WorkspaceResponse
+)
 def make_admin(
     workspace_id: int,
     user_id: int,

@@ -1,4 +1,4 @@
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -8,7 +8,13 @@ from app.auth import CurrentUser
 from app.bot_service import filobelo_bot
 from app.database import DbSession
 from app.dependencies import require_membership
-from app.models import Conversation, ConversationType, Message, Workspace, WorkspaceMember
+from app.models import (
+    Conversation,
+    ConversationType,
+    Message,
+    Workspace,
+    WorkspaceMember,
+)
 from app.schemas import (
     ConversationCreate,
     ConversationResponse,
@@ -19,7 +25,6 @@ from app.schemas import (
     PaginatedMessageResponse,
 )
 from app.utils import get_conversation_by_id
-
 
 router = APIRouter(prefix="/{workspace_id}/conversations", tags=["conversations"])
 
@@ -41,7 +46,9 @@ def list_recent_conversations(
         select(Conversation, Workspace.title)
         .join(Workspace, Workspace.id == Conversation.workspace_id)
         .where(Conversation.workspace_id.in_(member_workspace_ids))
-        .order_by(func.coalesce(Conversation.last_message_at, Conversation.created_at).desc())
+        .order_by(
+            func.coalesce(Conversation.last_message_at, Conversation.created_at).desc()
+        )
         .limit(limit)
     ).all()
 
@@ -54,7 +61,9 @@ def list_recent_conversations(
     ]
 
 
-def _require_creator_or_admin(conversation: Conversation, member: WorkspaceMember) -> None:
+def _require_creator_or_admin(
+    conversation: Conversation, member: WorkspaceMember
+) -> None:
     if conversation.creator_id != member.user_id and member.role != "admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -62,13 +71,15 @@ def _require_creator_or_admin(conversation: Conversation, member: WorkspaceMembe
         )
 
 
-@router.post("/", response_model=ConversationResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/", response_model=ConversationResponse, status_code=status.HTTP_201_CREATED
+)
 def create_conversation(
-    workspace_id : int,
-    data         : ConversationCreate,
-    db           : DbSession,
-    member       : Annotated[WorkspaceMember, Depends(require_membership)],
-    current_user : CurrentUser,
+    workspace_id: int,
+    data: ConversationCreate,
+    db: DbSession,
+    member: Annotated[WorkspaceMember, Depends(require_membership)],
+    current_user: CurrentUser,
 ):
     if data.type == ConversationType.BOT and not current_user.is_premium:
         raise HTTPException(
@@ -77,10 +88,10 @@ def create_conversation(
         )
 
     new_conversation = Conversation(
-        workspace_id = workspace_id,
-        creator_id   = member.user_id,
-        type         = data.type,
-        title        = data.title,
+        workspace_id=workspace_id,
+        creator_id=member.user_id,
+        type=data.type,
+        title=data.title,
     )
     db.add(new_conversation)
     db.commit()
@@ -89,17 +100,25 @@ def create_conversation(
 
 
 @router.get(
-    "/", response_model=list[ConversationResponse], dependencies=[Depends(require_membership)]
+    "/",
+    response_model=list[ConversationResponse],
+    dependencies=[Depends(require_membership)],
 )
 def list_conversations(workspace_id: int, db: DbSession):
-    return db.execute(
-        select(Conversation)
-        .where(Conversation.workspace_id == workspace_id)
-        .order_by(
-            Conversation.is_pinned.desc(),
-            func.coalesce(Conversation.last_message_at, Conversation.created_at).desc(),
+    return (
+        db.execute(
+            select(Conversation)
+            .where(Conversation.workspace_id == workspace_id)
+            .order_by(
+                Conversation.is_pinned.desc(),
+                func.coalesce(
+                    Conversation.last_message_at, Conversation.created_at
+                ).desc(),
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
 
 @router.get(
@@ -113,11 +132,11 @@ def get_conversation(conversation_id: int, workspace_id: int, db: DbSession):
 
 @router.patch("/{conversation_id}", response_model=ConversationResponse)
 def update_conversation(
-    conversation_id : int,
-    workspace_id    : int,
-    data            : ConversationUpdate,
-    db              : DbSession,
-    member          : Annotated[WorkspaceMember, Depends(require_membership)],
+    conversation_id: int,
+    workspace_id: int,
+    data: ConversationUpdate,
+    db: DbSession,
+    member: Annotated[WorkspaceMember, Depends(require_membership)],
 ):
     conversation = get_conversation_by_id(conversation_id, workspace_id, db)
     _require_creator_or_admin(conversation, member)
@@ -147,16 +166,19 @@ def delete_conversation(
 
 # =============================================== MESSAGES ===================================================
 
+
 @router.post(
-    "/{conversation_id}/messages", response_model=MessageResponse, status_code=status.HTTP_201_CREATED
+    "/{conversation_id}/messages",
+    response_model=MessageResponse,
+    status_code=status.HTTP_201_CREATED,
 )
 def send_message(
-    conversation_id : int,
-    workspace_id    : int,
-    data            : MessageCreate,
-    db              : DbSession,
-    member          : Annotated[WorkspaceMember, Depends(require_membership)],
-    current_user    : CurrentUser,
+    conversation_id: int,
+    workspace_id: int,
+    data: MessageCreate,
+    db: DbSession,
+    member: Annotated[WorkspaceMember, Depends(require_membership)],
+    current_user: CurrentUser,
 ):
     conversation = get_conversation_by_id(conversation_id, workspace_id, db)
 
@@ -168,11 +190,11 @@ def send_message(
 
     now = datetime.now(UTC)
     new_message = Message(
-        conversation_id = conversation_id,
-        sender_id       = member.user_id,
-        sender_type     = data.sender_type,
-        content         = data.content,
-        created_at      = now,
+        conversation_id=conversation_id,
+        sender_id=member.user_id,
+        sender_type=data.sender_type,
+        content=data.content,
+        created_at=now,
     )
     conversation.last_message_at = now
     db.add(new_message)
@@ -205,7 +227,8 @@ def list_messages(
     total = db.execute(select(func.count()).select_from(base.subquery())).scalar() or 0
     messages = (
         db.execute(base.order_by(Message.created_at).offset(skip).limit(limit))
-        .scalars().all()
+        .scalars()
+        .all()
     )
 
     return PaginatedMessageResponse(
@@ -217,7 +240,9 @@ def list_messages(
     )
 
 
-@router.delete("/{conversation_id}/messages/{message_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/{conversation_id}/messages/{message_id}", status_code=status.HTTP_204_NO_CONTENT
+)
 def delete_message(
     conversation_id: int,
     workspace_id: int,
@@ -227,12 +252,20 @@ def delete_message(
 ):
     get_conversation_by_id(conversation_id, workspace_id, db)
 
-    message = db.execute(
-        select(Message).where(Message.id == message_id, Message.conversation_id == conversation_id)
-    ).scalars().first()
+    message = (
+        db.execute(
+            select(Message).where(
+                Message.id == message_id, Message.conversation_id == conversation_id
+            )
+        )
+        .scalars()
+        .first()
+    )
 
     if not message:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Message not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Message not found"
+        )
 
     if message.sender_id != member.user_id and member.role != "admin":
         raise HTTPException(

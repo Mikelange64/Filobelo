@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import filobeloWaving from '../../assets/mascott/filobelo_waving.svg'
 import filobeloReading from '../../assets/mascott/filobelo_reading.svg'
@@ -6,23 +7,23 @@ import './Landing.css'
 
 const FEATURES = [
   {
-    title: 'Workspaces & tasks',
-    desc: 'Organize projects into workspaces with Kanban boards that track what’s overdue, due soon, or on track.',
+    title: "Workspaces & tasks",
+    desc: "Always know what's overdue, due soon, or already handled — one glance, no digging.",
     icon: <ColumnsIcon />,
   },
   {
-    title: 'Notes',
-    desc: 'Write and format notes right inside a workspace, no separate app to switch to.',
+    title: "Notes",
+    desc: "Keep decisions and context where the work happens, instead of scattered across another app.",
     icon: <LinesIcon />,
   },
   {
-    title: 'Conversations',
-    desc: 'Chat with your team and an assistant that already knows what’s happening in your workspace.',
+    title: "Conversations",
+    desc: "Ask instead of searching — chat with your team and an assistant that already knows the context.",
     icon: <BubbleIcon />,
   },
   {
-    title: 'Calendar',
-    desc: 'See every deadline across every workspace on one shared calendar.',
+    title: "Calendar",
+    desc: "Never get blindsided by a deadline hiding in a workspace you forgot about.",
     icon: <GridIcon />,
   },
 ]
@@ -67,8 +68,30 @@ function GridIcon() {
 }
 
 function Landing() {
+  const rootRef = useRef(null)
+
+  // Scroll-reveal: fade+rise each section in once, the first time it enters
+  // the viewport. The hero fades in immediately on load instead (it's
+  // already visible), so it isn't in this observed set.
+  useEffect(() => {
+    const els = rootRef.current?.querySelectorAll('.landing__reveal') ?? []
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('landing__reveal--visible')
+            observer.unobserve(entry.target)
+          }
+        })
+      },
+      { threshold: 0.15 }
+    )
+    els.forEach((el) => observer.observe(el))
+    return () => observer.disconnect()
+  }, [])
+
   return (
-    <div className="landing">
+    <div className="landing" ref={rootRef}>
       <header className="landing__nav">
         <span className="landing__logo">Filobelo</span>
         <div className="landing__nav-actions">
@@ -95,7 +118,7 @@ function Landing() {
         </div>
       </section>
 
-      <section className="landing__features" id="features">
+      <section className="landing__features landing__reveal" id="features">
         <div className="landing__section-head">
           <h2>Everything in one workspace</h2>
           <p>No juggling five apps to get anything done.</p>
@@ -111,7 +134,7 @@ function Landing() {
         </div>
       </section>
 
-      <section className="landing__showcase">
+      <section className="landing__showcase landing__reveal">
         <div className="landing__showcase-text">
           <h2>Your whole workspace, at a glance</h2>
           <p>Tasks, boards, and deadlines sit together on one screen — so you always know what needs you next.</p>
@@ -121,7 +144,7 @@ function Landing() {
         </div>
       </section>
 
-      <section className="landing__final-cta">
+      <section className="landing__final-cta landing__reveal">
         <img src={filobeloReading} alt="" className="landing__final-cta-mascot" />
         <h2>Ready to get organized?</h2>
         <p>Free to start. Set up your first workspace in under a minute.</p>

@@ -1,5 +1,5 @@
-import time
 import logging
+import time
 
 from fastapi import HTTPException, status
 from redis import Redis
@@ -12,13 +12,12 @@ from app.database import DbSession
 from app.models import User
 from app.schemas import ForgotPasswordRequest, ResendVerificationRequest, UserCreate
 
-
 logger = logging.getLogger(__name__)
 redis_client = Redis.from_url(
-    settings.redis_url, 
-    decode_responses=True, 
-    socket_connect_timeout=0.2, 
-    socket_timeout=0.2
+    settings.redis_url,
+    decode_responses=True,
+    socket_connect_timeout=0.2,
+    socket_timeout=0.2,
 )
 
 
@@ -30,7 +29,9 @@ def _check_rate_limit(identifier: str, kind: str, window: int, max_num: int) -> 
         redis_client.zadd(key, {str(now): now})
         redis_client.zremrangebyscore(key, 0, now - window)
         count = redis_client.zcard(key)
-        redis_client.expire(key, window)  # so inactive keys eventually clean themselves up
+        redis_client.expire(
+            key, window
+        )  # so inactive keys eventually clean themselves up
     except RedisError:
         logger.warning("Redis unavailable, skipping rate limit for kind=%s", kind)
         return

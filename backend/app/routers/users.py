@@ -1,13 +1,6 @@
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
-from botocore.exceptions import ClientError
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, status
-from fastapi.security import OAuth2PasswordRequestForm
-from PIL import UnidentifiedImageError
-from sqlalchemy import delete as sql_delete
-from sqlalchemy import func, or_, select
-
 from app.auth import (
     CurrentUser,
     LoginForm,
@@ -29,11 +22,11 @@ from app.models import (
     Workspace,
     WorkspaceMember,
 )
-from app.redis_client import(
-    login_limiter, 
-    register_limiter, 
+from app.redis_client import (
+    login_limiter,
     password_reset_limiter,
-    resend_verification_limiter
+    register_limiter,
+    resend_verification_limiter,
 )
 from app.schemas import (
     ChangePasswordRequest,
@@ -57,6 +50,11 @@ from app.utils import (
     send_verification_email,
     upload_profile_image,
 )
+from botocore.exceptions import ClientError
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, status
+from PIL import UnidentifiedImageError
+from sqlalchemy import delete as sql_delete
+from sqlalchemy import func, or_, select
 
 router = APIRouter(tags=["users"])
 
@@ -89,9 +87,7 @@ def create_user(user: UserCreate, db: DbSession):
         raise HTTPException(status_code=400, detail="Username already registered")
 
     hashed_password = hash_password(user.password)
-    new_user = User(
-        username=user.username, email=user.email.lower(), password_hash=hashed_password
-    )
+    1
 
     db.add(new_user)
     db.flush()

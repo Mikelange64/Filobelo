@@ -270,16 +270,23 @@
 
 .landing__final-cta {
   max-width: 640px;
-  margin: 0 auto;
-  padding: 0 40px 110px;
+  margin: 0 auto 90px;
+  padding: 60px 48px;
   text-align: center;
   display: flex;
   flex-direction: column;
   align-items: center;
+  border-radius: 24px;
+  border: 1px solid var(--color-border);
+  /* Soft radial wash + card fill so the section reads as an anchored panel
+     instead of sparse content floating on the bare page background. */
+  background:
+    radial-gradient(ellipse 60% 80% at 50% 0%, color-mix(in srgb, var(--color-brand-primary) 12%, transparent), transparent 70%),
+    var(--color-bg-card);
 }
 
 .landing__final-cta-mascot {
-  width: 140px;
+  width: 190px;
   height: auto;
   margin-bottom: 8px;
 }
@@ -318,6 +325,54 @@
 
 .landing__logo--footer {
   font-size: 1rem;
+}
+
+/* ===== Motion ===== */
+
+/* Hero is already visible on load, so it gets a simple fade-up instead of
+   waiting for a scroll trigger. Lower sections start hidden and get
+   .landing__reveal--visible added by IntersectionObserver in Landing.jsx
+   the first time they enter the viewport. */
+.landing__hero-text,
+.landing__hero-mascot-wrap {
+  animation: landing-fade-up 0.6s ease-out both;
+}
+
+.landing__hero-mascot-wrap {
+  animation-delay: 0.1s;
+}
+
+.landing__reveal {
+  opacity: 0;
+  transform: translateY(24px);
+  transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+}
+
+.landing__reveal--visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@keyframes landing-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing__hero-text,
+  .landing__hero-mascot-wrap,
+  .landing__reveal {
+    animation: none;
+    transition: none;
+    opacity: 1;
+    transform: none;
+  }
 }
 
 /* ===== Responsive ===== */

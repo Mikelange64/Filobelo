@@ -1,5 +1,5 @@
 import json
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from typing import Literal
 
 import httpx
@@ -11,7 +11,6 @@ from app.database import DbSession
 from app.models import ConversationType, Message, SenderType
 from app.schemas import MessageResponse
 from app.utils import get_conversation_by_id_with_messages, get_workspace_task_index
-
 
 MODEL = "deepseek-v4-flash"
 API_KEY = settings.deepseek_api_key.get_secret_value()
@@ -65,7 +64,7 @@ BASE_SYSTEM_PROMPT = (
     "Keep replies conversational and to the point — this is a chat interface, not a "
     "document."
 )
-_TURN_ROLE : dict[SenderType, Literal["user", "assistant"]] = {
+_TURN_ROLE: dict[SenderType, Literal["user", "assistant"]] = {
     SenderType.USER: "user",
     SenderType.BOT: "assistant",
 }
@@ -73,16 +72,13 @@ _TURN_ROLE : dict[SenderType, Literal["user", "assistant"]] = {
 
 class FilobeloBot:
     def __init__(self):
-        self.client = OpenAI(
-            api_key=API_KEY,
-            base_url="https://api.deepseek.com"
-        )
+        self.client = OpenAI(api_key=API_KEY, base_url="https://api.deepseek.com")
 
     def reply(
         self,
-        conversation_id : int,
-        workspace_id    : int,
-        db              : DbSession,
+        conversation_id: int,
+        workspace_id: int,
+        db: DbSession,
     ) -> MessageResponse:
         conversation = get_conversation_by_id_with_messages(
             conversation_id, workspace_id, db
@@ -90,7 +86,7 @@ class FilobeloBot:
 
         if conversation.type != ConversationType.BOT:
             raise HTTPException(
-                status_code = status.HTTP_404_NOT_FOUND, detail = "Conversation not found"
+                status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found"
             )
 
         history = self._build_history(conversation.messages)
@@ -102,24 +98,26 @@ class FilobeloBot:
 
         try:
             message, sources = self._run_completion(messages)
-        except Exception as e :
+        except Exception as e:
             raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="AI service unavailable"
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="AI service unavailable",
             ) from e
 
         reply = message.content
         if not reply:
             raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="AI service unavailable"
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="AI service unavailable",
             )
 
         now = datetime.now(UTC)
         new_message = Message(
-            conversation_id = conversation_id,
-            sender_type     = SenderType.BOT,
-            content         = reply,
-            sources         = sources or None,
-            created_at      = now
+            conversation_id=conversation_id,
+            sender_type=SenderType.BOT,
+            content=reply,
+            sources=sources or None,
+            created_at=now,
         )
         conversation.last_message_at = now
 
@@ -129,7 +127,6 @@ class FilobeloBot:
 
         response = MessageResponse.model_validate(new_message)
         return response
-
 
     def _run_completion(self, messages: list[dict]) -> tuple[object, list[dict]]:
         """Calls the model, and if it requests the web_search tool, runs the
@@ -147,28 +144,30 @@ class FilobeloBot:
                 tools=tools,
                 stream=False,
                 reasoning_effort="high",
-                extra_body={"thinking": {"type": "enabled"}}
+                extra_body={"thinking": {"type": "enabled"}},
             )
             message = response.choices[0].message
             tool_calls = getattr(message, "tool_calls", None)
             if not tool_calls:
                 return message, sources
 
-            messages.append({
-                "role": "assistant",
-                "content": message.content,
-                "tool_calls": [
-                    {
-                        "id": call.id,
-                        "type": "function",
-                        "function": {
-                            "name": call.function.name,
-                            "arguments": call.function.arguments,
-                        },
-                    }
-                    for call in tool_calls
-                ],
-            })
+            messages.append(
+                {
+                    "role": "assistant",
+                    "content": message.content,
+                    "tool_calls": [
+                        {
+                            "id": call.id,
+                            "type": "function",
+                            "function": {
+                                "name": call.function.name,
+                                "arguments": call.function.arguments,
+                            },
+                        }
+                        for call in tool_calls
+                    ],
+                }
+            )
             for call in tool_calls:
                 args = json.loads(call.function.arguments)
                 result, results = self._search_web(args.get("query", ""))
@@ -176,11 +175,13 @@ class FilobeloBot:
                     if r["url"] not in seen_urls:
                         seen_urls.add(r["url"])
                         sources.append(r)
-                messages.append({
-                    "role": "tool",
-                    "tool_call_id": call.id,
-                    "content": result,
-                })
+                messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": call.id,
+                        "content": result,
+                    }
+                )
 
         # Ran out of search rounds - ask once more without tools so the model
         # is forced to answer with whatever it has instead of looping again.
@@ -189,10 +190,9 @@ class FilobeloBot:
             messages=messages,
             stream=False,
             reasoning_effort="high",
-            extra_body={"thinking": {"type": "enabled"}}
+            extra_body={"thinking": {"type": "enabled"}},
         )
         return response.choices[0].message, sources
-
 
     @staticmethod
     def _search_web(query: str, max_results: int = 5) -> tuple[str, list[dict]]:
@@ -228,14 +228,11 @@ class FilobeloBot:
         ]
         return formatted, sources
 
-
     @staticmethod
     def _build_history(messages: list[Message]) -> list:
         return [
-            {"role": _TURN_ROLE[m.sender_type], "content": m.content}
-            for m in messages
+            {"role": _TURN_ROLE[m.sender_type], "content": m.content} for m in messages
         ]
-
 
     @staticmethod
     def _build_system_prompt(workspace_id: int, db: DbSession) -> str:
@@ -246,7 +243,10 @@ class FilobeloBot:
 
         lines = ["Here is an index of this workspace's tasks and resources:"]
         for task in tasks:
-            lines.append(f'- Task #{task.id} "{task.title}"')
+            details = [task.status.value]
+            if task.due_date:
+                details.append(f"due {task.due_date.date().isoformat()}")
+            lines.append(f'- Task #{task.id} "{task.title}" ({", ".join(details)})')
             for resource in task.resources:
                 lines.append(
                     f'    - {resource.type.value} #{resource.id} "{resource.title}"'
