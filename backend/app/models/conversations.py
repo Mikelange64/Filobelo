@@ -76,28 +76,31 @@ class Conversation(Base):
 class Message(Base):
     __tablename__ = "messages"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    conversation_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("conversations.id"), nullable=False, index=True
+    id              : Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    conversation_id : Mapped[int] = mapped_column(
+        Integer, 
+        ForeignKey("conversations.id"), 
+        nullable=False, 
+        index=True
     )
     sender_id: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+        Integer, 
+        ForeignKey("users.id", ondelete="SET NULL"), 
+        nullable=True, 
+        index=True
     )
-    sender_type: Mapped[SenderType] = mapped_column(sqlEnum(SenderType), nullable=False)
-    content: Mapped[str] = mapped_column(Text, nullable=False)
+    sender_type  : Mapped[SenderType] = mapped_column(sqlEnum(SenderType), nullable=False)
+    content      : Mapped[str] = mapped_column(Text, nullable=False)
     # List of {"title", "url"} dicts from the web_search tool, in the order
     # they were found - null for messages that never triggered a search.
-    sources: Mapped[list[dict] | None] = mapped_column(
-        JSON, nullable=True, default=None
-    )
-    created_at: Mapped[datetime] = mapped_column(
+    sources      : Mapped[list[dict] | None] = mapped_column(JSON, nullable=True, default=None)
+    created_at   : Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
     )
 
-    conversation: Mapped["Conversation"] = relationship(
-        "Conversation",
-        back_populates="messages",
+    conversation : Mapped["Conversation"] = relationship(
+        "Conversation", back_populates="messages",
     )
-    sender: Mapped["User | None"] = relationship(
+    sender       : Mapped["User | None"] = relationship(
         "User", foreign_keys=[sender_id], back_populates="messages_sent"
     )
