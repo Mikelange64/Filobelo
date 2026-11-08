@@ -1,5 +1,3 @@
-
-
 from .association import WorkspaceMember
 from .conversations import Conversation, ConversationType, Message, SenderType
 from .resources import Resource, ResourceType

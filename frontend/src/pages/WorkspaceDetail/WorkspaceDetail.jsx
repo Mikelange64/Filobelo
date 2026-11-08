@@ -13,7 +13,6 @@ import {
     getWorkspace,
     createTask,
     patchTask,
-    patchWorkspacePreferences,
     deleteTask,
     updateTaskStatus,
     getMembersWithRoles,
@@ -76,12 +75,14 @@ function WorkspaceDetail() {
     const [searchParams, setSearchParams] = useSearchParams();
     const {
         onLeave: shellLeave,
+        onArchive: shellArchive,
         onTogglePin,
         onComingSoon,
         onTaskToggled,
         onWorkspaceTasksChanged,
         onWorkspaceCompleted,
         onWorkspaceReopened,
+        onWorkspaceUpdated,
         onToast,
     } = useOutletContext();
     const currentUserId = user?.id;
@@ -488,6 +489,7 @@ function WorkspaceDetail() {
 
     function handleWorkspaceUpdate({ title, description, dueDate }) {
         setWorkspace((prev) => ({ ...prev, title, description, dueDate }));
+        onWorkspaceUpdated?.(workspaceId, { title, description, dueDate });
     }
 
     function handleTogglePinWorkspace() {
@@ -497,10 +499,10 @@ function WorkspaceDetail() {
 
     async function handleArchiveWorkspace() {
         try {
-            await patchWorkspacePreferences(workspaceId, { is_archived: true });
+            await shellArchive(workspaceId);
             navigate("/");
         } catch (err) {
-            onToast?.(err.detail ?? "Could not archive workspace");
+            onToast?.(err.message ?? "Could not archive workspace");
         }
     }
 
@@ -936,6 +938,7 @@ function WorkspaceDetail() {
                         workspaceId={workspaceId}
                         onWorkspaceUpdate={handleWorkspaceUpdate}
                         onLeave={handleLeaveWorkspace}
+                        onArchive={handleArchiveWorkspace}
                         onComplete={handleRequestComplete}
                         onReopen={handleReopenWorkspace}
                         onToast={onToast}

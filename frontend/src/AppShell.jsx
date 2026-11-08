@@ -232,6 +232,12 @@ function AppShell() {
     setCompletedTotal((c) => Math.max(0, c - 1))
   }
 
+  function handleWorkspaceUpdated(wsId, patch) {
+    setWorkspaces((prev) =>
+      prev.map((ws) => (ws.id === wsId ? { ...ws, ...patch } : ws))
+    )
+  }
+
   function handleTaskToggled(wsId, taskId, status) {
     setWorkspaces((prev) =>
       prev.map((ws) => {
@@ -276,6 +282,7 @@ function AppShell() {
     onWorkspaceTasksChanged: handleWorkspaceTasksChanged,
     onWorkspaceCompleted: handleWorkspaceCompleted,
     onWorkspaceReopened: handleWorkspaceReopened,
+    onWorkspaceUpdated: handleWorkspaceUpdated,
     onToast: setToast,
   }
 

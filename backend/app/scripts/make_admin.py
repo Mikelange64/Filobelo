@@ -1,4 +1,5 @@
 from sqlalchemy import select
+
 from app.database import SessionLocal
 from app.models import User
 
@@ -19,6 +20,7 @@ def promote_user(username: str):
 
 if __name__ == "__main__":
     import sys
+
     if len(sys.argv) > 1:
         promote_user(sys.argv[1])
     else:

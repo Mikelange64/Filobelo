@@ -90,7 +90,10 @@ export default function TaskRow({ task, member, isAdmin, currentUserId, onSelect
   }
 
   return (
-    <div className={`task-row${isDone ? ' task-row--completed' : ''}`}>
+    <div
+      className={`task-row${isDone ? ' task-row--completed' : ''}`}
+      style={{ '--task-row-color': task.color }}
+    >
       {canToggle ? (
         <button
           type="button"

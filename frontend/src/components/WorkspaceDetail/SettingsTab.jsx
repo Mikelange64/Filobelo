@@ -1,8 +1,8 @@
 import { useState } from 'react'
-import { patchWorkspace, patchWorkspacePreferences } from '../../api/client'
+import { patchWorkspace } from '../../api/client'
 import { formatDueDate } from '../../utils/date'
 
-export default function SettingsTab({ workspace, isAdmin, workspaceId, onWorkspaceUpdate, onLeave, onComplete, onReopen, onToast }) {
+export default function SettingsTab({ workspace, isAdmin, workspaceId, onWorkspaceUpdate, onLeave, onArchive, onComplete, onReopen, onToast }) {
   const [title, setTitle] = useState(workspace.title)
   const [description, setDescription] = useState(workspace.description)
   const [dueDate, setDueDate] = useState(
@@ -139,8 +139,7 @@ export default function SettingsTab({ workspace, isAdmin, workspaceId, onWorkspa
               <p className="settings-danger-label">Archive workspace</p>
               <p className="settings-danger-desc">Hides this workspace from the active list. Can be restored.</p>
             </div>
-            <button type="button" className="settings-danger-btn"
-              onClick={() => patchWorkspacePreferences(workspaceId, { is_archived: true }).catch(() => {})}>
+            <button type="button" className="settings-danger-btn" onClick={onArchive}>
               Archive
             </button>
           </div>
