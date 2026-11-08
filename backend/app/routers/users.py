@@ -1,3 +1,4 @@
+import logging
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
@@ -57,6 +58,7 @@ from sqlalchemy import delete as sql_delete
 from sqlalchemy import func, or_, select
 
 router = APIRouter(tags=["users"])
+logger = logging.getLogger(__name__)
 
 
 # =======================================================================================
@@ -87,7 +89,12 @@ def create_user(user: UserCreate, db: DbSession):
         raise HTTPException(status_code=400, detail="Username already registered")
 
     hashed_password = hash_password(user.password)
-    1
+
+    new_user = User(
+        username=user.username, 
+        email=user.email,
+        password_hash=hashed_password
+    )
 
     db.add(new_user)
     db.flush()
@@ -109,7 +116,7 @@ def create_user(user: UserCreate, db: DbSession):
             to_email=new_user.email, username=new_user.username, token=token
         )
     except Exception:
-        pass
+        logger.exception("Failed to send verification email on signup for user_id=%s", new_user.id)
 
     return new_user
 
@@ -391,7 +398,7 @@ def resend_verification_email(db: DbSession, request_data: ResendVerificationReq
                 to_email=user.email, username=user.username, token=token
             )
         except Exception:
-            pass
+            logger.exception("Failed to resend verification email for user_id=%s", user.id)
 
     return {
         "message": "If an account exists and isn't verified yet, a new verification link has been sent"
@@ -438,7 +445,7 @@ def forgot_password(db: DbSession, request_data: ForgotPasswordRequest):
                 to_email=user.email, username=user.username, token=token
             )
         except Exception:
-            pass
+            logger.exception("Failed to send password reset email for user_id=%s", user.id)
 
     return {
         "message": "If an account exists with this email, you will receive password reset instructions"
