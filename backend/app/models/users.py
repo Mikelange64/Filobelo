@@ -1,12 +1,13 @@
 from __future__ import annotations
-from datetime import datetime, UTC
 
-from sqlalchemy import String, Integer, Boolean, DateTime, text, ForeignKey
+from datetime import UTC, datetime
+
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.database import Base
 from app.config import settings
-    
+from app.database import Base
+
 
 class User(Base) :
     __tablename__ = 'users'
@@ -21,7 +22,7 @@ class User(Base) :
     image_file:    Mapped[str | None] = mapped_column(String(200), default=None)
     last_login:    Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     
-    joined_at:    Mapped[datetime] = mapped_column(
+    joined_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default = lambda : datetime.now(UTC),
         server_default = text("now()"),
