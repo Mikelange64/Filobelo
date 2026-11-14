@@ -1,4 +1,5 @@
 from datetime import UTC, datetime, timedelta
+
 from sqlalchemy import (
     Boolean,
     DateTime,
@@ -16,16 +17,17 @@ from app.models.tasks import TaskStatus
 class Workspace(Base):
     __tablename__ = "workspaces"
 
-    id          : Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    
     # Historical record only - the creator has no special privileges beyond
     # having been the first admin, so this survives its creator's account
     # deletion instead of blocking it or taking the workspace down with them.
-    creator_id  : Mapped[int | None] = mapped_column(
+    creator_id : Mapped[int | None] = mapped_column(
         Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    title       : Mapped[str] = mapped_column(String(50), nullable=False)
-    description : Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
-    max_number  : Mapped[int | None] = mapped_column(Integer, nullable=True, default=None)
+    title:       Mapped[str] = mapped_column(String(50), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
+    max_number:  Mapped[int | None] = mapped_column(Integer, nullable=True, default=None)
 
     members: Mapped[list["User"]] = relationship(
         secondary="workspace_member", back_populates="workspaces", viewonly=True
@@ -44,8 +46,8 @@ class Workspace(Base):
     due_date: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True, default=None
     )
-    is_completed  : Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    completed_at  : Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, default=None)
+    is_completed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, default=None)
 
     @property
     def default_due_date(self) -> datetime | None:
@@ -79,12 +81,18 @@ class Workspace(Base):
 class Folder(Base):
     __tablename__ = "folders"
 
-    id         : Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    owner_id   : Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    name       : Mapped[str] = mapped_column(String(50), nullable=False)
-    color      : Mapped[str] = mapped_column(String(50), nullable=False)
-    created_at : Mapped[datetime] = mapped_column(
+    id:       Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    owner_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    # Subfolders: NULL = top level. No depth limit. SET NULL at the DB level is
+    # only a safety net (e.g. account deletion removing folders in any order) -
+    # the delete endpoint re-parents children explicitly before deleting.
+    parent_id  : Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("folders.id", ondelete="SET NULL"), nullable=True, default=None, index=True
+    )
+    name:       Mapped[str] = mapped_column(String(50), nullable=False)
+    color:      Mapped[str] = mapped_column(String(50), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )
 
-    owner      : Mapped["User"] = relationship(back_populates="folders")
+    owner: Mapped["User"] = relationship(back_populates="folders")

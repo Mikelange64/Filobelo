@@ -3,11 +3,13 @@ from enum import Enum
 
 from sqlalchemy import (
     DateTime,
-    Enum as sqlEnum,
     ForeignKey,
     Integer,
     String,
     Text,
+)
+from sqlalchemy import (
+    Enum as sqlEnum,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -23,11 +25,11 @@ class TaskStatus(str, Enum):
 class Task(Base):
     __tablename__ = "tasks"
 
-    id           : Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    title        : Mapped[str] = mapped_column(String(50), nullable=False)
-    content      : Mapped[str] = mapped_column(Text, nullable=False)
-    color        : Mapped[str] = mapped_column(String(50), nullable=False, default="#6bc4d4")
-    status       : Mapped[TaskStatus] = mapped_column(
+    id:      Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    title:   Mapped[str] = mapped_column(String(50), nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    color:   Mapped[str] = mapped_column(String(50), nullable=False, default="#6bc4d4")
+    status:  Mapped[TaskStatus] = mapped_column(
         sqlEnum(TaskStatus), nullable=False, default=TaskStatus.TODO
     )
 
@@ -35,40 +37,35 @@ class Task(Base):
     # whoever created/owned it, same as Workspace.creator_id and
     # Conversation.creator_id/Message.sender_id.
     creator_id: Mapped[int | None] = mapped_column(
-        Integer,
-        ForeignKey("users.id", ondelete="SET NULL"),
-        nullable=True,
-        index=True
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
     )
     owner_id: Mapped[int | None] = mapped_column(
-        Integer,
-        ForeignKey("users.id", ondelete="SET NULL"),
-        nullable=True,
-        index=True
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
     )
     workspace_id: Mapped[int] = mapped_column(
-        Integer, 
-        ForeignKey("workspaces.id"), 
-        nullable=False, 
-        index=True
+        Integer, ForeignKey("workspaces.id"), nullable=False, index=True
     )
-    
-    date_created : Mapped[datetime] = mapped_column(
+
+    date_created: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )
-    due_date     : Mapped[datetime|None] = mapped_column(DateTime(timezone=True), nullable=True)
-    completed_at : Mapped[datetime|None] = mapped_column(DateTime(timezone=True), nullable=True, default=None)
+    due_date: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, default=None
+    )
 
     creator: Mapped["User | None"] = relationship(
         "User", foreign_keys=[creator_id], back_populates="created_tasks"
     )
-    owner: Mapped["User | None"]   = relationship(
+    owner: Mapped["User | None"] = relationship(
         "User", foreign_keys=[owner_id], back_populates="owned_tasks"
     )
     workspace: Mapped["Workspace"] = relationship(
         "Workspace", foreign_keys=[workspace_id], back_populates="tasks"
     )
-    resources : Mapped[list["Resource"]] = relationship(
+    resources: Mapped[list["Resource"]] = relationship(
         "Resource", back_populates="task", cascade="all, delete-orphan"
     )
 

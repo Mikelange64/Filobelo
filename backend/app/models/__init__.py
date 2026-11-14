@@ -1,4 +1,4 @@
-from .association import WorkspaceMember
+from .associations import WorkspaceMember
 from .conversations import Conversation, ConversationType, Message, SenderType
 from .resources import Resource, ResourceType
 from .tasks import Task, TaskStatus
@@ -6,21 +6,30 @@ from .users import PasswordResetToken, RefreshToken, User, VerificationToken
 from .workspaces import Folder, Workspace
 
 __all__ = [
+    # users.py
     "User",
-    "Workspace",
-    "WorkspaceMember",
-    "Conversation",
-    "Message",
-    "Task",
-    "Resource",
-    "Folder",
-
     "PasswordResetToken",
     "RefreshToken",
     "VerificationToken",
 
-    "ResourceType",
-    "ConversationType",
-    "SenderType",
+    # workspaces.py
+    "Workspace",
+    "Folder",
+
+    # tasks.py
+    "Task",
     "TaskStatus",
+
+    # conversations
+    "Conversation",
+    "ConversationType",
+    "Message",
+    "SenderType",
+
+    # resources.py
+    "Resource",
+    "ResourceType",
+
+    # associations.py
+    "WorkspaceMember",
 ]

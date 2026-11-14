@@ -1,13 +1,14 @@
 import re
-
-from sqlalchemy import Integer, String, Text, DateTime, ForeignKey, Enum as sqlEnum
-from sqlalchemy.orm import Mapped, mapped_column, relationship
-
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from enum import Enum
 
-from app.database import Base
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Enum as sqlEnum
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
 from app.config import settings
+from app.database import Base
+
 
 class ResourceType(str, Enum):
     LINK = "LINK"
@@ -18,18 +19,18 @@ class ResourceType(str, Enum):
 class Resource(Base):
     __tablename__ = "resources"
 
-    id           : Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    task_id      : Mapped[int] = mapped_column(Integer, ForeignKey("tasks.id"), nullable=False, index=True)
-    created_by   : Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    id:         Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    task_id:    Mapped[int] = mapped_column(Integer, ForeignKey("tasks.id"), nullable=False, index=True)
+    created_by: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
 
-    type         : Mapped[ResourceType] = mapped_column(sqlEnum(ResourceType), nullable=False)
-    title        : Mapped[str] = mapped_column(String(100), nullable=False)
-    file_key     : Mapped[str | None] = mapped_column(String)
-    url          : Mapped[str | None] = mapped_column(String)
-    content      : Mapped[str | None] = mapped_column(Text)
-    mime_type    : Mapped[str | None] = mapped_column(String)
+    type:          Mapped[ResourceType] = mapped_column(sqlEnum(ResourceType), nullable=False)
+    title:         Mapped[str] = mapped_column(String(100), nullable=False)
+    file_key:      Mapped[str | None] = mapped_column(String)
+    url:           Mapped[str | None] = mapped_column(String)
+    content:       Mapped[str | None] = mapped_column(Text)
+    mime_type:     Mapped[str | None] = mapped_column(String)
     thumbnail_url: Mapped[str | None] = mapped_column(String)
-    created_at   : Mapped[datetime] = mapped_column(
+    created_at:    Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default= lambda : datetime.now(UTC)
     )
     updated_at   : Mapped[datetime] = mapped_column(
