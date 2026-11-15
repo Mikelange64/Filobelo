@@ -3,10 +3,11 @@ from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 from botocore.exceptions import ClientError
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Depends, Form, HTTPException, Query, UploadFile, status
 from PIL import UnidentifiedImageError
 from sqlalchemy import delete as sql_delete
 from sqlalchemy import func, or_, select
+from sqlalchemy.orm import Session
 
 from app.auth import (
     CurrentUser,
@@ -67,9 +68,55 @@ logger = logging.getLogger(__name__)
 # =======================================================================================
 
 
+def _read_profile_image(file: UploadFile) -> tuple[bytes, str]:
+    """Reads an uploaded picture, enforces the size limit and re-encodes it
+    as a 300x300 JPEG. Returns (bytes, new_filename). Raises 400 on a file
+    that is too large or is not an image."""
+    # Read one byte past the limit: enough to know it is too big without
+    # pulling an arbitrarily large upload into memory.
+    content = file.file.read(settings.max_upload_size_bytes + 1)
+
+    if len(content) > settings.max_upload_size_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"File too large. Maximum size is {settings.max_upload_size_bytes // (1024 * 1024)}MB",
+        )
+
+    try:
+        return process_profile_image(content)
+    except (UnidentifiedImageError, ValueError) as err:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid image file. Please upload a valid image(JPEG, PNG, GIF, WebP).",
+        ) from err
+
+
 @router.post("", response_model=UserPrivate, status_code=status.HTTP_201_CREATED)
 def create_user(user: UserCreate, db: DbSession):
+    return _register_user(user, db)
+
+
+# Same registration, sent as a multipart form so it can carry a profile
+# picture. This is the only way to set a picture at signup: PATCH /me/picture
+# needs a signed-in user, and a new account cannot sign in until its email is
+# verified. The JSON route above is unchanged.
+@router.post(
+    "/with-picture", response_model=UserPrivate, status_code=status.HTTP_201_CREATED
+)
+def create_user_with_picture(
+    user: Annotated[UserCreate, Form()],
+    db: DbSession,
+    file: UploadFile | None = None,
+):
+    return _register_user(user, db, picture=file)
+
+
+def _register_user(user: UserCreate, db: Session, picture: UploadFile | None = None):
     register_limiter(user, db)
+
+    # Validated and re-encoded before anything is written, so a bad picture
+    # rejects the signup instead of leaving an account behind.
+    processed_picture = _read_profile_image(picture) if picture is not None else None
 
     email_exists = (
         db.execute(select(User).where(func.lower(User.email) == user.email.lower()))
@@ -111,6 +158,22 @@ def create_user(user: UserCreate, db: DbSession):
     db.refresh(new_user)
 
     logger.info("User registered user_id=%s email=%s", new_user.id, new_user.email)
+
+    # Uploaded only after the account exists, so a failed signup never leaves
+    # a file in the bucket. A storage failure does not undo the signup: the
+    # account is created without a picture and one can be set later.
+    if processed_picture is not None:
+        picture_bytes, picture_filename = processed_picture
+        try:
+            upload_profile_image(picture_bytes, picture_filename)
+        except Exception:
+            logger.exception(
+                "Profile picture upload failed on signup for user_id=%s", new_user.id
+            )
+        else:
+            new_user.image_file = picture_filename
+            db.commit()
+            db.refresh(new_user)
 
     try:
         send_verification_email(
@@ -654,21 +717,7 @@ def get_user(user_id: int, db: DbSession):
 
 @router.patch("/me/picture", response_model=UserPrivate)
 def upload_profile_picture(file: UploadFile, current_user: CurrentUser, db: DbSession):
-    content = file.file.read()  # file.file because the app is sync
-
-    if len(content) > settings.max_upload_size_bytes:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"File too large. Maximum size is {settings.max_upload_size_bytes // (1024 * 1024)}MB",
-        )
-
-    try:
-        processed_bytes, new_filename = process_profile_image(content)
-    except UnidentifiedImageError as err:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid image file. Please upload a valid image(JPEG, PNG, GIF, WebP).",
-        ) from err
+    processed_bytes, new_filename = _read_profile_image(file)
 
     try:
         upload_profile_image(processed_bytes, new_filename)

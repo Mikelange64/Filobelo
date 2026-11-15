@@ -67,6 +67,18 @@ export default function ConversationThread({ workspaceId, conversation, memberBy
   const autoLoadOlderRef = useRef(true)
   // False until the newest page has loaded once for the open conversation.
   const initialLoadedRef = useRef(false)
+  // Latest props for the polling loop, which outlives individual renders.
+  const conversationRef = useRef(conversation)
+  const onUpdatedRef = useRef(onUpdated)
+  useEffect(() => {
+    conversationRef.current = conversation
+    onUpdatedRef.current = onUpdated
+  })
+  // A bot send whose outcome is unknown: the request failed AND the follow-up
+  // check failed too, so the message may or may not be stored. Remembered as
+  // { conversationId, content, cursor } so that sending the same text again
+  // asks the server first instead of posting a duplicate.
+  const unconfirmedSendRef = useRef(null)
 
   const conversationId = conversation.id
   const canManage = conversation.creator_id === currentUserId || isAdmin
@@ -228,6 +240,18 @@ export default function ConversationThread({ workspaceId, conversation, memberBy
           // someone reading further up is left where they are.
           if (isNearBottom()) pendingScrollRef.current = 'bottom'
           setMessages((prev) => mergeMessages(prev, fresh.messages))
+          // Keep this conversation's row in the list (preview text and
+          // position) in step with what just arrived.
+          const newest = fresh.messages[fresh.messages.length - 1]
+          const current = conversationRef.current
+          if (current.id === conversationId
+            && new Date(newest.created_at) > new Date(current.last_message_at)) {
+            onUpdatedRef.current({
+              ...current,
+              last_message_at: newest.created_at,
+              last_message: newest.content,
+            })
+          }
         }
         if (fresh.hasMore !== null) setHasMore(fresh.hasMore)
       } catch (err) {
@@ -312,6 +336,41 @@ export default function ConversationThread({ workspaceId, conversation, memberBy
     // user's own message - so it's added optimistically here for immediate
     // feedback, then reconciled against the server once the (possibly
     // multi-second) round trip settles, whether it succeeds or fails.
+    const unconfirmed = unconfirmedSendRef.current
+    if (unconfirmed && unconfirmed.conversationId === conversationId && unconfirmed.content === trimmed) {
+      // The last attempt at this exact text ended without an answer. Find
+      // out whether it was stored before sending it a second time.
+      let earlier = null
+      try {
+        earlier = await fetchNewer(unconfirmed.cursor)
+      } catch {
+        if (isCurrent()) setSending(false)
+        onToast?.('Still cannot reach the server - your message is kept in the box')
+        return
+      }
+      unconfirmedSendRef.current = null
+      const already = earlier.messages.find(
+        (m) => m.sender_type === 'USER' && m.sender_id === currentUserId && m.content === trimmed
+      )
+      if (already) {
+        if (isCurrent()) {
+          setMessages((prev) => mergeMessages(prev, earlier.messages))
+          setDraft((d) => (d.trim() === trimmed ? '' : d))
+          setSending(false)
+        }
+        const newest = earlier.messages[earlier.messages.length - 1]
+        onUpdated({ ...conversation, last_message_at: newest.created_at, last_message: newest.content })
+        // If Filobelo answered it, the reply is in what was just merged.
+        if (newest.sender_type === 'USER') {
+          onToast?.('Your message was already saved - Filobelo could not reply to it')
+        }
+        return
+      }
+      // Not stored: fall through and send it normally.
+    } else {
+      unconfirmedSendRef.current = null
+    }
+
     const cursor = newestStoredId(messagesRef.current)
     const optimisticId = `optimistic-${Date.now()}`
     setMessages((prev) => [...prev, {
@@ -340,7 +399,10 @@ export default function ConversationThread({ workspaceId, conversation, memberBy
     try {
       fresh = await fetchNewer(cursor)
     } catch {
-      // handled below: without an answer, treat a failed send as not stored
+      // No answer. If the send itself failed too, nobody knows whether the
+      // message is stored: the text goes back in the box (below), and this
+      // note makes a resend of it check first instead of duplicating it.
+      if (sendError) unconfirmedSendRef.current = { conversationId, content: trimmed, cursor }
     }
     const storedOwn = fresh?.messages.find(
       (m) => m.sender_type === 'USER' && m.sender_id === currentUserId && m.content === trimmed

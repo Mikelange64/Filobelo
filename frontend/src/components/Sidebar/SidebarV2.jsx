@@ -1,7 +1,9 @@
 import { useState, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import WorkspaceListItem from './WorkspaceListItem'
 import StatusDot from '../shared/StatusDot'
 import ThemeToggle from '../shared/ThemeToggle'
+import ConfirmModal from '../shared/ConfirmModal'
 import { getWorkspaceUrgency } from '../../utils/workspaceStatus'
 import { SWATCH_COLORS } from '../../constants/colors'
 import './SidebarV2.css'
@@ -191,6 +193,7 @@ function FolderItem({ folder, foldersByParent, workspaces, folders, onCreateFold
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuView, setMenuView] = useState('main') // 'main' | 'color'
   const [creatingChild, setCreatingChild] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
   const menuRef = useRef(null)
 
   const childFolders = foldersByParent.get(folder.id) ?? []
@@ -284,7 +287,7 @@ function FolderItem({ folder, foldersByParent, workspaces, folders, onCreateFold
                 </button>
               </li>
               <li>
-                <button type="button" onClick={() => { onDelete(folder.id); closeMenu() }}>
+                <button type="button" onClick={() => { setConfirmDelete(true); closeMenu() }}>
                   Delete folder
                 </button>
               </li>
@@ -297,6 +300,27 @@ function FolderItem({ folder, foldersByParent, workspaces, folders, onCreateFold
           )}
         </div>
       </div>
+
+      {/* Portalled to <body> so the dialog is not clipped by the sidebar. */}
+      {confirmDelete && createPortal(
+        <ConfirmModal
+          title={`Delete "${folder.name}"?`}
+          message={isEmpty
+            ? 'This folder is empty.'
+            : 'Only the folder is removed. Its subfolders and workspaces move up one level.'}
+          confirmLabel="Delete folder"
+          danger
+          onConfirm={async () => {
+            try {
+              await onDelete(folder.id)
+            } finally {
+              setConfirmDelete(false)
+            }
+          }}
+          onCancel={() => setConfirmDelete(false)}
+        />,
+        document.body
+      )}
 
       {expanded && (creatingChild || !isEmpty) && (
         <div className="sidebar-v2__folder-children">

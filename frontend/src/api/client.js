@@ -145,8 +145,20 @@ export async function loginRequest(emailOrUsername, password) {
   return data
 }
 
-// Register — JSON body.
-export async function registerRequest(username, email, password) {
+// Register — JSON body, or a multipart form when a profile picture was chosen
+// (the picture has to travel with the signup: a new account can't sign in to
+// upload one until its email is verified).
+export async function registerRequest(username, email, password, avatarFile = null) {
+  if (avatarFile) {
+    const form = new FormData()
+    form.append('username', username)
+    form.append('email', email)
+    form.append('password', password)
+    form.append('file', avatarFile)
+    // No Content-Type header: the browser sets the multipart boundary itself.
+    const res = await fetch(`${BASE_URL}/users/with-picture`, { method: 'POST', body: form })
+    return parseResponse(res)
+  }
   const res = await fetch(`${BASE_URL}/users`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

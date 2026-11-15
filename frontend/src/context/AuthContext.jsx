@@ -54,8 +54,8 @@ export function AuthProvider({ children }) {
     setUser(me)
   }
 
-  async function register(username, email, password) {
-    await registerRequest(username, email, password)
+  async function register(username, email, password, avatarFile = null) {
+    await registerRequest(username, email, password, avatarFile)
   }
 
   async function refreshUser() {

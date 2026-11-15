@@ -172,6 +172,11 @@ function WorkspaceDetail() {
     queryKey: conversationsKey,
     queryFn: fetchConversations,
     enabled: conversationsPanelOpen,
+    // While the panel is open, re-read the list so every row (not only the
+    // open thread, which polls its own messages) picks up new activity:
+    // order, timestamps, conversations other members just created. TanStack
+    // pauses this by itself while the browser tab is hidden.
+    refetchInterval: conversationsPanelOpen ? 15 * 1000 : false,
   })
   const conversations = conversationsQuery.data ?? null
   const conversationsLoading = conversationsQuery.isLoading
