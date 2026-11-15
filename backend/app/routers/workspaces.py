@@ -1,3 +1,4 @@
+import logging
 from datetime import UTC, datetime
 from typing import Annotated
 
@@ -29,6 +30,10 @@ from app.utils import get_workspace_by_id
 from app.utils.email_utils import send_join_invite_email, send_member_added_email
 
 router = APIRouter(tags=["workspaces"])
+
+# Ids only in these log lines - no workspace titles, usernames or emails.
+# Who did it is the "user=" field at the start of each line.
+logger = logging.getLogger(__name__)
 
 
 def _workspace_response(
@@ -70,9 +75,13 @@ def get_my_workspaces(
 
     total = db.execute(select(func.count()).select_from(base.subquery())).scalar() or 0
 
+    # offset/limit without a deterministic order lets Postgres hand back rows
+    # in any order it likes, so pages could overlap or skip workspaces. id
+    # breaks ties between identical timestamps.
     workspaces = (
         db.execute(
             base.options(joinedload(Workspace.members), joinedload(Workspace.tasks))
+            .order_by(Workspace.date_created.desc(), Workspace.id.desc())
             .offset(skip)
             .limit(limit)
         )
@@ -123,6 +132,11 @@ def create_workspace(
     db.add(new_member)
     db.commit()
     db.refresh(new_workspace)
+
+    logger.info(
+        "Workspace created workspace_id=%s creator_user_id=%s",
+        new_workspace.id, new_workspace.creator_id,
+    )
 
     return _workspace_response(new_workspace, new_member)
 
@@ -203,6 +217,7 @@ def complete_workspace(
     workspace.is_completed = True
     workspace.completed_at = datetime.now(UTC)
     db.commit()
+    logger.info("Workspace marked complete workspace_id=%s", workspace_id)
     db.refresh(workspace)
 
     return _workspace_response(workspace, member)
@@ -232,6 +247,7 @@ def reopen_workspace(
     workspace.is_completed = False
     workspace.completed_at = None
     db.commit()
+    logger.info("Workspace reopened workspace_id=%s", workspace_id)
     db.refresh(workspace)
 
     return _workspace_response(workspace, member)
@@ -264,6 +280,18 @@ def get_workspace(workspace_id: int, db: DbSession, current_user: CurrentUser):
         .scalars()
         .first()
     )
+
+    # Checked here rather than via Depends(require_membership) so a missing
+    # workspace still 404s instead of 403ing before the lookup runs.
+    if not member:
+        logger.warning(
+            "Forbidden: not a member user_id=%s workspace_id=%s",
+            current_user.id, workspace_id,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User is not a member of this workspace",
+        )
 
     return _workspace_response(workspace, member)
 
@@ -386,6 +414,10 @@ def add_user(
     db.add(WorkspaceMember(user_id=user_id, workspace_id=workspace_id))
     db.commit()
 
+    logger.info(
+        "Workspace member added workspace_id=%s user_id=%s", workspace_id, user_id
+    )
+
     try:
         send_member_added_email(
             to_email=target_user.email,
@@ -395,7 +427,12 @@ def add_user(
             workspace_url=f"{settings.frontend_url}/workspaces/{workspace_id}",
         )
     except Exception:
-        pass
+        # Still deliberately non-fatal (the member was added); just no
+        # longer silent.
+        logger.exception(
+            "Failed to send member-added email workspace_id=%s user_id=%s",
+            workspace_id, user_id,
+        )
 
     return _workspace_response(get_workspace_by_id(workspace_id, db), member)
 
@@ -430,10 +467,15 @@ def invite_external(
             register_url=f"{settings.frontend_url}/register",
         )
     except Exception:
+        logger.exception(
+            "Failed to send external invite email workspace_id=%s", workspace_id
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to send invitation email.",
         )
+
+    logger.info("External invite email sent workspace_id=%s", workspace_id)
 
     return {"message": f"Invitation sent to {body.email}"}
 
@@ -460,6 +502,10 @@ def make_admin(
 
     target_member.role = "admin"
     db.commit()
+    logger.info(
+        "Workspace member promoted to admin workspace_id=%s user_id=%s",
+        workspace_id, user_id,
+    )
     return _workspace_response(workspace, caller_member)
 
 
@@ -469,8 +515,10 @@ def leave_workspace(
     db: DbSession,
     membership: Annotated[WorkspaceMember, Depends(require_membership)],
 ):
+    user_id = membership.user_id  # read before commit: the row is gone after
     handle_membership_departure(membership, db)
     db.commit()
+    logger.info("Workspace member left workspace_id=%s user_id=%s", workspace_id, user_id)
 
 
 @router.delete("/{workspace_id}/members/{user_id}", response_model=WorkspaceResponse)
@@ -489,5 +537,8 @@ def remove_user(
 
     handle_membership_departure(target_member, db)
     db.commit()
+    logger.info(
+        "Workspace member removed workspace_id=%s user_id=%s", workspace_id, user_id
+    )
 
     return _workspace_response(get_workspace_by_id(workspace_id, db), caller_member)

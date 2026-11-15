@@ -22,3 +22,19 @@
   font-size: 0.875rem;
   color: var(--color-text-secondary);
 }
+
+.error-boundary__reload {
+  margin-top: 12px;
+  padding: 8px 18px;
+  border: none;
+  border-radius: var(--radius-control);
+  background: var(--color-brand-primary);
+  color: var(--color-text-on-brand);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.error-boundary__reload:hover {
+  background: var(--color-brand-primary-hover);
+}

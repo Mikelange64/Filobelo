@@ -2,8 +2,9 @@ import smtplib
 from email.message import EmailMessage
 from pathlib import Path
 
-from app.config import settings
 from fastapi.templating import Jinja2Templates
+
+from app.config import settings
 
 _TEMPLATES_DIR = Path(__file__).parent.parent.parent / "templates"
 templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
@@ -17,16 +18,22 @@ def send_email(
     message["From"] = settings.mail_from
     message["To"] = to_email
     message["Subject"] = subject
-    message.set_content(plain_text) # Some email clients do not render html, this is a fallback
+    message.set_content(
+        plain_text
+    )  # Some email clients do not render html, this is a fallback
 
     if html_content:
-        message.add_alternative(html_content, subtype="html")  # or clients that do render html
+        message.add_alternative(
+            html_content, subtype="html"
+        )  # or clients that do render html
 
     # Port 465 = implicit SSL (SMTP_SSL); port 587 = STARTTLS upgrade (SMTP + starttls())
     # timeout is required: without it a blocked/slow outbound connection hangs the
     # request indefinitely, which is especially bad with a single uvicorn worker.
     if settings.mail_port == 465:
-        with smtplib.SMTP_SSL(settings.mail_host, settings.mail_port, timeout=10) as smtp:
+        with smtplib.SMTP_SSL(
+            settings.mail_host, settings.mail_port, timeout=10
+        ) as smtp:
             if settings.mail_username and settings.mail_password:
                 smtp.login(
                     settings.mail_username,
@@ -44,7 +51,7 @@ def send_email(
                 )
             smtp.send_message(message)
 
-    
+
 def send_password_reset_email(to_email: str, username: str, token: str) -> None:
     reset_url = f"{settings.frontend_url}/reset-password?token={token}"
 
@@ -53,13 +60,13 @@ def send_password_reset_email(to_email: str, username: str, token: str) -> None:
     html_content = template.render(reset_url=reset_url, username=username)
 
     plain_text = f"""Hi {username},
-    
+
     You requested to reset your password. Click the link below to set a new password:
-    
+
     {reset_url}
-    
+
     If you didn't request this, you can safely ignore this email.
-    
+
     Best Regards,
     The Filobelo Team
     """

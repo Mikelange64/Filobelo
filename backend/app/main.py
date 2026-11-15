@@ -1,4 +1,16 @@
+import logging
+from contextlib import asynccontextmanager
 from pathlib import Path
+
+# Logging is configured before anything else is imported, so that log lines
+# written while the rest of the app loads already use the right format.
+from app.logging_config import (
+    RequestLoggingMiddleware,
+    setup_logging,
+    take_over_uvicorn_loggers,
+)
+
+setup_logging()
 
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
@@ -8,12 +20,35 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.superusers import superusers
-from app.routers import folders, tasks, users, workspaces, resources, conversations
-from app.database import DbSession
 from app.config import settings
+from app.database import DbSession
+from app.routers import conversations, folders, resources, tasks, users, workspaces
+from app.superusers import superusers
 
-app = FastAPI()
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Runs once when the server starts. `fastapi run` sets up its own logging
+    # after importing this file, so the uvicorn part is re-applied here (see
+    # take_over_uvicorn_loggers in app/logging_config.py for the full story).
+    take_over_uvicorn_loggers()
+    yield
+
+
+app = FastAPI(lifespan=lifespan)
+
+# Request logging: one line per request, the X-Request-ID header, and the
+# catch-all for unhandled exceptions (logged with traceback, answered with a
+# 500 {"message": ...}). See app/logging_config.py.
+#
+# Order matters: the middleware added LAST is the outermost one. This is
+# added before CORS so that CORS wraps it - which means the 500 response it
+# produces still gets CORS headers and the frontend can read it. (Side
+# effect: CORS preflight OPTIONS requests are answered by the CORS layer
+# and never reach this, so they are not logged. That is intended.)
+app.add_middleware(RequestLoggingMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
@@ -43,16 +78,29 @@ app.include_router(superusers.router, prefix="/api/superusers")
 # EXCEPTION HANDLER
 # ======================================================================================================================
 
+
 @app.get("/health")
 def health_check(db: DbSession):
     try:
         db.execute(text("SELECT 1"))
     except Exception as exc:
+        # One line without a traceback: an uptime checker polling this while
+        # the database is down would otherwise print a full traceback each time.
+        logger.error(
+            "Health check failed: database unavailable (%s)", type(exc).__name__
+        )
         raise HTTPException(
-            status_code = status.HTTP_503_SERVICE_UNAVAILABLE, detail = "Database Unavailable"
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database Unavailable",
         ) from exc
 
-    return {"status" : "healthy"}
+    return {"status": "healthy"}
+
+
+# Unhandled exceptions (anything that is not an HTTPException or a validation
+# error) are not handled here: RequestLoggingMiddleware catches them, logs the
+# traceback with the request id, and returns 500 {"message": "Internal server error"}.
+
 
 @app.exception_handler(StarletteHTTPException)
 def general_exception_handler(request: Request, exc: StarletteHTTPException):

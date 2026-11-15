@@ -1,9 +1,13 @@
+import logging
 import uuid
 from io import BytesIO
 from app.config import settings
 import filetype
 from PIL import Image, ImageOps
 from app.utils.image_utils import _get_s3_client
+
+# Same convention as image_utils.py: log the S3 failure once here, re-raise.
+logger = logging.getLogger(__name__)
 
 # filetype.guess() sniffs magic bytes; plain text has none, so it's detected
 # via a UTF-8 decode fallback in process_file() instead of appearing here.
@@ -91,17 +95,28 @@ def normalize_image(content: bytes, mime: str) -> bytes:
 def _upload_to_s3(file_bytes: bytes, key: str, mime:str):
     s3 = _get_s3_client()
     
-    s3.upload_fileobj(
-        BytesIO(file_bytes),
-        settings.s3_bucket_name,
-        key,
-        ExtraArgs={"ContentType": mime},
-    )
+    try:
+        s3.upload_fileobj(
+            BytesIO(file_bytes),
+            settings.s3_bucket_name,
+            key,
+            ExtraArgs={"ContentType": mime},
+        )
+    except Exception as exc:
+        logger.error(
+            "S3 upload failed key=%s size_bytes=%s: %s: %s",
+            key, len(file_bytes), type(exc).__name__, exc,
+        )
+        raise
 
 
 def _delete_from_s3(key: str) -> None:
     s3 = _get_s3_client()
-    s3.delete_object(Bucket=settings.s3_bucket_name, Key=key)
+    try:
+        s3.delete_object(Bucket=settings.s3_bucket_name, Key=key)
+    except Exception as exc:
+        logger.error("S3 delete failed key=%s: %s: %s", key, type(exc).__name__, exc)
+        raise
 
 
 def upload_file(file_bytes: bytes, filename: str, mime: str) -> None:

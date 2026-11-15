@@ -316,3 +316,113 @@ def test_delete_user_removes_s3_picture(
 
     # S3 object should be cleaned up
     assert count_s3_objects(mocked_s3, "test-bucket") == 0
+
+
+# ========================================================================================
+# REGISTER WITH A PROFILE PICTURE  (POST /with-picture)
+# ========================================================================================
+
+REGISTER_FORM = {
+    "username": "photouser",
+    "email": "photo@example.com",
+    "password": "testpassword",
+}
+
+
+def test_register_with_picture_success(client: TestClient, mocked_s3, test_image):
+    response = client.post(
+        f"{prefix}/with-picture",
+        data=REGISTER_FORM,
+        files={"file": ("profile.jpg", BytesIO(test_image), "image/jpeg")},
+    )
+
+    assert response.status_code == 201
+    data = response.json()
+    assert data["username"] == "photouser"
+    assert data["image_path"].startswith("https://")
+    assert data["image_path"].endswith(".jpeg")
+    assert count_s3_objects(mocked_s3, "test-bucket") == 1
+
+
+def test_register_with_picture_file_is_optional(client: TestClient, mocked_s3):
+    response = client.post(f"{prefix}/with-picture", data=REGISTER_FORM)
+
+    assert response.status_code == 201
+    assert count_s3_objects(mocked_s3, "test-bucket") == 0
+
+
+def test_register_with_picture_invalid_image_creates_no_account(
+    client: TestClient, mocked_s3
+):
+    response = client.post(
+        f"{prefix}/with-picture",
+        data=REGISTER_FORM,
+        files={"file": ("fake.txt", BytesIO(b"not an image"), "text/plain")},
+    )
+
+    assert response.status_code == 400
+    assert "Invalid image file" in response.json()["message"]
+    assert count_s3_objects(mocked_s3, "test-bucket") == 0
+
+    # The email is still free: nothing was created by the rejected attempt.
+    retry = client.post(f"{prefix}/with-picture", data=REGISTER_FORM)
+    assert retry.status_code == 201
+
+
+def test_register_with_picture_file_too_large(client: TestClient, mocked_s3):
+    large_content = b"x" * (5 * 1024 * 1024 + 1)
+
+    response = client.post(
+        f"{prefix}/with-picture",
+        data=REGISTER_FORM,
+        files={"file": ("large.jpg", BytesIO(large_content), "image/jpeg")},
+    )
+
+    assert response.status_code == 400
+    assert "File too large" in response.json()["message"]
+    assert count_s3_objects(mocked_s3, "test-bucket") == 0
+
+
+def test_register_with_picture_validates_fields(client: TestClient, test_image):
+    response = client.post(
+        f"{prefix}/with-picture",
+        data={**REGISTER_FORM, "password": "short"},
+        files={"file": ("profile.jpg", BytesIO(test_image), "image/jpeg")},
+    )
+
+    assert response.status_code == 422
+
+
+def test_register_with_picture_duplicate_email_uploads_nothing(
+    client: TestClient, mocked_s3, test_image
+):
+    client.post(f"{prefix}/with-picture", data=REGISTER_FORM)
+
+    response = client.post(
+        f"{prefix}/with-picture",
+        data={**REGISTER_FORM, "username": "otherphotouser"},
+        files={"file": ("profile.jpg", BytesIO(test_image), "image/jpeg")},
+    )
+
+    assert response.status_code == 400
+    assert count_s3_objects(mocked_s3, "test-bucket") == 0
+
+
+def test_register_with_picture_storage_failure_still_creates_account(
+    client: TestClient, test_image, monkeypatch
+):
+    """If the bucket is unreachable the signup still succeeds, without a picture."""
+
+    def broken_upload(file_bytes, filename):
+        raise RuntimeError("bucket unreachable")
+
+    monkeypatch.setattr("app.routers.users.upload_profile_image", broken_upload)
+
+    response = client.post(
+        f"{prefix}/with-picture",
+        data=REGISTER_FORM,
+        files={"file": ("profile.jpg", BytesIO(test_image), "image/jpeg")},
+    )
+
+    assert response.status_code == 201
+    assert not response.json()["image_path"].endswith(".jpeg")

@@ -1,7 +1,9 @@
 import { useState, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import WorkspaceListItem from './WorkspaceListItem'
 import StatusDot from '../shared/StatusDot'
 import ThemeToggle from '../shared/ThemeToggle'
+import ConfirmModal from '../shared/ConfirmModal'
 import { getWorkspaceUrgency } from '../../utils/workspaceStatus'
 import { SWATCH_COLORS } from '../../constants/colors'
 import './SidebarV2.css'
@@ -73,7 +75,7 @@ function ChevronIcon({ open }) {
     <svg
       width="12" height="12" viewBox="0 0 24 24"
       fill="none" stroke="currentColor" strokeWidth="2.5"
-      style={{ transform: open ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }}
+      className={`sidebar-v2__chevron-svg${open ? ' sidebar-v2__chevron-svg--open' : ''}`}
       aria-hidden="true"
     >
       <polyline points="9 18 15 12 9 6" />
@@ -81,9 +83,9 @@ function ChevronIcon({ open }) {
   )
 }
 
-function ColorPicker({ selected, onChange }) {
+function ColorPicker({ selected, onChange, inline = false }) {
   return (
-    <div className="sidebar-v2__color-picker">
+    <div className={`sidebar-v2__color-picker${inline ? ' sidebar-v2__color-picker--inline' : ''}`}>
       {FOLDER_COLORS.map((color) => (
         <button
           key={color}
@@ -98,9 +100,9 @@ function ColorPicker({ selected, onChange }) {
   )
 }
 
-function FolderCreateRow({ onCreate, onCancel }) {
+function FolderCreateRow({ onCreate, onCancel, initialColor = FOLDER_COLORS[0], placeholder = 'Folder name' }) {
   const [name, setName] = useState('')
-  const [color, setColor] = useState(FOLDER_COLORS[0])
+  const [color, setColor] = useState(initialColor)
   const [showPicker, setShowPicker] = useState(false)
   const inputRef = useRef(null)
   const pickerRef = useRef(null)
@@ -155,7 +157,7 @@ function FolderCreateRow({ onCreate, onCancel }) {
           ref={inputRef}
           type="text"
           className="sidebar-v2__folder-input"
-          placeholder="Folder name"
+          placeholder={placeholder}
           value={name}
           onChange={(e) => setName(e.target.value)}
           onKeyDown={handleKeyDown}
@@ -168,26 +170,90 @@ function FolderCreateRow({ onCreate, onCancel }) {
   )
 }
 
-function FolderItem({ folder, workspaces, folders, onDelete, onSelectWorkspace, onTogglePin, onArchive, onLeave, onMoveToFolder }) {
+// Flat folder list -> Map(parentId | null -> child folders). A folder whose
+// parent isn't in the list (shouldn't happen, but e.g. a stale cache) is
+// treated as top-level so it can never silently disappear from the sidebar.
+function groupFoldersByParent(folders) {
+  const ids = new Set(folders.map((f) => f.id))
+  const byParent = new Map()
+  for (const f of folders) {
+    const key = f.parent_id != null && ids.has(f.parent_id) ? f.parent_id : null
+    if (!byParent.has(key)) byParent.set(key, [])
+    byParent.get(key).push(f)
+  }
+  return byParent
+}
+
+// Renders one folder and, recursively, its subfolders - no depth limit. Each
+// level is its own FolderItem, so each keeps its own collapsed/expanded state,
+// and the nested .sidebar-v2__folder-children containers add one step of
+// indentation per level.
+function FolderItem({ folder, foldersByParent, workspaces, folders, onCreateFolder, onUpdateFolder, onDelete, onToast, onSelectWorkspace, onTogglePin, onArchive, onLeave, onMoveToFolder }) {
   const [expanded, setExpanded] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [menuView, setMenuView] = useState('main') // 'main' | 'color'
+  const [creatingChild, setCreatingChild] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
   const menuRef = useRef(null)
+
+  const childFolders = foldersByParent.get(folder.id) ?? []
+  const ownWorkspaces = workspaces.filter((ws) => ws.folderId === folder.id).sort(byMostRecent)
+  const isEmpty = childFolders.length === 0 && ownWorkspaces.length === 0
 
   useEffect(() => {
     if (!menuOpen) return
     function handleClickOutside(e) {
-      if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false)
+      if (menuRef.current && !menuRef.current.contains(e.target)) closeMenu()
+    }
+    function handleEscape(e) {
+      if (e.key === 'Escape') closeMenu()
     }
     document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
+    document.addEventListener('keydown', handleEscape)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+      document.removeEventListener('keydown', handleEscape)
+    }
   }, [menuOpen])
+
+  function closeMenu() {
+    setMenuOpen(false)
+    setMenuView('main')
+  }
+
+  function startSubfolder() {
+    closeMenu()
+    setExpanded(true)
+    setCreatingChild(true)
+  }
+
+  async function createChild(name, color) {
+    try {
+      await onCreateFolder?.(name, color, folder.id)
+    } catch (err) {
+      onToast?.(err?.message ?? 'Could not create folder')
+    } finally {
+      setCreatingChild(false)
+    }
+  }
+
+  async function changeColor(color) {
+    closeMenu()
+    if (color === folder.color) return
+    try {
+      await onUpdateFolder?.(folder.id, { color })
+    } catch (err) {
+      onToast?.(err?.message ?? 'Could not change folder colour')
+    }
+  }
 
   return (
     <div className="sidebar-v2__folder">
-      <div className="sidebar-v2__folder-row">
+      <div className={`sidebar-v2__folder-row${menuOpen ? ' sidebar-v2__folder-row--menu-open' : ''}`}>
         <button
           type="button"
           className="sidebar-v2__folder-toggle"
+          aria-expanded={expanded}
           onClick={() => setExpanded((v) => !v)}
         >
           <FolderIcon color={folder.color} open={expanded} />
@@ -201,26 +267,90 @@ function FolderItem({ folder, workspaces, folders, onDelete, onSelectWorkspace, 
           <button
             type="button"
             className="sidebar-v2__folder-menu-btn"
-            onClick={() => setMenuOpen((v) => !v)}
-            aria-label="Folder options"
+            onClick={() => (menuOpen ? closeMenu() : setMenuOpen(true))}
+            aria-label={`Folder options for ${folder.name}`}
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
           >
             <DotsIcon />
           </button>
-          {menuOpen && (
+          {menuOpen && menuView === 'main' && (
             <ul className="sidebar-v2__folder-menu">
               <li>
-                <button type="button" onClick={() => { onDelete(folder.id); setMenuOpen(false) }}>
+                <button type="button" className="sidebar-v2__folder-menu-item--neutral" onClick={startSubfolder}>
+                  New subfolder
+                </button>
+              </li>
+              <li>
+                <button type="button" className="sidebar-v2__folder-menu-item--neutral" onClick={() => setMenuView('color')}>
+                  Change colour
+                </button>
+              </li>
+              <li>
+                <button type="button" onClick={() => { setConfirmDelete(true); closeMenu() }}>
                   Delete folder
                 </button>
               </li>
             </ul>
           )}
+          {menuOpen && menuView === 'color' && (
+            <div className="sidebar-v2__folder-menu sidebar-v2__folder-menu--color" role="group" aria-label="Folder colour">
+              <ColorPicker inline selected={folder.color} onChange={changeColor} />
+            </div>
+          )}
         </div>
       </div>
 
-      {expanded && workspaces.length > 0 && (
+      {/* Portalled to <body> so the dialog is not clipped by the sidebar. */}
+      {confirmDelete && createPortal(
+        <ConfirmModal
+          title={`Delete "${folder.name}"?`}
+          message={isEmpty
+            ? 'This folder is empty.'
+            : 'Only the folder is removed. Its subfolders and workspaces move up one level.'}
+          confirmLabel="Delete folder"
+          danger
+          onConfirm={async () => {
+            try {
+              await onDelete(folder.id)
+            } finally {
+              setConfirmDelete(false)
+            }
+          }}
+          onCancel={() => setConfirmDelete(false)}
+        />,
+        document.body
+      )}
+
+      {expanded && (creatingChild || !isEmpty) && (
         <div className="sidebar-v2__folder-children">
-          {workspaces.map((ws) => (
+          {creatingChild && (
+            <FolderCreateRow
+              onCreate={createChild}
+              onCancel={() => setCreatingChild(false)}
+              initialColor={folder.color}
+              placeholder="Subfolder name"
+            />
+          )}
+          {childFolders.map((child) => (
+            <FolderItem
+              key={child.id}
+              folder={child}
+              foldersByParent={foldersByParent}
+              workspaces={workspaces}
+              folders={folders}
+              onCreateFolder={onCreateFolder}
+              onUpdateFolder={onUpdateFolder}
+              onDelete={onDelete}
+              onToast={onToast}
+              onSelectWorkspace={onSelectWorkspace}
+              onTogglePin={onTogglePin}
+              onArchive={onArchive}
+              onLeave={onLeave}
+              onMoveToFolder={onMoveToFolder}
+            />
+          ))}
+          {ownWorkspaces.map((ws) => (
             <WorkspaceListItem
               key={ws.id}
               workspace={ws}
@@ -235,8 +365,8 @@ function FolderItem({ folder, workspaces, folders, onDelete, onSelectWorkspace, 
         </div>
       )}
 
-      {expanded && workspaces.length === 0 && (
-        <p className="sidebar-v2__folder-empty">No workspaces</p>
+      {expanded && isEmpty && !creatingChild && (
+        <p className="sidebar-v2__folder-empty">Empty folder</p>
       )}
     </div>
   )
@@ -312,18 +442,22 @@ function WorkspaceSearchOverlay({ workspaces, onSelect, onClose }) {
 function SidebarV2({
   workspaces = [],
   completedCount = 0,
+  archivedCount = 0,
   folders = [],
   currentUser = null,
   onNewWorkspace,
   onOpenInbox,
   onOpenCompleted,
+  onOpenArchived,
   onSelectWorkspace,
   onTogglePin,
   onArchive,
   onLeave,
   onCreateFolder,
+  onUpdateFolder,
   onDeleteFolder,
   onMoveToFolder,
+  onToast,
   onProfileClick,
   onCalendarToggle,
   onNotificationsClick,
@@ -334,12 +468,14 @@ function SidebarV2({
 
   const pinned = workspaces.filter((ws) => ws.isPinned).sort(byMostRecent)
   const rest = workspaces.filter((ws) => !ws.isPinned).sort(byMostRecent)
+  const foldersByParent = groupFoldersByParent(folders)
+  const rootFolders = foldersByParent.get(null) ?? []
 
   async function handleCreate(name, color) {
     try {
       await onCreateFolder(name, color)
     } catch (err) {
-      console.error(err)
+      onToast?.(err?.message ?? 'Could not create folder')
     } finally {
       setCreatingFolder(false)
     }
@@ -399,13 +535,17 @@ function SidebarV2({
               <p className="sidebar-v2__empty-hint">No folders yet</p>
             )}
 
-            {folders.map((folder) => (
+            {rootFolders.map((folder) => (
               <FolderItem
                 key={folder.id}
                 folder={folder}
-                workspaces={workspaces.filter((ws) => ws.folderId === folder.id).sort(byMostRecent)}
+                foldersByParent={foldersByParent}
+                workspaces={workspaces}
                 folders={folders}
+                onCreateFolder={onCreateFolder}
+                onUpdateFolder={onUpdateFolder}
                 onDelete={onDeleteFolder}
+                onToast={onToast}
                 onSelectWorkspace={onSelectWorkspace}
                 onTogglePin={onTogglePin}
                 onArchive={onArchive}
@@ -463,14 +603,24 @@ function SidebarV2({
           )}
         </div>
 
+        {(completedCount > 0 || archivedCount > 0) && (
+          <div className="sidebar-v2__divider" />
+        )}
+
         {completedCount > 0 && (
-          <>
-            <div className="sidebar-v2__divider" />
-            <button type="button" className="sidebar-v2__completed-btn" onClick={onOpenCompleted}>
-              <span className="sidebar-v2__completed-label">Completed</span>
-              <span className="sidebar-v2__completed-count">{completedCount}</span>
-            </button>
-          </>
+          <button type="button" className="sidebar-v2__completed-btn" onClick={onOpenCompleted}>
+            <span className="sidebar-v2__completed-label">Completed</span>
+            <span className="sidebar-v2__completed-count">{completedCount}</span>
+          </button>
+        )}
+
+        {/* Same look as Completed (shares its classes). AppShell passes
+            archivedCount / onOpenArchived; hidden while there is nothing archived. */}
+        {archivedCount > 0 && (
+          <button type="button" className="sidebar-v2__completed-btn" onClick={onOpenArchived}>
+            <span className="sidebar-v2__completed-label">Archived</span>
+            <span className="sidebar-v2__completed-count">{archivedCount}</span>
+          </button>
         )}
 
         <div className="sidebar-v2__utility-row">

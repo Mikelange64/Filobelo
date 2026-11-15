@@ -128,6 +128,43 @@ def test_get_workspace_not_found(client: TestClient, user_auth_headers, workspac
     assert response.json()["message"] == "Workspace not found"
 
 
+def test_get_workspace_non_member_forbidden(
+    client: TestClient, workspace, db_session
+):
+    create_test_user(client, username="outsider", email="outsider@example.com")
+    verify_user_in_db(db_session, "outsider@example.com")
+    token = login_user(client, email="outsider@example.com")
+
+    response = client.get(f"{wsprefix}/{workspace['id']}", headers=auth_header(token))
+    assert_forbidden(response)
+    assert "title" not in response.json()
+
+
+def test_list_workspaces_pages_are_stable_and_complete(
+    client: TestClient, user_auth_headers
+):
+    created_ids = []
+    for i in range(5):
+        res = client.post(
+            wsprefix, json={"title": f"WS {i}"}, headers=user_auth_headers
+        )
+        created_ids.append(res.json()["id"])
+
+    seen = []
+    skip = 0
+    while True:
+        page = client.get(
+            f"{wsprefix}?skip={skip}&limit=2", headers=user_auth_headers
+        ).json()
+        seen.extend(ws["id"] for ws in page["workspaces"])
+        if not page["has_more"]:
+            break
+        skip += 2
+
+    # every workspace exactly once, newest first
+    assert seen == sorted(created_ids, reverse=True)
+
+
 # ========================================================================================
 # UPDATE WORKSPACE PARTIAL  (PATCH)
 # ========================================================================================

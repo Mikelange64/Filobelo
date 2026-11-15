@@ -7,6 +7,7 @@ import {
   getTokens,
   clearTokens,
 } from '../api/client'
+import { queryClient } from '../api/queryClient'
 
 const AuthContext = createContext(null)
 
@@ -36,6 +37,7 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     function handleExpired() {
+      queryClient.clear()
       setUser(null)
     }
     window.addEventListener('auth:expired', handleExpired)
@@ -44,12 +46,16 @@ export function AuthProvider({ children }) {
 
   async function login(emailOrUsername, password) {
     await loginRequest(emailOrUsername, password)
+    // The cache is keyed by what was fetched, not by who fetched it, so it
+    // must never survive a change of user - otherwise the next person to sign
+    // in on this browser would briefly be shown the previous user's data.
+    queryClient.clear()
     const me = await authFetch('/users/me')
     setUser(me)
   }
 
-  async function register(username, email, password) {
-    await registerRequest(username, email, password)
+  async function register(username, email, password, avatarFile = null) {
+    await registerRequest(username, email, password, avatarFile)
   }
 
   async function refreshUser() {
@@ -65,6 +71,7 @@ export function AuthProvider({ children }) {
       // server-side cleanup is best-effort; clear locally regardless
     }
     clearTokens()
+    queryClient.clear()
     setUser(null)
   }
 

@@ -54,3 +54,27 @@ export function formatDueDate(dueDate) {
   }
   return `${days}d left`
 }
+
+// ── <input type="date"> <-> stored due dates ────────────────────────────────
+// Due dates are stored as "midnight at the start of that day, in the user's
+// own timezone" (that's what the calendar pickers in the create modals send).
+// A date input, on the other hand, speaks bare "YYYY-MM-DD". Converting
+// between the two by string-slicing the ISO value, or by sending the bare
+// date to the server (which reads it as midnight UTC), shifts the date by a
+// day for anyone not on UTC - so always go through these two helpers.
+
+/** Stored ISO due date -> "YYYY-MM-DD" for a date input, in local time. */
+export function toDateInputValue(dueDate) {
+  if (!dueDate) return ''
+  const d = new Date(dueDate)
+  if (Number.isNaN(d.getTime())) return ''
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
+
+/** "YYYY-MM-DD" from a date input -> ISO string for local midnight that day, or null if empty. */
+export function dateInputToISO(value) {
+  if (!value) return null
+  const [year, month, day] = value.split('-').map(Number)
+  return new Date(year, month - 1, day).toISOString()
+}

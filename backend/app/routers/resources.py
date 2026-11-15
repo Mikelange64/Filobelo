@@ -7,7 +7,7 @@ from sqlalchemy import select
 
 from app.database import DbSession
 from app.config import settings
-from app.dependencies import require_membership
+from app.dependencies import require_membership, require_task_in_workspace
 from app.models import Resource, ResourceType, WorkspaceMember
 from app.utils import (
     process_file,
@@ -29,11 +29,20 @@ from app.schemas import (
 )
 
 
-router = APIRouter(prefix="/{workspace_id}/tasks/{task_id}/resource", tags=["resources"])
+# Every route here hangs off a task, so the task is tied to the URL's
+# workspace once at the router level rather than per endpoint - otherwise
+# membership of any one workspace would unlock every task's resources.
+router = APIRouter(
+    prefix="/{workspace_id}/tasks/{task_id}/resource",
+    tags=["resources"],
+    dependencies=[Depends(require_task_in_workspace)],
+)
 
 
-def _get_typed_resource(resource_id: int, expected_type: ResourceType, db: DbSession) -> Resource:
-    resource = get_resource_by_id(resource_id, db)
+def _get_typed_resource(
+    resource_id: int, task_id: int, expected_type: ResourceType, db: DbSession
+) -> Resource:
+    resource = get_resource_by_id(resource_id, task_id, db)
     if resource.type != expected_type:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Resource not found"
@@ -90,13 +99,13 @@ def list_links(task_id: int, db: DbSession):
 
 
 @router.get("/links/{link_id}", response_model=LinkResponse, dependencies=[Depends(require_membership)])
-def get_link(link_id: int, db: DbSession):
-    return _get_typed_resource(link_id, ResourceType.LINK, db)
+def get_link(task_id: int, link_id: int, db: DbSession):
+    return _get_typed_resource(link_id, task_id, ResourceType.LINK, db)
 
 
 @router.patch("/links/{link_id}", response_model=LinkResponse, dependencies=[Depends(require_membership)])
-def update_link(link_id: int, data: LinkUpdate, db: DbSession):
-    resource = _get_typed_resource(link_id, ResourceType.LINK, db)
+def update_link(task_id: int, link_id: int, data: LinkUpdate, db: DbSession):
+    resource = _get_typed_resource(link_id, task_id, ResourceType.LINK, db)
 
     update = data.model_dump(exclude_unset=True)
     for field, value in update.items():
@@ -136,13 +145,13 @@ def list_notes(task_id: int, db: DbSession):
 
 
 @router.get("/notes/{note_id}", response_model=NoteResponse, dependencies=[Depends(require_membership)])
-def get_note(note_id: int, db: DbSession):
-    return _get_typed_resource(note_id, ResourceType.NOTE, db)
+def get_note(task_id: int, note_id: int, db: DbSession):
+    return _get_typed_resource(note_id, task_id, ResourceType.NOTE, db)
 
 
 @router.patch("/notes/{note_id}", response_model=NoteResponse, dependencies=[Depends(require_membership)])
-def update_note(note_id: int, data: NoteUpdate, db: DbSession):
-    resource = _get_typed_resource(note_id, ResourceType.NOTE, db)
+def update_note(task_id: int, note_id: int, data: NoteUpdate, db: DbSession):
+    resource = _get_typed_resource(note_id, task_id, ResourceType.NOTE, db)
 
     update = data.model_dump(exclude_unset=True)
     for field, value in update.items():
@@ -220,8 +229,8 @@ def upload_resource_file(
     status_code=status.HTTP_204_NO_CONTENT,
     dependencies=[Depends(require_membership)],
 )
-def delete_resource(resource_id: int, db: DbSession):
-    resource = get_resource_by_id(resource_id, db)
+def delete_resource(task_id: int, resource_id: int, db: DbSession):
+    resource = get_resource_by_id(resource_id, task_id, db)
 
     if resource.type == ResourceType.FILE:
         delete_file(resource.file_key)

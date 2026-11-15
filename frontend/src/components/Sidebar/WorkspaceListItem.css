@@ -135,3 +135,18 @@
   margin-left: auto;
   opacity: 0.8;
 }
+
+/* "Move to folder" picker: nested folders are indented per level (inline
+   padding-left), long names truncate, and a long list scrolls. */
+.workspace-item__menu-list--folders {
+  max-height: 280px;
+  max-width: 240px;
+  overflow-y: auto;
+}
+
+.workspace-item__folder-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

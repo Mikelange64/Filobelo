@@ -1,21 +1,24 @@
-import { useState, useEffect } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { useOutletContext } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { listRecentConversations } from '../../api/client'
+import { keys } from '../../api/queryClient'
 import HomeCanvas from '../../components/Home/HomeCanvas'
 
 function HomeView() {
   const { user } = useAuth()
   const { activeWorkspaces, upcomingTasks, onSelectWorkspace, onNewWorkspace, onWorkspaceCompleted } = useOutletContext()
-  const [conversations, setConversations] = useState(null)
-
-  useEffect(() => {
-    let cancelled = false
-    listRecentConversations()
-      .then((data) => { if (!cancelled) setConversations(data) })
-      .catch(() => { if (!cancelled) setConversations([]) })
-    return () => { cancelled = true }
-  }, [])
+  const recentQuery = useQuery({
+    queryKey: keys.recentConversations,
+    queryFn: () => listRecentConversations(),
+    // Changes constantly (every message sent anywhere reorders it) and
+    // nothing else keeps it in sync, so always revalidate on arriving home.
+    // The cached copy is still shown instantly while that happens.
+    staleTime: 0,
+  })
+  // null = still loading (widget shows its loading state); a failed load with
+  // nothing cached falls back to an empty list, as before.
+  const conversations = recentQuery.data ?? (recentQuery.isError ? [] : null)
 
   return (
     <HomeCanvas

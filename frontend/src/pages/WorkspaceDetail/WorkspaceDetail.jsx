@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
     useParams,
     Link,
@@ -24,6 +25,7 @@ import {
     createLink,
     uploadResourceFile,
 } from "../../api/client";
+import { keys, writeCache } from "../../api/queryClient";
 import { getDaysRemaining, formatDueDate } from "../../utils/date";
 import { getWorkspaceUrgency } from "../../utils/workspaceStatus";
 import {
@@ -49,6 +51,7 @@ import SlideOver from "../../components/WorkspaceDetail/SlideOver";
 import FloatingActions from "../../components/WorkspaceDetail/FloatingActions";
 import NewTaskModal from "../../components/WorkspaceDetail/NewTaskModal";
 import KanbanBoard from "../../components/WorkspaceDetail/KanbanBoard";
+import ConfirmModal from "../../components/shared/ConfirmModal";
 import "./WorkspaceDetail.css";
 
 // ─── main component ─────────────────────────────────────────────────────────
@@ -59,6 +62,9 @@ const URGENCY_COLOR = {
     success: "var(--color-success)",
     neutral: "var(--color-neutral)",
 };
+
+// Stable fallback so "no tasks loaded yet" isn't a new [] on every render.
+const EMPTY = [];
 
 const TABS = [
     { id: "tasks", label: "Tasks" },
@@ -89,10 +95,6 @@ function WorkspaceDetail() {
     const [headerMenuOpen, setHeaderMenuOpen, headerMenuRef] =
         useDismissableMenu();
 
-  const [workspace, setWorkspace]               = useState(null)
-  const [tasks, setTasks]                       = useState([])
-  const [loading, setLoading]                   = useState(true)
-  const [error, setError]                       = useState(null)
   const [activeTab, setActiveTab]               = useState('tasks')
   const [completedOpen, setCompletedOpen]       = useState(false)
   const [selectedTaskId, setSelectedTaskId]     = useState(null)
@@ -100,10 +102,6 @@ function WorkspaceDetail() {
   const [slideOverLoading, setSlideOverLoading] = useState(false)
   const [slideOverWidth, setSlideOverWidth]     = useState(760)
   const [showNewTaskModal, setShowNewTaskModal] = useState(false)
-  const [detailMembers, setDetailMembers]       = useState(null)
-  const [membersLoading, setMembersLoading]     = useState(false)
-  const [conversations, setConversations]       = useState(null)
-  const [conversationsLoading, setConversationsLoading]       = useState(false)
   const [conversationsPanelOpen, setConversationsPanelOpen]   = useState(false)
   const [conversationsPanelWidth, setConversationsPanelWidth] = useState(880)
   const [conversationsRailWidth, setConversationsRailWidth]   = useState(280)
@@ -117,59 +115,117 @@ function WorkspaceDetail() {
   const [completingWorkspace, setCompletingWorkspace] = useState(false)
   const [showReopenModal, setShowReopenModal]         = useState(false)
   const [pendingTaskData, setPendingTaskData]         = useState(null)
+  // One confirmation dialog for the whole page: null, or
+  // { title, message, confirmLabel, onConfirm }.
+  const [confirmDialog, setConfirmDialog]             = useState(null)
+  // Identifies the latest task-detail request, so a slow response for a task
+  // the user has already clicked away from is ignored (see handleSelectTask).
+  const taskRequestRef = useRef(0)
 
-    useEffect(() => {
-        async function load() {
-            setLoading(true);
-            setError(null);
-            setSelectedTaskId(null);
-            setSlideOverTask(null);
-            setDetailMembers(null);
-            setConversations(null);
-            setSelectedConversationId(null);
-            setConversationsMode('WORKSPACE');
-            setConversationsPanelOpen(false);
-            try {
-                const data = await getWorkspace(workspaceId);
-                setWorkspace(normalizeWorkspace(data));
-                setTasks((data.tasks ?? []).map(normalizeTask));
-            } catch (err) {
-                setError(err.detail ?? "Could not load workspace");
-            } finally {
-                setLoading(false);
-            }
-        }
-        load();
-    }, [workspaceId]);
+  // ── Server data (cached) ──────────────────────────────────────────────────
+  // Each read is keyed by workspace id, so switching workspaces just points
+  // these at a different cache entry. A workspace opened before is shown from
+  // the cache immediately and refreshed in the background if it's gone stale.
+  const queryClient = useQueryClient()
+  const workspaceKey = keys.workspace(workspaceId)
+  const membersKey = keys.members(workspaceId)
+  const conversationsKey = keys.conversations(workspaceId)
 
-  async function loadDetailMembers() {
-    if (detailMembers !== null || membersLoading) return
-    setMembersLoading(true)
-    try {
-      const data = await getMembersWithRoles(workspaceId)
-      setDetailMembers(data.map((m) => ({
+  const workspaceQuery = useQuery({
+    queryKey: workspaceKey,
+    queryFn: async () => {
+      const data = await getWorkspace(workspaceId)
+      return {
+        workspace: normalizeWorkspace(data),
+        tasks: (data.tasks ?? []).map(normalizeTask),
+      }
+    },
+  })
+  const workspace = workspaceQuery.data?.workspace ?? null
+  const tasks = workspaceQuery.data?.tasks ?? EMPTY
+  const loading = workspaceQuery.isPending
+  // Only an error when there's nothing to show - if a background refresh
+  // fails, the cached copy stays on screen.
+  const error =
+    workspaceQuery.isError && !workspaceQuery.data
+      ? (workspaceQuery.error?.detail ?? "Could not load workspace")
+      : null
+
+  // The enriched (with-roles) member list is only needed on the Members tab.
+  const membersQuery = useQuery({
+    queryKey: membersKey,
+    queryFn: async () =>
+      (await getMembersWithRoles(workspaceId)).map((m) => ({
         id: m.id,
         name: m.username,
         avatarUrl: toAvatarUrl(m.image_path),
         role: m.role,
-      })))
-    } catch {
-      // fall back silently — basic member list shown
-    } finally {
-      setMembersLoading(false)
-    }
-  }
+      })),
+    enabled: activeTab === 'members',
+  })
+  // null while unloaded / on failure -> falls back to the basic member list
+  const detailMembers = membersQuery.data ?? null
+  const membersLoading = membersQuery.isLoading
 
-  async function ensureConversationsLoaded() {
-    if (conversations !== null) return conversations
-    setConversationsLoading(true)
-    try {
-      const data = await listConversations(workspaceId)
-      setConversations(data)
-      return data
-    } finally {
-      setConversationsLoading(false)
-    }
+  const fetchConversations = () => listConversations(workspaceId)
+  const conversationsQuery = useQuery({
+    queryKey: conversationsKey,
+    queryFn: fetchConversations,
+    enabled: conversationsPanelOpen,
+    // While the panel is open, re-read the list so every row (not only the
+    // open thread, which polls its own messages) picks up new activity:
+    // order, timestamps, conversations other members just created. TanStack
+    // pauses this by itself while the browser tab is hidden.
+    refetchInterval: conversationsPanelOpen ? 15 * 1000 : false,
+  })
+  const conversations = conversationsQuery.data ?? null
+  const conversationsLoading = conversationsQuery.isLoading
+
+  // Same call shape as the useState setters these replaced, so the handlers
+  // below (and their optimistic updates / rollbacks) are unchanged - they now
+  // read and write the cache.
+  const setWorkspace = (updater) =>
+    writeCache(workspaceKey, (old) =>
+      old && {
+        ...old,
+        workspace: typeof updater === 'function' ? updater(old.workspace) : updater,
+      }
+    )
+  const setTasks = (updater) =>
+    writeCache(workspaceKey, (old) =>
+      old && {
+        ...old,
+        tasks: typeof updater === 'function' ? updater(old.tasks) : updater,
+      }
+    )
+  const setDetailMembers = (updater) =>
+    writeCache(membersKey, (old) =>
+      (typeof updater === 'function' ? updater(old ?? null) : updater) ?? undefined
+    )
+  const setConversations = (updater) =>
+    writeCache(conversationsKey, (old) =>
+      typeof updater === 'function' ? updater(old ?? null) : updater
+    )
+
+  // Purely local UI state still has to be reset by hand when the route moves
+  // to a different workspace (this component stays mounted across that).
+  useEffect(() => {
+    setSelectedTaskId(null);
+    setSlideOverTask(null);
+    setSelectedConversationId(null);
+    setConversationsMode('WORKSPACE');
+    setConversationsPanelOpen(false);
+    setConfirmDialog(null);
+  }, [workspaceId]);
+
+  // Resolves with the conversation list: straight from the cache if it's
+  // fresh, otherwise after fetching. Shares one request with the
+  // conversationsQuery above when both ask at the same time.
+  function ensureConversationsLoaded() {
+    return queryClient.fetchQuery({
+      queryKey: conversationsKey,
+      queryFn: fetchConversations,
+    })
   }
 
   function lastOpenedConversationId(list) {
@@ -217,8 +273,7 @@ function WorkspaceDetail() {
   }
 
   function handleTabChange(tabId) {
-    setActiveTab(tabId)
-    if (tabId === 'members') loadDetailMembers()
+    setActiveTab(tabId) // switching to 'members' enables membersQuery
   }
 
   // Each of the two entry points (the floating "Ask Filobelo" button and the
@@ -277,6 +332,11 @@ function WorkspaceDetail() {
   }
 
     async function handleSelectTask(taskId) {
+        // Clicking task A then task B fires two requests that can finish in
+        // either order. Without this guard A's response could land last and
+        // put A's description under B - and editing it would then save A's
+        // text into B. Only the most recent request may update the panel.
+        const requestId = ++taskRequestRef.current;
         setSelectedTaskId(taskId);
         setSlideOverTask(null);
         setSlideOverLoading(true);
@@ -284,17 +344,20 @@ function WorkspaceDetail() {
             const data = await authFetch(
                 `/workspaces/${workspaceId}/tasks/${taskId}`,
             );
+            if (requestId !== taskRequestRef.current) return;
             setSlideOverTask(data);
         } catch {
             // slide-over opens without description
         } finally {
-            setSlideOverLoading(false);
+            if (requestId === taskRequestRef.current) setSlideOverLoading(false);
         }
     }
 
     function handleCloseSlideOver() {
+        taskRequestRef.current++; // abandon any in-flight task request
         setSelectedTaskId(null);
         setSlideOverTask(null);
+        setSlideOverLoading(false);
     }
 
     async function handleToggleTask(taskId) {
@@ -481,10 +544,10 @@ function WorkspaceDetail() {
     }
 
     function handleMemberAdded() {
-        // Reload enriched member list after invite
-        setDetailMembers(null);
-        setMembersLoading(false);
-        loadDetailMembers();
+        // Reload after invite: the roles list, plus the workspace itself (its
+        // own member list feeds the header avatars and task assignment).
+        queryClient.invalidateQueries({ queryKey: membersKey });
+        queryClient.invalidateQueries({ queryKey: workspaceKey, exact: true });
     }
 
     function handleWorkspaceUpdate({ title, description, dueDate }) {
@@ -527,9 +590,39 @@ function WorkspaceDetail() {
         }
     }
 
-    async function handleLeaveWorkspace() {
-        await shellLeave(workspaceId);
-        navigate("/");
+    // Leaving is confirmed in a modal wherever it's triggered from (Settings
+    // danger zone, Members tab). When the user is the only member, leaving
+    // deletes the workspace, so the wording changes to say so.
+    function handleLeaveWorkspace() {
+        const isSoleMember = workspace.members.length === 1;
+        setConfirmDialog({
+            title: isSoleMember ? "Delete workspace?" : "Leave workspace?",
+            message: isSoleMember
+                ? "You're the only member, so this permanently deletes the workspace and all its tasks. There is no undo."
+                : "You will lose access to its tasks and conversations.",
+            confirmLabel: isSoleMember ? "Delete" : "Leave",
+            onConfirm: async () => {
+                await shellLeave(workspaceId);
+                setConfirmDialog(null);
+                navigate("/");
+            },
+        });
+    }
+
+    // Dropping a card on the Kanban trash is easy to do by accident, and a
+    // deleted task takes its notes, links and files with it.
+    function handleKanbanTrashDrop(taskId) {
+        const task = tasks.find((t) => t.id === taskId);
+        if (!task) return;
+        setConfirmDialog({
+            title: "Delete task?",
+            message: `"${task.title}" and everything attached to it will be permanently deleted.`,
+            confirmLabel: "Delete",
+            onConfirm: async () => {
+                setConfirmDialog(null);
+                await handleDeleteTask(taskId);
+            },
+        });
     }
 
     if (loading) {
@@ -926,7 +1019,7 @@ function WorkspaceDetail() {
                         onSelect={handleSelectTask}
                         onStatusChange={handleTaskStatusChange}
                         onAddTask={() => setShowNewTaskModal(true)}
-                        onDelete={handleDeleteTask}
+                        onDelete={handleKanbanTrashDrop}
                     />
                 )}
 
@@ -1171,6 +1264,17 @@ function WorkspaceDetail() {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {confirmDialog && (
+                <ConfirmModal
+                    title={confirmDialog.title}
+                    message={confirmDialog.message}
+                    confirmLabel={confirmDialog.confirmLabel}
+                    danger
+                    onConfirm={confirmDialog.onConfirm}
+                    onCancel={() => setConfirmDialog(null)}
+                />
             )}
         </div>
     );

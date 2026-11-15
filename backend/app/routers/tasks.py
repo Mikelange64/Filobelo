@@ -81,16 +81,18 @@ def list_tasks(
 @router.get(
     "/{task_id}", response_model=TaskResponse, dependencies=[Depends(require_membership)]
 )
-def get_task(task_id: int, db: DbSession):
-    task = get_task_by_id(task_id, db)
+def get_task(workspace_id: int, task_id: int, db: DbSession):
+    task = get_task_by_id(task_id, workspace_id, db)
     return task
 
 
 @router.patch(
     "/{task_id}/", response_model=TaskResponse, dependencies=[Depends(require_membership)]
 )
-def update_task_partial(task_id: int, task_data: TaskUpdate, db: DbSession):
-    task = get_task_by_id(task_id, db)
+def update_task_partial(
+    workspace_id: int, task_id: int, task_data: TaskUpdate, db: DbSession
+):
+    task = get_task_by_id(task_id, workspace_id, db)
 
     update = task_data.model_dump(exclude_unset=True)
     for field, value in update.items():
@@ -103,12 +105,13 @@ def update_task_partial(task_id: int, task_data: TaskUpdate, db: DbSession):
 
 @router.put("/{task_id}", response_model=TaskResponse)
 def update_task_full(
+    workspace_id: int,
     task_id: int,
     task_data: TaskFullUpdate,
     db: DbSession,
     member: Annotated[WorkspaceMember, Depends(require_membership)],
 ):
-    task = get_task_by_id(task_id, db)
+    task = get_task_by_id(task_id, workspace_id, db)
     if task.owner_id != member.user_id and member.role != "admin":
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -131,11 +134,12 @@ def update_task_full(
 
 @router.delete("/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_task(
+    workspace_id: int,
     task_id: int,
     db: DbSession,
     member: Annotated[WorkspaceMember, Depends(require_membership)],
 ):
-    task = get_task_by_id(task_id, db)
+    task = get_task_by_id(task_id, workspace_id, db)
     if task.owner_id != member.user_id and member.role != "admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -148,8 +152,10 @@ def delete_task(
 @router.patch(
     "/{task_id}/status", response_model=TaskResponse, dependencies=[Depends(require_membership)]
 )
-def update_task_status(task_id: int, status_data: TaskStatusUpdate, db: DbSession):
-    task = get_task_by_id(task_id, db)
+def update_task_status(
+    workspace_id: int, task_id: int, status_data: TaskStatusUpdate, db: DbSession
+):
+    task = get_task_by_id(task_id, workspace_id, db)
     task.status = status_data.status
     task.completed_at = (
         datetime.now(UTC) if status_data.status == TaskStatus.DONE else None
@@ -167,7 +173,7 @@ def reassign_task(
     db: DbSession,
     member: Annotated[WorkspaceMember, Depends(require_membership)],
 ):
-    task = get_task_by_id(task_id, db)
+    task = get_task_by_id(task_id, workspace_id, db)
     if task.owner_id != member.user_id and member.role != "admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

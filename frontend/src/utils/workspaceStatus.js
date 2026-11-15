@@ -19,7 +19,10 @@ export function getWorkspaceStatus({ numOfTasks = 0, progress = 0 }) {
  * only (no per-task due dates available at the list level yet). */
 export function isWorkspaceLate({ dueDate, progress = 0 }) {
   if (!dueDate || progress >= 100) return false
-  return new Date(dueDate).getTime() < Date.now()
+  // Same day-granularity as the "Due today" / "1d overdue" labels: a
+  // workspace due today is not late until the day is over, otherwise it
+  // would show red while its badge still reads "Due today".
+  return getDaysRemaining(dueDate) < 0
 }
 
 /** Active = not explicitly completed, not archived. Uses the is_completed flag. */

@@ -99,6 +99,10 @@ function CalendarModal({ workspaces = [], onClose, onSelectWorkspace, onNewWorks
 
   useEffect(() => {
     function onKey(e) {
+      // Arrow keys belong to whatever the user is typing in (e.g. the title
+      // field of the New workspace modal, which opens on top of this one).
+      const el = e.target
+      if (el?.tagName === 'INPUT' || el?.tagName === 'TEXTAREA' || el?.isContentEditable) return
       if (e.key === 'ArrowLeft') prevMonth()
       else if (e.key === 'ArrowRight') nextMonth()
     }

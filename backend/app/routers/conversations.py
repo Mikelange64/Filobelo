@@ -1,8 +1,8 @@
 from datetime import UTC, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import func, select
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import and_, func, or_, select
 
 from app.auth import CurrentUser
 from app.bot_service import filobelo_bot
@@ -207,6 +207,26 @@ def send_message(
     return new_message
 
 
+def _get_cursor_message(message_id: int, conversation_id: int, db: DbSession) -> Message:
+    # scoped to conversation_id (itself already scoped to the workspace) so a
+    # cursor can never be used to position inside, or read from, another
+    # conversation by guessing a message id
+    message = (
+        db.execute(
+            select(Message).where(
+                Message.id == message_id, Message.conversation_id == conversation_id
+            )
+        )
+        .scalars()
+        .first()
+    )
+    if not message:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Message not found"
+        )
+    return message
+
+
 @router.get(
     "/{conversation_id}/messages",
     response_model=PaginatedMessageResponse,
@@ -216,27 +236,97 @@ def list_messages(
     conversation_id: int,
     workspace_id: int,
     db: DbSession,
-    skip: int = 0,
-    limit: int = 50,
+    skip: Annotated[int | None, Query(ge=0)] = None,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    before_id: int | None = None,
+    after_id: Annotated[int | None, Query(ge=0)] = None,
 ):
+    """Messages are always returned in chronological order (created_at, id).
+
+    - no cursor: the newest `limit` messages; has_more = older ones exist
+    - before_id: the `limit` messages immediately older than that message;
+      has_more = even older ones exist
+    - after_id: the `limit` messages immediately newer than that message;
+      has_more = even newer ones exist (used for polling). after_id=0 means
+      "from the very first message", for a client that has none yet
+    - skip: legacy offset paging from the oldest message
+    """
+    if sum(p is not None for p in (skip, before_id, after_id)) > 1:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Use only one of skip, before_id or after_id",
+        )
+
     conversation = get_conversation_by_id(conversation_id, workspace_id, db)
-    conversation.last_opened_at = datetime.now(UTC)
-    db.commit()
 
     base = select(Message).where(Message.conversation_id == conversation_id)
+    oldest_first = (Message.created_at.asc(), Message.id.asc())
+    newest_first = (Message.created_at.desc(), Message.id.desc())
+
+    if before_id is not None or after_id is not None:
+        # Cursor reads (scrolling back, polling) do not count as opening the
+        # conversation, so they stay read-only - no write per poll.
+        if before_id is not None:
+            cursor = _get_cursor_message(before_id, conversation_id, db)
+            query = base.where(
+                or_(
+                    Message.created_at < cursor.created_at,
+                    and_(
+                        Message.created_at == cursor.created_at,
+                        Message.id < cursor.id,
+                    ),
+                )
+            ).order_by(*newest_first)
+        elif after_id == 0:
+            query = base.order_by(*oldest_first)
+        else:
+            cursor = _get_cursor_message(after_id, conversation_id, db)
+            query = base.where(
+                or_(
+                    Message.created_at > cursor.created_at,
+                    and_(
+                        Message.created_at == cursor.created_at,
+                        Message.id > cursor.id,
+                    ),
+                )
+            ).order_by(*oldest_first)
+
+        messages = list(db.execute(query.limit(limit + 1)).scalars().all())
+        has_more = len(messages) > limit
+        messages = messages[:limit]
+        if before_id is not None:
+            messages.reverse()
+    else:
+        conversation.last_opened_at = datetime.now(UTC)
+        db.commit()
+
+        if skip is not None:
+            messages = list(
+                db.execute(base.order_by(*oldest_first).offset(skip).limit(limit))
+                .scalars()
+                .all()
+            )
+            has_more = None  # derived from total below
+        else:
+            messages = list(
+                db.execute(base.order_by(*newest_first).limit(limit + 1))
+                .scalars()
+                .all()
+            )
+            has_more = len(messages) > limit
+            messages = messages[:limit]
+            messages.reverse()
+
     total = db.execute(select(func.count()).select_from(base.subquery())).scalar() or 0
-    messages = (
-        db.execute(base.order_by(Message.created_at).offset(skip).limit(limit))
-        .scalars()
-        .all()
-    )
+    if has_more is None:
+        has_more = skip + limit < total
 
     return PaginatedMessageResponse(
         messages=messages,
         total=total,
         skip=skip,
         limit=limit,
-        has_more=skip + limit < total,
+        has_more=has_more,
     )
 
 

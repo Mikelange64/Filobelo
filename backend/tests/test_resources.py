@@ -7,6 +7,7 @@ from tests.auth_helpers import (
     auth_header,
     create_task,
     create_test_user,
+    create_workspace,
     login_user,
     verify_user_in_db,
 )
@@ -714,3 +715,77 @@ def test_list_resources_non_member(client: TestClient, db_session, workspace, ta
         headers=outsider_headers(client, db_session),
     )
     assert_forbidden(response)
+
+
+# ========================================================================================
+# CROSS-WORKSPACE / CROSS-TASK ISOLATION
+# ========================================================================================
+# The attacker is a legitimate member of their OWN workspace and puts that
+# workspace's id in the URL (so require_membership passes) alongside a task
+# or resource id belonging to someone else.
+
+
+@pytest.fixture
+def attacker_ws(client, second_user_token):
+    return create_workspace(client, second_user_token, title="Attacker WS")
+
+
+@pytest.mark.parametrize(
+    "method, suffix, body",
+    [
+        pytest.param("get", "/", None, id="list_all"),
+        pytest.param("get", "/links", None, id="list_links"),
+        pytest.param("get", "/notes", None, id="list_notes"),
+        pytest.param("get", "/files", None, id="list_files"),
+        pytest.param(
+            "post", "/links", {"title": "x", "url": "https://example.com"}, id="add_link"
+        ),
+        pytest.param("post", "/notes", {"title": "x", "content": "y"}, id="add_note"),
+    ],
+)
+def test_resources_of_foreign_task_not_reachable(
+    client, user_token, workspace, task, second_user_token, attacker_ws,
+    method, suffix, body,
+):
+    create_link(client, user_token, workspace["id"], task["id"])
+
+    response = client.request(
+        method,
+        resource_path(attacker_ws["id"], task["id"], suffix),
+        json=body,
+        headers=auth_header(second_user_token),
+    )
+    assert response.status_code == 404
+
+    # nothing was added to the victim's task
+    listing = client.get(
+        resource_path(workspace["id"], task["id"], "/"), headers=auth_header(user_token)
+    )
+    assert len(listing.json()) == 1
+
+
+def test_resource_not_reachable_through_own_task(
+    client, user_token, workspace, task, second_user_token, attacker_ws
+):
+    """Valid workspace + valid task of the attacker's own, but a resource id
+    that belongs to a different task."""
+    victim_link = create_link(client, user_token, workspace["id"], task["id"])
+    attacker_task = create_task(client, second_user_token, attacker_ws["id"])
+    headers = auth_header(second_user_token)
+    base = resource_path(attacker_ws["id"], attacker_task["id"])
+
+    assert client.get(f"{base}/links/{victim_link['id']}", headers=headers).status_code == 404
+    assert (
+        client.patch(
+            f"{base}/links/{victim_link['id']}", json={"title": "hijacked"}, headers=headers
+        ).status_code
+        == 404
+    )
+    assert client.delete(f"{base}/{victim_link['id']}", headers=headers).status_code == 404
+
+    still_there = client.get(
+        resource_path(workspace["id"], task["id"], f"/links/{victim_link['id']}"),
+        headers=auth_header(user_token),
+    )
+    assert still_there.status_code == 200
+    assert still_there.json()["title"] == victim_link["title"]

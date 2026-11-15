@@ -239,47 +239,41 @@ function NewWorkspaceModal({ onClose, onCreate, defaultDueDate = null }) {
 
             <div className="nwm-field-col">
               <span className="nwm-field-label">Max members</span>
-              {customMaxMode ? (
-                <div className="nwm-max-custom">
+              {/* Presets always stay put. Choosing Custom swaps only the
+                  Custom button for an input of the same size, in the same
+                  spot, so the modal doesn't jump or lose the presets. */}
+              <div className="nwm-segmented">
+                {MAX_MEMBER_PRESETS.map((p) => (
+                  <button
+                    key={p || 'none'}
+                    type="button"
+                    className={`nwm-segmented__btn${!customMaxMode && maxMembers === p ? ' nwm-segmented__btn--active' : ''}`}
+                    onClick={() => { setCustomMaxMode(false); setMaxMembers(p) }}
+                  >
+                    {MAX_MEMBER_LABELS[p]}
+                  </button>
+                ))}
+                {customMaxMode ? (
                   <input
                     type="text"
                     inputMode="numeric"
-                    className="nwm-max-custom-input"
-                    placeholder="Members"
+                    className={`nwm-max-custom-input nwm-max-custom-input--inline${maxMembersValid ? '' : ' nwm-max-custom-input--invalid'}`}
+                    placeholder="Custom"
+                    aria-label="Custom maximum number of members"
                     value={maxMembers}
                     onChange={(e) => setMaxMembers(e.target.value)}
                     autoFocus
                   />
-                  <button
-                    type="button"
-                    className="nwm-max-custom-back"
-                    onClick={() => { setCustomMaxMode(false); setMaxMembers('') }}
-                    aria-label="Use preset instead"
-                  >
-                    ✕
-                  </button>
-                </div>
-              ) : (
-                <div className="nwm-segmented">
-                  {MAX_MEMBER_PRESETS.map((p) => (
-                    <button
-                      key={p || 'none'}
-                      type="button"
-                      className={`nwm-segmented__btn${maxMembers === p ? ' nwm-segmented__btn--active' : ''}`}
-                      onClick={() => setMaxMembers(p)}
-                    >
-                      {MAX_MEMBER_LABELS[p]}
-                    </button>
-                  ))}
+                ) : (
                   <button
                     type="button"
                     className="nwm-segmented__btn nwm-segmented__btn--custom"
-                    onClick={() => setCustomMaxMode(true)}
+                    onClick={() => { setCustomMaxMode(true); setMaxMembers('') }}
                   >
                     Custom
                   </button>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           </div>
 

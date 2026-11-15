@@ -610,3 +610,47 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* ── Folder tree additions (subfolders, colour change, plain open/close) ── */
+
+/* Open/close: contents simply appear - no slide, bounce or stagger. The only
+   motion is this short chevron turn, and none at all under reduced motion. */
+.sidebar-v2__chevron-svg { transition: transform 0.12s linear; }
+.sidebar-v2__chevron-svg--open { transform: rotate(90deg); }
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar-v2__chevron-svg,
+  .sidebar-v2__color-dot,
+  .sidebar-v2__color-swatch,
+  .sidebar-v2__folder-menu-wrap { transition: none; }
+
+  .sidebar-v2__color-dot:hover,
+  .sidebar-v2__color-swatch:hover { transform: none; }
+}
+
+/* Keep the "..." button visible while its menu is open or focused, not only
+   on hover (it was unreachable by keyboard otherwise). */
+.sidebar-v2__folder-row--menu-open .sidebar-v2__folder-menu-wrap,
+.sidebar-v2__folder-menu-wrap:focus-within { opacity: 1; }
+
+/* Non-destructive folder menu entries (the base rule colours every entry as
+   an error, which was right while "Delete folder" was the only one). */
+.sidebar-v2__folder-menu li button.sidebar-v2__folder-menu-item--neutral {
+  color: var(--color-text-primary);
+}
+
+/* "Change colour": the creation swatch grid, laid out inside the menu panel
+   instead of as its own floating popover. */
+.sidebar-v2__folder-menu--color { min-width: 0; padding: 10px; }
+
+.sidebar-v2__color-picker--inline {
+  position: static;
+  padding: 0;
+  border: none;
+  box-shadow: none;
+  background: transparent;
+  grid-template-columns: repeat(4, 20px);
+}
+
+/* Utility row: the theme slider is wider than the icon it replaced. */
+.sidebar-v2__utility-row { gap: 6px; }

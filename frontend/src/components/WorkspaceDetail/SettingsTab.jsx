@@ -1,26 +1,41 @@
 import { useState } from 'react'
 import { patchWorkspace } from '../../api/client'
-import { formatDueDate } from '../../utils/date'
+import { formatDueDate, toDateInputValue, dateInputToISO } from '../../utils/date'
+import useDelayedFlag from '../../hooks/useDelayedFlag'
 
 export default function SettingsTab({ workspace, isAdmin, workspaceId, onWorkspaceUpdate, onLeave, onArchive, onComplete, onReopen, onToast }) {
   const [title, setTitle] = useState(workspace.title)
-  const [description, setDescription] = useState(workspace.description)
-  const [dueDate, setDueDate] = useState(
-    workspace.dueDate ? workspace.dueDate.split('T')[0] : ''
-  )
+  // Description is optional (a workspace can be created without one), so it
+  // can arrive as null and is allowed to be saved empty.
+  const [description, setDescription] = useState(workspace.description ?? '')
+  const [dueDate, setDueDate] = useState(toDateInputValue(workspace.dueDate))
   const [saving, setSaving] = useState(false)
-  const [confirmLeave, setConfirmLeave] = useState(false)
+  const [justSaved, setJustSaved] = useState(false)
+  // Saving is normally near-instant, so "Saving…" only appears if it drags on.
+  const showSaving = useDelayedFlag(saving, 1000)
   const isSoleMember = workspace.members?.length === 1
 
+  const trimTitle = title.trim()
+  const trimDesc = description.trim()
+  const isDirty =
+    trimTitle !== workspace.title ||
+    trimDesc !== (workspace.description ?? '') ||
+    dueDate !== toDateInputValue(workspace.dueDate)
+  const canSave = isDirty && trimTitle.length > 0 && !saving
+
   async function handleSave() {
-    const trimTitle = title.trim()
-    const trimDesc = description.trim()
-    if (!trimTitle || !trimDesc) return
+    if (!canSave) return
     setSaving(true)
     try {
-      const patch = { title: trimTitle, description: trimDesc, due_date: dueDate || null }
-      await patchWorkspace(workspaceId, patch)
-      onWorkspaceUpdate({ title: trimTitle, description: trimDesc, dueDate: dueDate || null })
+      const dueDateISO = dateInputToISO(dueDate)
+      await patchWorkspace(workspaceId, {
+        title: trimTitle,
+        description: trimDesc || null,
+        due_date: dueDateISO,
+      })
+      onWorkspaceUpdate({ title: trimTitle, description: trimDesc || null, dueDate: dueDateISO })
+      setJustSaved(true)
+      setTimeout(() => setJustSaved(false), 2000)
     } catch (err) {
       onToast?.(err.detail ?? 'Could not save changes')
     } finally {
@@ -58,8 +73,8 @@ export default function SettingsTab({ workspace, isAdmin, workspaceId, onWorkspa
         </div>
 
         {isAdmin && (
-          <button type="button" className="settings-save-btn" onClick={handleSave} disabled={saving}>
-            {saving ? 'Saving…' : 'Save changes'}
+          <button type="button" className="settings-save-btn" onClick={handleSave} disabled={!canSave}>
+            {showSaving ? 'Saving…' : justSaved && !isDirty ? 'Saved ✓' : 'Save changes'}
           </button>
         )}
       </section>
@@ -97,47 +112,30 @@ export default function SettingsTab({ workspace, isAdmin, workspaceId, onWorkspa
         <h2 className="settings-section__title">Danger zone</h2>
 
         <div className="settings-danger-row">
-          {isSoleMember && confirmLeave ? (
-            <>
-              <div>
-                <p className="settings-danger-label">Are you sure?</p>
-                <p className="settings-danger-desc">You're the last member — leaving permanently deletes the workspace and all its tasks. There is no undo.</p>
-              </div>
-              <div className="settings-danger-confirm">
-                <button type="button" className="settings-danger-btn settings-danger-btn--critical" onClick={onLeave}>
-                  Yes, delete
-                </button>
-                <button type="button" className="settings-danger-btn" onClick={() => setConfirmLeave(false)}>
-                  Cancel
-                </button>
-              </div>
-            </>
-          ) : (
-            <>
-              <div>
-                <p className="settings-danger-label">{isSoleMember ? 'Delete workspace' : 'Leave workspace'}</p>
-                <p className="settings-danger-desc">
-                  {isSoleMember
-                    ? "You're the only member — this permanently deletes the workspace and all its tasks."
-                    : 'You will lose access to all tasks and discussions.'}
-                </p>
-              </div>
-              <button
-                type="button"
-                className={`settings-danger-btn${isSoleMember ? ' settings-danger-btn--critical' : ''}`}
-                onClick={() => (isSoleMember ? setConfirmLeave(true) : onLeave())}
-              >
-                {isSoleMember ? 'Delete' : 'Leave'}
-              </button>
-            </>
-          )}
+          <div>
+            <p className="settings-danger-label">{isSoleMember ? 'Delete workspace' : 'Leave workspace'}</p>
+            <p className="settings-danger-desc">
+              {isSoleMember
+                ? "You're the only member — this permanently deletes the workspace and all its tasks."
+                : 'You will lose access to all tasks and discussions.'}
+            </p>
+          </div>
+          {/* Confirmation is a modal owned by the page (onLeave opens it), so
+              this row never changes shape. */}
+          <button
+            type="button"
+            className={`settings-danger-btn${isSoleMember ? ' settings-danger-btn--critical' : ''}`}
+            onClick={onLeave}
+          >
+            {isSoleMember ? 'Delete' : 'Leave'}
+          </button>
         </div>
 
         {isAdmin && (
           <div className="settings-danger-row">
             <div>
               <p className="settings-danger-label">Archive workspace</p>
-              <p className="settings-danger-desc">Hides this workspace from the active list. Can be restored.</p>
+              <p className="settings-danger-desc">Hides this workspace from the active list. Restore it any time from Archived in the sidebar.</p>
             </div>
             <button type="button" className="settings-danger-btn" onClick={onArchive}>
               Archive

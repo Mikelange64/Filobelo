@@ -223,3 +223,226 @@ def test_delete_folder_other_users_folder(
 def test_delete_folder_no_auth(client: TestClient, folder):
     response = client.delete(f"{folderprefix}/{folder['id']}")
     assert response.status_code == 401
+
+
+# ========================================================================================
+# SUBFOLDERS  (parent_id)
+# ========================================================================================
+
+
+def make_folder(client, headers, name="Folder", parent_id=None):
+    payload = {"name": name, "color": "#6366F1"}
+    if parent_id is not None:
+        payload["parent_id"] = parent_id
+    response = client.post(folderprefix, json=payload, headers=headers)
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
+def list_by_id(client, headers):
+    response = client.get(folderprefix, headers=headers)
+    assert response.status_code == 200
+    return {f["id"]: f for f in response.json()}
+
+
+def test_create_folder_defaults_to_top_level(client: TestClient, user_auth_headers):
+    folder = make_folder(client, user_auth_headers)
+    assert folder["parent_id"] is None
+
+
+def test_create_nested_folder(client: TestClient, user_auth_headers):
+    parent = make_folder(client, user_auth_headers, "Parent")
+    child = make_folder(client, user_auth_headers, "Child", parent_id=parent["id"])
+    assert child["parent_id"] == parent["id"]
+
+    listed = list_by_id(client, user_auth_headers)
+    assert listed[child["id"]]["parent_id"] == parent["id"]
+    assert listed[parent["id"]]["parent_id"] is None
+
+
+def test_create_folder_under_missing_parent(client: TestClient, user_auth_headers):
+    response = client.post(
+        folderprefix,
+        json={"name": "Orphan", "color": "#000", "parent_id": 99999},
+        headers=user_auth_headers,
+    )
+    assert response.status_code == 404
+    assert response.json() == {"message": "Folder not found"}
+
+
+def test_create_folder_under_other_users_folder_rejected(
+    client: TestClient, user_auth_headers, second_user_token
+):
+    theirs = create_folder(client, second_user_token, name="Theirs")
+    response = client.post(
+        folderprefix,
+        json={"name": "Sneaky", "color": "#000", "parent_id": theirs["id"]},
+        headers=user_auth_headers,
+    )
+    # Same response as a parent that does not exist - existence is not leaked.
+    assert response.status_code == 404
+    assert response.json() == {"message": "Folder not found"}
+    assert list_by_id(client, user_auth_headers) == {}
+
+
+def test_nesting_four_levels_deep(client: TestClient, user_auth_headers):
+    chain = []
+    parent_id = None
+    for depth in range(5):
+        folder = make_folder(client, user_auth_headers, f"Level {depth}", parent_id=parent_id)
+        assert folder["parent_id"] == parent_id
+        chain.append(folder)
+        parent_id = folder["id"]
+
+    listed = list_by_id(client, user_auth_headers)
+    assert len(listed) == 5
+    for parent, child in zip(chain, chain[1:]):
+        assert listed[child["id"]]["parent_id"] == parent["id"]
+
+
+def test_move_folder_into_another(client: TestClient, user_auth_headers):
+    a = make_folder(client, user_auth_headers, "A")
+    b = make_folder(client, user_auth_headers, "B")
+    response = client.patch(
+        f"{folderprefix}/{b['id']}", json={"parent_id": a["id"]}, headers=user_auth_headers
+    )
+    assert response.status_code == 200
+    assert response.json()["parent_id"] == a["id"]
+    assert list_by_id(client, user_auth_headers)[b["id"]]["parent_id"] == a["id"]
+
+
+def test_move_folder_to_top_level(client: TestClient, user_auth_headers):
+    a = make_folder(client, user_auth_headers, "A")
+    b = make_folder(client, user_auth_headers, "B", parent_id=a["id"])
+    response = client.patch(
+        f"{folderprefix}/{b['id']}", json={"parent_id": None}, headers=user_auth_headers
+    )
+    assert response.status_code == 200
+    assert response.json()["parent_id"] is None
+
+
+def test_update_without_parent_id_keeps_parent(client: TestClient, user_auth_headers):
+    a = make_folder(client, user_auth_headers, "A")
+    b = make_folder(client, user_auth_headers, "B", parent_id=a["id"])
+    response = client.patch(
+        f"{folderprefix}/{b['id']}",
+        json={"name": "Renamed", "color": "#fc556e"},
+        headers=user_auth_headers,
+    )
+    assert response.status_code == 200
+    assert response.json()["parent_id"] == a["id"]
+    assert response.json()["color"] == "#fc556e"
+
+
+def test_move_folder_under_other_users_folder_rejected(
+    client: TestClient, user_auth_headers, second_user_token
+):
+    mine = make_folder(client, user_auth_headers, "Mine")
+    theirs = create_folder(client, second_user_token, name="Theirs")
+    response = client.patch(
+        f"{folderprefix}/{mine['id']}",
+        json={"parent_id": theirs["id"]},
+        headers=user_auth_headers,
+    )
+    assert response.status_code == 404
+    assert list_by_id(client, user_auth_headers)[mine["id"]]["parent_id"] is None
+
+
+def test_move_folder_into_itself_rejected(client: TestClient, user_auth_headers):
+    a = make_folder(client, user_auth_headers, "A")
+    response = client.patch(
+        f"{folderprefix}/{a['id']}", json={"parent_id": a["id"]}, headers=user_auth_headers
+    )
+    assert response.status_code == 400
+    assert "message" in response.json()
+    assert list_by_id(client, user_auth_headers)[a["id"]]["parent_id"] is None
+
+
+def test_move_folder_into_descendant_rejected(client: TestClient, user_auth_headers):
+    a = make_folder(client, user_auth_headers, "A")
+    b = make_folder(client, user_auth_headers, "B", parent_id=a["id"])
+    c = make_folder(client, user_auth_headers, "C", parent_id=b["id"])
+
+    for target in (b, c):  # direct child, then grandchild
+        response = client.patch(
+            f"{folderprefix}/{a['id']}",
+            json={"parent_id": target["id"]},
+            headers=user_auth_headers,
+        )
+        assert response.status_code == 400
+        assert "message" in response.json()
+
+    listed = list_by_id(client, user_auth_headers)
+    assert listed[a["id"]]["parent_id"] is None
+    assert listed[b["id"]]["parent_id"] == a["id"]
+    assert listed[c["id"]]["parent_id"] == b["id"]
+
+
+def test_delete_middle_folder_reparents_children_and_workspaces(
+    client: TestClient, user_auth_headers, workspace
+):
+    top = make_folder(client, user_auth_headers, "Top")
+    middle = make_folder(client, user_auth_headers, "Middle", parent_id=top["id"])
+    child_1 = make_folder(client, user_auth_headers, "Child 1", parent_id=middle["id"])
+    child_2 = make_folder(client, user_auth_headers, "Child 2", parent_id=middle["id"])
+    grandchild = make_folder(client, user_auth_headers, "Grandchild", parent_id=child_1["id"])
+
+    client.patch(
+        f"/api/workspaces/{workspace['id']}/me",
+        json={"folder_id": middle["id"]},
+        headers=user_auth_headers,
+    )
+
+    response = client.delete(f"{folderprefix}/{middle['id']}", headers=user_auth_headers)
+    assert response.status_code == 204
+
+    listed = list_by_id(client, user_auth_headers)
+    # Only the deleted folder is gone.
+    assert set(listed) == {top["id"], child_1["id"], child_2["id"], grandchild["id"]}
+    # Direct children moved up to the deleted folder's parent...
+    assert listed[child_1["id"]]["parent_id"] == top["id"]
+    assert listed[child_2["id"]]["parent_id"] == top["id"]
+    # ...and the deeper subtree kept its shape.
+    assert listed[grandchild["id"]]["parent_id"] == child_1["id"]
+
+    ws = client.get(f"/api/workspaces/{workspace['id']}", headers=user_auth_headers)
+    assert ws.json()["folder_id"] == top["id"]
+
+
+def test_delete_top_level_folder_moves_children_to_top_level(
+    client: TestClient, user_auth_headers, workspace
+):
+    top = make_folder(client, user_auth_headers, "Top")
+    child = make_folder(client, user_auth_headers, "Child", parent_id=top["id"])
+    client.patch(
+        f"/api/workspaces/{workspace['id']}/me",
+        json={"folder_id": top["id"]},
+        headers=user_auth_headers,
+    )
+
+    response = client.delete(f"{folderprefix}/{top['id']}", headers=user_auth_headers)
+    assert response.status_code == 204
+
+    listed = list_by_id(client, user_auth_headers)
+    assert set(listed) == {child["id"]}
+    assert listed[child["id"]]["parent_id"] is None
+
+    ws = client.get(f"/api/workspaces/{workspace['id']}", headers=user_auth_headers)
+    assert ws.json()["folder_id"] is None
+
+
+def test_delete_folder_leaves_workspace_in_subfolder_alone(
+    client: TestClient, user_auth_headers, workspace
+):
+    top = make_folder(client, user_auth_headers, "Top")
+    child = make_folder(client, user_auth_headers, "Child", parent_id=top["id"])
+    client.patch(
+        f"/api/workspaces/{workspace['id']}/me",
+        json={"folder_id": child["id"]},
+        headers=user_auth_headers,
+    )
+
+    client.delete(f"{folderprefix}/{top['id']}", headers=user_auth_headers)
+
+    ws = client.get(f"/api/workspaces/{workspace['id']}", headers=user_auth_headers)
+    assert ws.json()["folder_id"] == child["id"]

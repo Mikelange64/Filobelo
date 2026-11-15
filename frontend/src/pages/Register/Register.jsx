@@ -28,6 +28,8 @@ function CameraIcon() {
   )
 }
 
+const MAX_AVATAR_BYTES = 5 * 1024 * 1024
+
 function Register() {
   const { register } = useAuth()
   const fileInputRef = useRef(null)
@@ -53,6 +55,14 @@ function Register() {
   function handleAvatarChange(e) {
     const file = e.target.files?.[0]
     if (!file) return
+    // Same limit the server enforces; checked here so a large photo is
+    // refused immediately instead of after a slow upload.
+    if (file.size > MAX_AVATAR_BYTES) {
+      setFieldErrors((p) => ({ ...p, avatar: 'Photo must be 5MB or smaller' }))
+      e.target.value = ''
+      return
+    }
+    setFieldErrors((p) => ({ ...p, avatar: '' }))
     setAvatarFile(file)
     setAvatarPreview(URL.createObjectURL(file))
   }
@@ -76,7 +86,7 @@ function Register() {
 
     setLoading(true)
     try {
-      await register(username.trim(), email.trim(), password)
+      await register(username.trim(), email.trim(), password, avatarFile)
       setSuccess(true)
     } catch (err) {
       setError(err.detail ?? 'Something went wrong. Please try again.')
@@ -109,7 +119,8 @@ function Register() {
         <p className="auth-card__subtext">Get started with Filobelo</p>
 
         <form className="auth-form" onSubmit={handleSubmit} noValidate>
-          {/* Avatar picker */}
+          {/* Optional. The chosen file is sent with the signup itself
+              (POST /users/with-picture). */}
           <div className="auth-form__group auth-form__group--avatar">
             <input
               ref={fileInputRef}
@@ -136,6 +147,9 @@ function Register() {
                 {avatarPreview ? 'Change photo' : 'Add photo'}
               </span>
             </button>
+            {fieldErrors.avatar && (
+              <span className="auth-form__field-error">{fieldErrors.avatar}</span>
+            )}
           </div>
 
           <div className="auth-form__group">
