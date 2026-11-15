@@ -463,3 +463,80 @@
   position: fixed;
   z-index: 900;
 }
+
+/* Rich menu (shared/ActionMenu): icon + semibold label + one-key shortcut.
+   Destructive items are red, icon included, and sit alone at the bottom. */
+.ui-menu--rich {
+  min-width: 248px;
+  border-radius: 14px;
+  box-shadow: var(--shadow-panel);
+}
+
+.ui-menu__row {
+  position: relative;
+}
+
+.ui-menu__item--rich {
+  justify-content: flex-start;
+  gap: 12px;
+  height: 38px;
+  font-weight: 600;
+}
+
+.ui-menu__item--rich .ui-menu__icon {
+  flex-shrink: 0;
+  color: var(--color-text-secondary);
+}
+
+.ui-menu__item--rich.ui-menu__item--danger .ui-menu__icon {
+  color: inherit;
+}
+
+.ui-menu__item--highlighted {
+  background: var(--color-bg-canvas-hover);
+}
+
+.ui-menu__label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ui-menu__kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.ui-menu__chevron {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+}
+
+.ui-menu__item--rich .ui-menu__hint {
+  font-weight: 500;
+}
+
+/* Flyout opened from a rich item: to the right of the parent menu. */
+.ui-menu--sub {
+  position: absolute;
+  top: -7px;
+  left: calc(100% + 13px);
+  min-width: 220px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.ui-menu--sub .ui-menu__item--rich {
+  font-weight: 600;
+}

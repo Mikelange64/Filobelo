@@ -25,7 +25,7 @@ function WorkspaceGrid({ workspaces, folders = [], membersByWorkspaceId, onSelec
           <WorkspaceCard
             key={ws.id}
             workspace={ws}
-            folderColor={folders.find((f) => f.id === ws.folderId)?.color}
+            folder={folders.find((f) => f.id === ws.folderId) ?? null}
             members={ws.members ?? membersByWorkspaceId?.[ws.id]}
             onSelect={onSelectWorkspace}
             onComplete={onComplete}

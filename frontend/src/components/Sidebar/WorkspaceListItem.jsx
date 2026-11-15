@@ -1,8 +1,8 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import useDismissableMenu from '../../hooks/useDismissableMenu'
 import ConfirmModal from '../shared/ConfirmModal'
-import Popover from '../shared/Popover'
+import ActionMenu, { MenuItem, MENU_ICON } from '../shared/ActionMenu'
 import { getWorkspaceFlag } from '../../utils/workspaceStatus'
 import { flattenFolderTree } from '../../utils/folders'
 import './WorkspaceListItem.css'
@@ -15,32 +15,93 @@ function WorkspaceListItem({
   onSelect,
   onTogglePin,
   onArchive,
+  onComplete,
   onLeave,
   onMoveToFolder,
 }) {
   const [menuOpen, setMenuOpen, menuRef, floatingRef] = useDismissableMenu()
-  const triggerRef = useRef(null)
-  const [folderPicker, setFolderPicker] = useState(false)
+  const rowRef = useRef(null)
   const [confirmLeave, setConfirmLeave] = useState(false)
   const flag = getWorkspaceFlag(workspace)
   const isSoleMember = workspace.numOfMembers === 1
+  const isAdmin = workspace.currentUserRole === 'admin'
 
-  useEffect(() => {
-    if (!menuOpen) setFolderPicker(false)
-  }, [menuOpen])
-
-  function handleMenuAction(action) {
+  function moveTo(folderId) {
     setMenuOpen(false)
-    action?.(workspace.id)
-  }
-
-  function handleMoveToFolder(folderId) {
-    setMenuOpen(false)
+    if ((workspace.folderId ?? null) === folderId) return
     onMoveToFolder?.(workspace.id, folderId)
   }
 
+  const folderSubmenu = (
+    <>
+      <MenuItem
+        role="menuitemradio"
+        aria-checked={!workspace.folderId}
+        icon={<span className="workspace-item__no-folder" aria-hidden="true" />}
+        label="No folder"
+        trailing={!workspace.folderId ? <CheckIcon /> : null}
+        onClick={() => moveTo(null)}
+      />
+      {folders.length > 0 && <div className="ui-menu__sep" role="separator" />}
+      {flattenFolderTree(folders).map(({ folder, depth }) => (
+        <MenuItem
+          key={folder.id}
+          role="menuitemradio"
+          aria-checked={workspace.folderId === folder.id}
+          style={depth > 0 ? { paddingLeft: 10 + depth * 14 } : undefined}
+          icon={<FolderGlyph color={folder.color} />}
+          label={folder.name}
+          trailing={workspace.folderId === folder.id ? <CheckIcon /> : null}
+          onClick={() => moveTo(folder.id)}
+        />
+      ))}
+    </>
+  )
+
+  const items = [
+    {
+      id: 'pin',
+      label: workspace.isPinned ? 'Unpin' : 'Pin',
+      icon: workspace.isPinned ? MENU_ICON.unpin : MENU_ICON.pin,
+      shortcut: 'P',
+      onSelect: () => onTogglePin?.(workspace.id),
+    },
+    (folders.length > 0 || workspace.folderId) && {
+      id: 'move',
+      label: 'Move to folder',
+      icon: MENU_ICON.move,
+      shortcut: 'M',
+      submenu: folderSubmenu,
+    },
+    isAdmin && onComplete && {
+      id: 'complete',
+      label: 'Mark complete',
+      icon: MENU_ICON.done,
+      shortcut: 'D',
+      separatorBefore: true,
+      onSelect: () => onComplete(workspace.id),
+    },
+    {
+      id: 'archive',
+      label: 'Archive',
+      icon: MENU_ICON.archive,
+      shortcut: 'A',
+      separatorBefore: !(isAdmin && onComplete),
+      onSelect: () => onArchive?.(workspace.id),
+    },
+    {
+      id: 'leave',
+      label: isSoleMember ? 'Delete workspace' : 'Leave workspace',
+      icon: isSoleMember ? MENU_ICON.trash : MENU_ICON.leave,
+      shortcut: isSoleMember ? '⌫' : 'L',
+      danger: true,
+      separatorBefore: true,
+      onSelect: () => setConfirmLeave(true),
+    },
+  ]
+
   return (
-    <div className={`workspace-item${active ? ' workspace-item--active' : ''}${menuOpen ? ' workspace-item--menu-open' : ''}`}>
+    <div ref={rowRef} className={`workspace-item${active ? ' workspace-item--active' : ''}${menuOpen ? ' workspace-item--menu-open' : ''}`}>
       <button
         type="button"
         className="workspace-item__select"
@@ -62,7 +123,6 @@ function WorkspaceListItem({
 
       <div className="workspace-item__menu" ref={menuRef}>
         <button
-          ref={triggerRef}
           type="button"
           className="workspace-item__menu-trigger"
           aria-label={`More actions for ${workspace.title}`}
@@ -73,69 +133,14 @@ function WorkspaceListItem({
           <DotsIcon />
         </button>
 
-        {menuOpen && !folderPicker && (
-          <Popover as="ul" anchorRef={triggerRef} floatingRef={floatingRef} className="ui-menu workspace-item__menu-list" role="menu">
-            <li role="none">
-              <button type="button" role="menuitem" className="ui-menu__item"
-                onClick={() => handleMenuAction(onTogglePin)}>
-                {workspace.isPinned ? 'Unpin' : 'Pin'}
-              </button>
-            </li>
-            <li role="none">
-              <button type="button" role="menuitem" className="ui-menu__item"
-                onClick={() => handleMenuAction(onArchive)}>
-                Archive
-              </button>
-            </li>
-            {folders.length > 0 && (
-              <li role="none">
-                <button type="button" role="menuitem" className="ui-menu__item"
-                  onClick={() => setFolderPicker(true)}>
-                  Move to folder
-                  <ChevronIcon />
-                </button>
-              </li>
-            )}
-            {workspace.folderId && (
-              <li role="none">
-                <button type="button" role="menuitem" className="ui-menu__item"
-                  onClick={() => handleMoveToFolder(null)}>
-                  Remove from folder
-                </button>
-              </li>
-            )}
-            <li role="none" className="ui-menu__sep" aria-hidden="true" />
-            <li role="none">
-              <button type="button" role="menuitem" className="ui-menu__item ui-menu__item--danger"
-                onClick={() => { setMenuOpen(false); setConfirmLeave(true) }}>
-                {isSoleMember ? 'Delete' : 'Leave'}
-              </button>
-            </li>
-          </Popover>
-        )}
-
-        {menuOpen && folderPicker && (
-          <Popover as="ul" anchorRef={triggerRef} floatingRef={floatingRef} className="ui-menu workspace-item__menu-list workspace-item__menu-list--folders" role="menu">
-            <li role="none">
-              <button type="button" className="ui-menu__item workspace-item__menu-back"
-                onClick={() => setFolderPicker(false)}>
-                <ChevronBackIcon /> Back
-              </button>
-            </li>
-            <li role="none" className="ui-menu__sep" aria-hidden="true" />
-            {flattenFolderTree(folders).map(({ folder, depth }) => (
-              <li key={folder.id} role="none">
-                <button type="button" role="menuitem"
-                  className={`ui-menu__item workspace-item__menu-folder${workspace.folderId === folder.id ? ' ui-menu__item--active' : ''}`}
-                  style={depth > 0 ? { paddingLeft: 10 + depth * 14 } : undefined}
-                  onClick={() => handleMoveToFolder(folder.id)}>
-                  <span className="workspace-item__folder-swatch" style={{ backgroundColor: folder.color }} />
-                  <span className="workspace-item__folder-label">{folder.name}</span>
-                  {workspace.folderId === folder.id && <CheckIcon />}
-                </button>
-              </li>
-            ))}
-          </Popover>
+        {menuOpen && (
+          <ActionMenu
+            anchorRef={rowRef}
+            floatingRef={floatingRef}
+            items={items}
+            label={`Actions for ${workspace.title}`}
+            onClose={() => setMenuOpen(false)}
+          />
         )}
       </div>
 
@@ -164,6 +169,14 @@ function WorkspaceListItem({
   )
 }
 
+function FolderGlyph({ color }) {
+  return (
+    <svg width="17" height="15" viewBox="0 0 24 20" aria-hidden="true" className="ui-menu__icon">
+      <path d="M2 4.5A2.5 2.5 0 0 1 4.5 2h4.2c.6 0 1.2.25 1.6.7L11.6 4H19.5A2.5 2.5 0 0 1 22 6.5v9a2.5 2.5 0 0 1-2.5 2.5h-15A2.5 2.5 0 0 1 2 15.5z" fill={color} />
+    </svg>
+  )
+}
+
 function DotsIcon() {
   return (
     <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
@@ -174,26 +187,10 @@ function DotsIcon() {
   )
 }
 
-function ChevronIcon() {
-  return (
-    <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
-      <polyline points="9 18 15 12 9 6" />
-    </svg>
-  )
-}
-
-function ChevronBackIcon() {
-  return (
-    <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
-      <polyline points="15 18 9 12 15 6" />
-    </svg>
-  )
-}
-
 function CheckIcon() {
   return (
-    <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true" style={{ marginLeft: 'auto' }}>
-      <polyline points="20 6 9 17 4 12" />
+    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="var(--color-brand-text)" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M5 12.5l4.5 4.5L19 7.5" />
     </svg>
   )
 }

@@ -24,28 +24,28 @@
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 12px;
-  height: 38px;
+  gap: 10px;
+  height: 32px;
   padding: 0 10px;
   border: none;
   border-radius: 8px;
   background: transparent;
   color: var(--color-text-primary);
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 400;
   text-align: left;
   cursor: pointer;
 }
 
 .workspace-item--active .workspace-item__select {
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .workspace-item__square {
   flex-shrink: 0;
-  width: 9px;
-  height: 9px;
-  margin: 0 4px;
+  width: 8px;
+  height: 8px;
+  margin: 0 2px;
   border-radius: 3px;
 }
 
@@ -89,8 +89,8 @@
   display: none;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
+  width: 24px;
+  height: 24px;
   padding: 0;
   border: none;
   border-radius: 6px;
@@ -123,37 +123,14 @@
 .workspace-item:focus-within .workspace-item__select,
 .workspace-item--menu-open .workspace-item__select,
 .workspace-item:has(> .workspace-item__menu [aria-expanded='true']) .workspace-item__select {
-  padding-right: 36px;
+  padding-right: 34px;
 }
 
-.workspace-item__menu-list {
-  width: 200px;
-}
-
-.workspace-item__menu-list--folders {
-  max-height: 280px;
-  overflow-y: auto;
-}
-
-.workspace-item__menu-back {
-  justify-content: flex-start;
-  color: var(--color-text-secondary);
-}
-
-.workspace-item__menu-folder {
-  justify-content: flex-start;
-}
-
-.workspace-item__folder-swatch {
+.workspace-item__no-folder {
   flex-shrink: 0;
-  width: 9px;
-  height: 9px;
-  border-radius: 3px;
-}
-
-.workspace-item__folder-label {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  width: 17px;
+  height: 15px;
+  box-sizing: border-box;
+  border: 1.5px dashed var(--color-text-muted);
+  border-radius: 4px;
 }

@@ -5,13 +5,13 @@
 }
 
 .conversations-widget__header {
-  padding: 20px 20px 12px;
+  padding: 18px 18px 10px;
 }
 
 .conversations-widget__row {
   display: flex;
-  gap: 14px;
-  padding: 14px 20px;
+  gap: 12px;
+  padding: 11px 18px;
   border: none;
   border-top: 1px solid var(--color-row-line);
   background: transparent;

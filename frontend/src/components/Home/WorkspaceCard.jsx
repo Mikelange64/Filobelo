@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { getWorkspaceStatus, WORKSPACE_STATUS } from '../../utils/workspaceStatus'
 import { getDaysRemaining, formatDayCount } from '../../utils/date'
 import './WorkspaceCard.css'
@@ -47,7 +48,19 @@ function ContextMenu({ x, y, onComplete, onClose }) {
   )
 }
 
-function WorkspaceCard({ workspace, folderColor, members, onSelect, onComplete }) {
+function FolderGlyph() {
+  return (
+    <svg width="13" height="11" viewBox="0 0 24 20" aria-hidden="true">
+      <path fill="currentColor" d="M2 4.5A2.5 2.5 0 0 1 4.5 2h4.2c.6 0 1.2.25 1.6.7L11.6 4H19.5A2.5 2.5 0 0 1 22 6.5v9a2.5 2.5 0 0 1-2.5 2.5h-15A2.5 2.5 0 0 1 2 15.5z" />
+    </svg>
+  )
+}
+
+// Option A from the card mockups: a thin band in the folder colour (grey when
+// the workspace is in no folder), the folder name above the title, and the
+// percentage large in the top-right corner. The folder colour is identity
+// only - status is the pill, never the colour.
+function WorkspaceCard({ workspace, folder, members, onSelect, onComplete }) {
   const pill = getCardPill(workspace)
   const [ctxMenu, setCtxMenu] = useState(null)
 
@@ -64,6 +77,7 @@ function WorkspaceCard({ workspace, folderColor, members, onSelect, onComplete }
   const pct = Math.round(workspace.progress ?? 0)
   const taskTotal = workspace.tasks?.length ?? workspace.numOfTasks ?? 0
   const taskDone = workspace.tasks?.filter((t) => t.status === 'DONE').length ?? 0
+  const accent = folder?.color ?? null
 
   function handleContextMenu(e) {
     if (!onComplete) return
@@ -75,19 +89,28 @@ function WorkspaceCard({ workspace, folderColor, members, onSelect, onComplete }
     <>
       <button
         type="button"
-        className="workspace-card"
+        className={`workspace-card${accent ? '' : ' workspace-card--plain'}`}
+        style={accent ? { '--card-accent': accent } : undefined}
         onClick={() => onSelect?.(workspace.id)}
         onContextMenu={handleContextMenu}
       >
+        <span className="workspace-card__band" aria-hidden="true" />
+
         <span className="workspace-card__head">
-          {folderColor && (
-            <span className="workspace-card__square" style={{ backgroundColor: folderColor }} aria-hidden="true" />
-          )}
-          <span className="workspace-card__title">{workspace.title}</span>
+          <span className="workspace-card__heading">
+            <span className="workspace-card__folder">
+              <FolderGlyph />
+              <span className="workspace-card__folder-name">{folder ? folder.name : 'No folder'}</span>
+            </span>
+            <span className="workspace-card__title">{workspace.title}</span>
+          </span>
+          <span className="workspace-card__pct" aria-label={`${pct}% complete`}>
+            {pct}<span className="workspace-card__pct-sign">%</span>
+          </span>
         </span>
 
         <span className="workspace-card__status">
-          {pill && <span className={`ui-pill ui-pill--${pill.tone}`}>{pill.label}</span>}
+          {pill && <span className={`ui-pill ui-pill--sm ui-pill--${pill.tone}`}>{pill.label}</span>}
         </span>
 
         <span className="workspace-card__foot">
@@ -100,36 +123,34 @@ function WorkspaceCard({ workspace, folderColor, members, onSelect, onComplete }
                 ? 'No tasks yet'
                 : `${taskDone} of ${taskTotal} task${taskTotal === 1 ? '' : 's'}`}
             </span>
-            <span className="workspace-card__meta-right">
-              <span className="workspace-card__pct">{pct}%</span>
-              <span className="workspace-card__avatars">
-                {visibleMembers.map((member) => (
-                  <span key={member.id} className="ui-avatar workspace-card__avatar">
-                    {member.avatarUrl ? (
-                      <img src={member.avatarUrl} alt={member.name ?? ''} />
-                    ) : member.name ? (
-                      member.name[0].toUpperCase()
-                    ) : null}
-                  </span>
-                ))}
-                {overflowCount > 0 && (
-                  <span className="ui-avatar workspace-card__avatar workspace-card__avatar--overflow">
-                    +{overflowCount}
-                  </span>
-                )}
-              </span>
+            <span className="workspace-card__avatars">
+              {visibleMembers.map((member) => (
+                <span key={member.id} className="ui-avatar workspace-card__avatar">
+                  {member.avatarUrl ? (
+                    <img src={member.avatarUrl} alt={member.name ?? ''} />
+                  ) : member.name ? (
+                    member.name[0].toUpperCase()
+                  ) : null}
+                </span>
+              ))}
+              {overflowCount > 0 && (
+                <span className="ui-avatar workspace-card__avatar workspace-card__avatar--overflow">
+                  +{overflowCount}
+                </span>
+              )}
             </span>
           </span>
         </span>
       </button>
 
-      {ctxMenu && (
+      {ctxMenu && createPortal(
         <ContextMenu
           x={ctxMenu.x}
           y={ctxMenu.y}
           onComplete={() => onComplete?.(workspace.id)}
           onClose={() => setCtxMenu(null)}
-        />
+        />,
+        document.body
       )}
     </>
   )

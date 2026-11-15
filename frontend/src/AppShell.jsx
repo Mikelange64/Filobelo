@@ -307,6 +307,14 @@ function AppShell() {
     }
   }
 
+  async function handleCompleteFromSidebar(wsId) {
+    try {
+      await handleWorkspaceCompleted(wsId)
+    } catch (err) {
+      setToast(err?.detail ?? err?.message ?? 'Could not complete workspace')
+    }
+  }
+
   function handleWorkspaceUpdated(wsId, patch) {
     setWorkspaces((prev) =>
       prev.map((ws) => (ws.id === wsId ? { ...ws, ...patch } : ws))
@@ -384,6 +392,7 @@ function AppShell() {
         onSelectWorkspace={handleSelectWorkspace}
         onTogglePin={handleTogglePin}
         onArchive={handleArchive}
+        onComplete={handleCompleteFromSidebar}
         onRestore={handleUnarchive}
         onReopen={handleReopenFromSidebar}
         onLeave={handleLeave}

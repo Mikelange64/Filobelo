@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { useInfiniteQuery } from '@tanstack/react-query'
 import WorkspaceListItem from './WorkspaceListItem'
 import ConfirmModal from '../shared/ConfirmModal'
-import Popover from '../shared/Popover'
+import ActionMenu, { MenuItem, MENU_ICON } from '../shared/ActionMenu'
 import useDismissableMenu from '../../hooks/useDismissableMenu'
 import { getCompletedWorkspaces } from '../../api/client'
 import { keys } from '../../api/queryClient'
@@ -40,6 +40,7 @@ const ICON = {
   plus: 'M12 5v14M5 12h14',
   check: 'M5 12.5l4.5 4.5L19 7.5',
   upDown: 'M7 10l5-5 5 5M7 14l5 5 5-5',
+  panel: 'M6 4h12a3 3 0 0 1 3 3v10a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V7a3 3 0 0 1 3-3zM9 4v16',
   archive: 'M4.7 4.5h14.6a1.2 1.2 0 0 1 1.2 1.2v2.1A1.2 1.2 0 0 1 19.3 9H4.7a1.2 1.2 0 0 1-1.2-1.2V5.7A1.2 1.2 0 0 1 4.7 4.5zM5 9v9.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V9M10 13h4',
 }
 
@@ -57,9 +58,9 @@ function DotsIcon() {
   )
 }
 
-function FolderIcon({ color }) {
+function FolderIcon({ color, size = 17 }) {
   return (
-    <svg width="18" height="16" viewBox="0 0 24 20" aria-hidden="true" className="sidebar-v2__folder-icon">
+    <svg width={size} height={Math.round(size * 0.85)} viewBox="0 0 24 20" aria-hidden="true" className="sidebar-v2__folder-icon">
       <path d="M2 4.5A2.5 2.5 0 0 1 4.5 2h4.2c.6 0 1.2.25 1.6.7L11.6 4H19.5A2.5 2.5 0 0 1 22 6.5v9a2.5 2.5 0 0 1-2.5 2.5h-15A2.5 2.5 0 0 1 2 15.5z" fill={color} />
     </svg>
   )
@@ -184,14 +185,13 @@ function groupFoldersByParent(folders) {
 // level is its own FolderItem, so each keeps its own collapsed/expanded state,
 // and the nested .sidebar-v2__folder-children containers add one step of
 // indentation per level.
-function FolderItem({ folder, foldersByParent, workspaces, folders, activeWorkspaceId, onCreateFolder, onUpdateFolder, onDelete, onToast, onSelectWorkspace, onTogglePin, onArchive, onLeave, onMoveToFolder }) {
+function FolderItem({ folder, foldersByParent, workspaces, folders, activeWorkspaceId, onCreateFolder, onUpdateFolder, onDelete, onToast, onSelectWorkspace, onTogglePin, onArchive, onComplete, onLeave, onMoveToFolder }) {
   const [expanded, setExpanded] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
-  const [menuView, setMenuView] = useState('main') // 'main' | 'color' | 'move'
   const [creatingChild, setCreatingChild] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const menuRef = useRef(null)
-  const triggerRef = useRef(null)
+  const rowRef = useRef(null)
   const floatingRef = useRef(null)
 
   const childFolders = foldersByParent.get(folder.id) ?? []
@@ -216,7 +216,6 @@ function FolderItem({ folder, foldersByParent, workspaces, folders, activeWorksp
 
   function closeMenu() {
     setMenuOpen(false)
-    setMenuView('main')
   }
 
   function startSubfolder() {
@@ -269,7 +268,7 @@ function FolderItem({ folder, foldersByParent, workspaces, folders, activeWorksp
 
   return (
     <div className="sidebar-v2__folder">
-      <div className={`sidebar-v2__folder-row${menuOpen ? ' sidebar-v2__folder-row--menu-open' : ''}`}>
+      <div ref={rowRef} className={`sidebar-v2__folder-row${menuOpen ? ' sidebar-v2__folder-row--menu-open' : ''}`}>
         <button
           type="button"
           className="sidebar-v2__folder-toggle"
@@ -285,7 +284,6 @@ function FolderItem({ folder, foldersByParent, workspaces, folders, activeWorksp
 
         <div className="sidebar-v2__folder-menu-wrap" ref={menuRef}>
           <button
-            ref={triggerRef}
             type="button"
             className="sidebar-v2__folder-menu-btn"
             onClick={() => (menuOpen ? closeMenu() : setMenuOpen(true))}
@@ -295,66 +293,62 @@ function FolderItem({ folder, foldersByParent, workspaces, folders, activeWorksp
           >
             <DotsIcon />
           </button>
-          {menuOpen && menuView === 'main' && (
-            <Popover as="ul" anchorRef={triggerRef} floatingRef={floatingRef} className="ui-menu sidebar-v2__folder-menu" role="menu">
-              <li role="none">
-                <button type="button" role="menuitem" className="ui-menu__item" onClick={startSubfolder}>
-                  New subfolder
-                </button>
-              </li>
-              <li role="none">
-                <button type="button" role="menuitem" className="ui-menu__item" onClick={() => setMenuView('color')}>
-                  Change colour
-                </button>
-              </li>
-              {(moveTargets.length > 0 || folder.parent_id != null) && (
-                <li role="none">
-                  <button type="button" role="menuitem" className="ui-menu__item" onClick={() => setMenuView('move')}>
-                    Move to…
-                  </button>
-                </li>
-              )}
-              <li role="none" className="ui-menu__sep" aria-hidden="true" />
-              <li role="none">
-                <button type="button" role="menuitem" className="ui-menu__item ui-menu__item--danger" onClick={() => { setConfirmDelete(true); closeMenu() }}>
-                  Delete folder
-                </button>
-              </li>
-            </Popover>
-          )}
-          {menuOpen && menuView === 'color' && (
-            <Popover anchorRef={triggerRef} floatingRef={floatingRef} className="ui-menu sidebar-v2__folder-menu sidebar-v2__folder-menu--color" role="group" aria-label="Folder colour">
-              <ColorPicker inline selected={folder.color} onChange={changeColor} />
-            </Popover>
-          )}
-          {menuOpen && menuView === 'move' && (
-            <Popover as="ul" anchorRef={triggerRef} floatingRef={floatingRef} className="ui-menu sidebar-v2__folder-menu sidebar-v2__folder-menu--move" role="menu" aria-label="Move folder to">
-              <li role="none">
-                <button
-                  type="button"
-                  role="menuitem"
-                  className={`ui-menu__item${folder.parent_id == null ? ' ui-menu__item--active' : ''}`}
-                  onClick={() => moveTo(null)}
-                >
-                  Top level
-                </button>
-              </li>
-              {moveTargets.length > 0 && <li role="none" className="ui-menu__sep" aria-hidden="true" />}
-              {moveTargets.map(({ folder: target, depth }) => (
-                <li key={target.id} role="none">
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className={`ui-menu__item sidebar-v2__move-target${folder.parent_id === target.id ? ' ui-menu__item--active' : ''}`}
-                    style={depth > 0 ? { paddingLeft: 10 + depth * 14 } : undefined}
-                    onClick={() => moveTo(target.id)}
-                  >
-                    <span className="sidebar-v2__move-swatch" style={{ backgroundColor: target.color }} />
-                    <span className="sidebar-v2__move-label">{target.name}</span>
-                  </button>
-                </li>
-              ))}
-            </Popover>
+          {menuOpen && (
+            <ActionMenu
+              anchorRef={rowRef}
+              floatingRef={floatingRef}
+              label={`Options for ${folder.name}`}
+              onClose={closeMenu}
+              items={[
+                { id: 'sub', label: 'New subfolder', icon: MENU_ICON.newFolder, shortcut: 'N', onSelect: startSubfolder },
+                {
+                  id: 'color',
+                  label: 'Change colour',
+                  icon: MENU_ICON.palette,
+                  shortcut: 'C',
+                  submenu: <ColorPicker inline selected={folder.color} onChange={changeColor} />,
+                },
+                (moveTargets.length > 0 || folder.parent_id != null) && {
+                  id: 'move',
+                  label: 'Move to',
+                  icon: MENU_ICON.move,
+                  shortcut: 'M',
+                  submenu: (
+                    <>
+                      <MenuItem
+                        role="menuitemradio"
+                        aria-checked={folder.parent_id == null}
+                        label="Top level"
+                        active={folder.parent_id == null}
+                        onClick={() => moveTo(null)}
+                      />
+                      {moveTargets.length > 0 && <div className="ui-menu__sep" role="separator" />}
+                      {moveTargets.map(({ folder: target, depth }) => (
+                        <MenuItem
+                          key={target.id}
+                          role="menuitemradio"
+                          aria-checked={folder.parent_id === target.id}
+                          active={folder.parent_id === target.id}
+                          style={depth > 0 ? { paddingLeft: 10 + depth * 14 } : undefined}
+                          icon={<FolderIcon color={target.color} size={16} />}
+                          label={target.name}
+                          onClick={() => moveTo(target.id)}
+                        />
+                      ))}
+                    </>
+                  ),
+                },
+                {
+                  id: 'delete',
+                  label: 'Delete folder',
+                  icon: MENU_ICON.trash,
+                  shortcut: '⌫',
+                  danger: true,
+                  separatorBefore: true,
+                  onSelect: () => setConfirmDelete(true),
+                },
+              ]}
+            />
           )}
         </div>
       </div>
@@ -405,6 +399,7 @@ function FolderItem({ folder, foldersByParent, workspaces, folders, activeWorksp
               onSelectWorkspace={onSelectWorkspace}
               onTogglePin={onTogglePin}
               onArchive={onArchive}
+              onComplete={onComplete}
               onLeave={onLeave}
               onMoveToFolder={onMoveToFolder}
             />
@@ -419,6 +414,7 @@ function FolderItem({ folder, foldersByParent, workspaces, folders, activeWorksp
               onSelect={onSelectWorkspace}
               onTogglePin={onTogglePin}
               onArchive={onArchive}
+              onComplete={onComplete}
               onLeave={onLeave}
               onMoveToFolder={onMoveToFolder}
             />
@@ -514,9 +510,9 @@ function WorkspaceSearchOverlay({ workspaces, folders, onSelect, onClose }) {
 // secondary text, with its own short menu.
 function FinishedRow({ workspace, folderColor, active, marker, menuItems, onSelect }) {
   const [open, setOpen, wrapRef, floatingRef] = useDismissableMenu()
-  const triggerRef = useRef(null)
+  const rowRef = useRef(null)
   return (
-    <div className={`workspace-item workspace-item--muted${active ? ' workspace-item--active' : ''}`}>
+    <div ref={rowRef} className={`workspace-item workspace-item--muted${active ? ' workspace-item--active' : ''}`}>
       <button
         type="button"
         className="workspace-item__select"
@@ -531,7 +527,6 @@ function FinishedRow({ workspace, folderColor, active, marker, menuItems, onSele
       </button>
       <div className="workspace-item__menu" ref={wrapRef}>
         <button
-          ref={triggerRef}
           type="button"
           className="workspace-item__menu-trigger"
           aria-label={`More actions for ${workspace.title}`}
@@ -542,22 +537,13 @@ function FinishedRow({ workspace, folderColor, active, marker, menuItems, onSele
           <DotsIcon />
         </button>
         {open && (
-          <Popover as="ul" anchorRef={triggerRef} floatingRef={floatingRef} className="ui-menu workspace-item__menu-list" role="menu">
-            {menuItems.map((item) => (
-              <li key={item.label} role="none">
-                <button
-                  type="button"
-                  role="menuitem"
-                  className="ui-menu__item"
-                  disabled={item.disabled}
-                  onClick={() => { setOpen(false); item.onSelect() }}
-                >
-                  <span>{item.label}</span>
-                  {item.hint && <span className="ui-menu__hint">{item.hint}</span>}
-                </button>
-              </li>
-            ))}
-          </Popover>
+          <ActionMenu
+            anchorRef={rowRef}
+            floatingRef={floatingRef}
+            items={menuItems}
+            label={`Actions for ${workspace.title}`}
+            onClose={() => setOpen(false)}
+          />
         )}
       </div>
     </div>
@@ -612,10 +598,10 @@ function CompletedList({ folders, activeWorkspaceId, onSelectWorkspace, onReopen
                 </span>
               )}
               menuItems={[
-                { label: 'Open', onSelect: () => onSelectWorkspace?.(ws.id) },
+                { id: 'open', label: 'Open', icon: MENU_ICON.open, shortcut: 'O', onSelect: () => onSelectWorkspace?.(ws.id) },
                 isAdmin
-                  ? { label: 'Reopen', onSelect: () => onReopen?.(ws.id) }
-                  : { label: 'Reopen', hint: 'Admins only', disabled: true, onSelect: () => {} },
+                  ? { id: 'reopen', label: 'Reopen', icon: MENU_ICON.reopen, shortcut: 'R', onSelect: () => onReopen?.(ws.id) }
+                  : { id: 'reopen', label: 'Reopen', icon: MENU_ICON.reopen, hint: 'Admins only', disabled: true },
               ]}
             />
           )
@@ -661,8 +647,8 @@ function ArchivedList({ workspaces, folders, activeWorkspaceId, onSelectWorkspac
             onSelect={onSelectWorkspace}
             marker={null}
             menuItems={[
-              { label: 'Open', onSelect: () => onSelectWorkspace?.(ws.id) },
-              { label: 'Restore', onSelect: () => onRestore?.(ws.id) },
+              { id: 'open', label: 'Open', icon: MENU_ICON.open, shortcut: 'O', onSelect: () => onSelectWorkspace?.(ws.id) },
+              { id: 'restore', label: 'Restore', icon: MENU_ICON.restore, shortcut: 'R', onSelect: () => onRestore?.(ws.id) },
             ]}
           />
         ))}
@@ -672,10 +658,10 @@ function ArchivedList({ workspaces, folders, activeWorkspaceId, onSelectWorkspac
   )
 }
 
-function AccountMenu({ currentUser, onOpenSettings, onSignOut }) {
+function AccountMenu({ currentUser, onOpenSettings, onSignOut, compact = false }) {
   const [open, setOpen, ref] = useDismissableMenu()
   return (
-    <div className="sidebar-v2__footer" ref={ref}>
+    <div className={`sidebar-v2__footer${compact ? ' sidebar-v2__footer--compact' : ''}`} ref={ref}>
       {open && (
         <div className="ui-menu sidebar-v2__account-menu" role="menu">
           <div className="sidebar-v2__account-head">
@@ -706,6 +692,8 @@ function AccountMenu({ currentUser, onOpenSettings, onSignOut }) {
         className="sidebar-v2__profile"
         aria-haspopup="menu"
         aria-expanded={open}
+        aria-label={compact ? 'Account' : undefined}
+        title={compact ? currentUser?.name : undefined}
         onClick={() => setOpen((v) => !v)}
       >
         <span className="ui-avatar">
@@ -713,10 +701,116 @@ function AccountMenu({ currentUser, onOpenSettings, onSignOut }) {
             ? <img src={currentUser.avatarUrl} alt="" />
             : (currentUser?.name ? currentUser.name[0].toUpperCase() : '?')}
         </span>
-        <span className="sidebar-v2__profile-name">{currentUser?.name ?? 'Sign in'}</span>
-        <span className="sidebar-v2__profile-caret"><Icon d={ICON.upDown} size={16} strokeWidth={2} /></span>
+        {!compact && (
+          <>
+            <span className="sidebar-v2__profile-name">{currentUser?.name ?? 'Sign in'}</span>
+            <span className="sidebar-v2__profile-caret"><Icon d={ICON.upDown} size={16} strokeWidth={2} /></span>
+          </>
+        )}
       </button>
     </div>
+  )
+}
+
+// Per-viewer UI memory (sidebar collapsed, which sections are folded). Plain
+// localStorage, wrapped: private windows can throw, and the sidebar must work
+// without it.
+function usePersistentState(key, initial) {
+  const [value, setValue] = useState(() => {
+    try {
+      const raw = localStorage.getItem(key)
+      return raw == null ? initial : JSON.parse(raw)
+    } catch {
+      return initial
+    }
+  })
+  useEffect(() => {
+    try { localStorage.setItem(key, JSON.stringify(value)) } catch { /* ignore */ }
+  }, [key, value])
+  return [value, setValue]
+}
+
+// A section heading that folds its list, like "Pinned ⌄" in chat sidebars.
+// `action` (e.g. the folder +) sits on the right and is not part of the toggle.
+function SectionHeader({ label, open, onToggle, action }) {
+  return (
+    <div className="sidebar-v2__section-header">
+      <button type="button" className="sidebar-v2__section-toggle" aria-expanded={open} onClick={onToggle}>
+        <h2 className="ui-caps">{label}</h2>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"
+          className={`sidebar-v2__section-chevron${open ? '' : ' sidebar-v2__section-chevron--closed'}`}>
+          <path d="M6 9l6 6 6-6" />
+        </svg>
+      </button>
+      {action}
+    </div>
+  )
+}
+
+// The collapsed sidebar: a 72px rail with icons and one tile per workspace
+// (its initial on the folder colour), plus a dot when it needs attention.
+function SidebarRail({ workspaces, folders, activeWorkspaceId, activeNav, currentUser, onExpand, onNewWorkspace, onGoHome, onSearch, onOpenCalendar, onSelectWorkspace, onOpenSettings, onSignOut }) {
+  const ordered = [
+    ...workspaces.filter((ws) => ws.isPinned).sort(byMostRecent),
+    ...workspaces.filter((ws) => !ws.isPinned).sort(byMostRecent),
+  ]
+  const nav = [
+    { id: 'home', label: 'Home', icon: ICON.home, onClick: onGoHome },
+    { id: 'search', label: 'Search', icon: ICON.search, onClick: onSearch },
+    { id: 'calendar', label: 'Calendar', icon: ICON.calendar, onClick: onOpenCalendar },
+  ]
+  return (
+    <>
+      <button type="button" className="sidebar-v2__rail-btn" onClick={onExpand} aria-label="Expand sidebar" title="Expand sidebar">
+        <Icon d={ICON.panel} />
+      </button>
+      <button type="button" className="ui-btn ui-btn--primary sidebar-v2__rail-new" onClick={onNewWorkspace} aria-label="New workspace" title="New workspace">
+        <Icon d={ICON.plus} size={18} strokeWidth={2.2} />
+      </button>
+      <div className="sidebar-v2__rail-group">
+        {nav.map((n) => (
+          <button
+            key={n.id}
+            type="button"
+            className={`sidebar-v2__rail-btn${activeNav === n.id ? ' sidebar-v2__rail-btn--active' : ''}`}
+            aria-label={n.label}
+            title={n.label}
+            aria-current={activeNav === n.id ? 'page' : undefined}
+            onClick={n.onClick}
+          >
+            <Icon d={n.icon} />
+          </button>
+        ))}
+      </div>
+      <span className="sidebar-v2__rail-divider" aria-hidden="true" />
+      <div className="sidebar-v2__rail-list">
+        {ordered.map((ws) => {
+          const color = folders.find((f) => f.id === ws.folderId)?.color
+          const flag = getWorkspaceFlag(ws)
+          const alert = flag && (flag.tone === 'error' || flag.tone === 'warning') ? flag.tone : null
+          return (
+            <button
+              key={ws.id}
+              type="button"
+              className={`sidebar-v2__rail-btn${ws.id === activeWorkspaceId ? ' sidebar-v2__rail-btn--active' : ''}`}
+              aria-label={ws.title}
+              title={ws.title}
+              aria-current={ws.id === activeWorkspaceId ? 'page' : undefined}
+              onClick={() => onSelectWorkspace?.(ws.id)}
+            >
+              <span
+                className={`sidebar-v2__rail-tile${color ? '' : ' sidebar-v2__rail-tile--plain'}`}
+                style={color ? { backgroundColor: color } : undefined}
+              >
+                {ws.title.trim()[0]?.toUpperCase() ?? '?'}
+              </span>
+              {alert && <span className={`sidebar-v2__rail-alert sidebar-v2__rail-alert--${alert}`} aria-hidden="true" />}
+            </button>
+          )
+        })}
+      </div>
+      <AccountMenu compact currentUser={currentUser} onOpenSettings={onOpenSettings} onSignOut={onSignOut} />
+    </>
   )
 }
 
@@ -738,6 +832,7 @@ function SidebarV2({
   onSelectWorkspace,
   onTogglePin,
   onArchive,
+  onComplete,
   onRestore,
   onReopen,
   onLeave,
@@ -756,7 +851,11 @@ function SidebarV2({
   // Which list the middle of the sidebar shows. Not persisted: Active is the
   // default every time the app opens.
   const [mode, setMode] = useState('active')
+  const [collapsed, setCollapsed] = usePersistentState('filobelo.sidebar.collapsed', false)
+  const [sections, setSections] = usePersistentState('filobelo.sidebar.sections', { pinned: true, folders: true, workspaces: true })
   const navRef = useRef(null)
+  const toggleSection = (id) => setSections((prev) => ({ ...prev, [id]: !(prev?.[id] ?? true) }))
+  const isOpen = (id) => sections?.[id] ?? true
 
   // Two-finger horizontal swipe over the sidebar steps between Active, Done
   // and Archived. One gesture moves one tab: after a switch, further events
@@ -768,6 +867,7 @@ function SidebarV2({
     let locked = false
     let idleTimer
     function onWheel(e) {
+      if (el.dataset.collapsed === 'true') return
       if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return
       // Horizontal: ours. Also stops the browser using it for back/forward.
       e.preventDefault()
@@ -815,16 +915,43 @@ function SidebarV2({
     onSelect: onSelectWorkspace,
     onTogglePin,
     onArchive,
+    onComplete,
     onLeave,
     onMoveToFolder,
   }
 
   return (
     <>
-      <nav className="sidebar-v2" aria-label="Main" ref={navRef}>
+      <nav
+        className={`sidebar-v2${collapsed ? ' sidebar-v2--collapsed' : ''}`}
+        aria-label="Main"
+        ref={navRef}
+        data-collapsed={collapsed}
+      >
+        {collapsed ? (
+          <SidebarRail
+            workspaces={workspaces}
+            folders={folders}
+            activeWorkspaceId={activeWorkspaceId}
+            activeNav={activeNav}
+            currentUser={currentUser}
+            onExpand={() => setCollapsed(false)}
+            onNewWorkspace={onNewWorkspace}
+            onGoHome={onGoHome}
+            onSearch={() => setSearchOpen(true)}
+            onOpenCalendar={onOpenCalendar}
+            onSelectWorkspace={onSelectWorkspace}
+            onOpenSettings={onOpenSettings}
+            onSignOut={onSignOut}
+          />
+        ) : (
+        <>
         <div className="sidebar-v2__header">
           <button type="button" className="sidebar-v2__logo-btn" onClick={onGoHome} aria-label="Go to home">
             <span className="sidebar-v2__logo-text">Filobelo</span>
+          </button>
+          <button type="button" className="ui-icon-btn sidebar-v2__collapse" onClick={() => setCollapsed(true)} aria-label="Collapse sidebar" title="Collapse sidebar">
+            <Icon d={ICON.panel} />
           </button>
         </div>
 
@@ -879,8 +1006,8 @@ function SidebarV2({
             <div className="sidebar-v2__mode" key="active">
               {pinned.length > 0 && (
                 <div className="sidebar-v2__group">
-                  <h2 className="ui-caps sidebar-v2__section-label">Pinned</h2>
-                  {pinned.map((ws) => (
+                  <SectionHeader label="Pinned" open={isOpen('pinned')} onToggle={() => toggleSection('pinned')} />
+                  {isOpen('pinned') && pinned.map((ws) => (
                     <WorkspaceListItem
                       key={ws.id}
                       workspace={ws}
@@ -893,32 +1020,39 @@ function SidebarV2({
               )}
 
               <div className="sidebar-v2__group">
-                <div className="sidebar-v2__section-header">
-                  <h2 className="ui-caps">Folders</h2>
-                  <button
-                    type="button"
-                    className="ui-icon-btn ui-icon-btn--sm sidebar-v2__section-add"
-                    // mousedown would otherwise reach the create row's
-                    // outside-click handler first: it closes, then this click
-                    // reopens it. Stopping it here lets + toggle cleanly.
-                    onMouseDown={(e) => e.stopPropagation()}
-                    onClick={() => setCreatingFolder((v) => !v)}
-                    aria-expanded={creatingFolder}
-                    aria-label="New folder"
-                  >
-                    <Icon d={ICON.plus} size={14} strokeWidth={2.2} />
-                  </button>
-                </div>
+                <SectionHeader
+                  label="Folders"
+                  open={isOpen('folders')}
+                  onToggle={() => toggleSection('folders')}
+                  action={(
+                    <button
+                      type="button"
+                      className="ui-icon-btn ui-icon-btn--sm sidebar-v2__section-add"
+                      // mousedown would otherwise reach the create row's
+                      // outside-click handler first: it closes, then this click
+                      // reopens it. Stopping it here lets + toggle cleanly.
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onClick={() => {
+                        if (!isOpen('folders')) toggleSection('folders')
+                        setCreatingFolder((v) => !v)
+                      }}
+                      aria-expanded={creatingFolder}
+                      aria-label="New folder"
+                    >
+                      <Icon d={ICON.plus} size={14} strokeWidth={2.2} />
+                    </button>
+                  )}
+                />
 
                 {creatingFolder && (
                   <FolderCreateRow onCreate={handleCreate} onCancel={() => setCreatingFolder(false)} />
                 )}
 
-                {folders.length === 0 && !creatingFolder && (
+                {isOpen('folders') && folders.length === 0 && !creatingFolder && (
                   <p className="sidebar-v2__hint">No folders yet</p>
                 )}
 
-                {rootFolders.map((folder) => (
+                {isOpen('folders') && rootFolders.map((folder) => (
                   <FolderItem
                     key={folder.id}
                     folder={folder}
@@ -933,6 +1067,7 @@ function SidebarV2({
                     onSelectWorkspace={onSelectWorkspace}
                     onTogglePin={onTogglePin}
                     onArchive={onArchive}
+                    onComplete={onComplete}
                     onLeave={onLeave}
                     onMoveToFolder={onMoveToFolder}
                   />
@@ -940,9 +1075,9 @@ function SidebarV2({
               </div>
 
               <div className="sidebar-v2__group">
-                <h2 className="ui-caps sidebar-v2__section-label">Workspaces</h2>
-                {workspaces.length === 0 && <p className="sidebar-v2__hint">No workspaces yet</p>}
-                {rest.map((ws) => (
+                <SectionHeader label="Workspaces" open={isOpen('workspaces')} onToggle={() => toggleSection('workspaces')} />
+                {isOpen('workspaces') && workspaces.length === 0 && <p className="sidebar-v2__hint">No workspaces yet</p>}
+                {isOpen('workspaces') && rest.map((ws) => (
                   <WorkspaceListItem
                     key={ws.id}
                     workspace={ws}
@@ -980,6 +1115,8 @@ function SidebarV2({
         </div>
 
         <AccountMenu currentUser={currentUser} onOpenSettings={onOpenSettings} onSignOut={onSignOut} />
+        </>
+        )}
       </nav>
 
       {searchOpen && (
