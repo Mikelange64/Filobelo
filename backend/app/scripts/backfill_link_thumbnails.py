@@ -1,6 +1,6 @@
 from sqlalchemy import select
 
-from app.database import SessionLocal
+from app.sync_legacy.database import SessionLocal
 from app.models import Resource, ResourceType
 from app.utils import fetch_oembed_thumbnail
 

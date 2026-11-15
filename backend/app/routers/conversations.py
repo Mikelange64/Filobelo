@@ -4,10 +4,10 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import and_, func, or_, select
 
-from app.auth import CurrentUser
+from app.sync_legacy.auth import CurrentUser
 from app.bot_service import filobelo_bot
-from app.database import DbSession
-from app.dependencies import require_membership
+from app.sync_legacy.database import DbSession
+from app.sync_legacy.dependencies import require_membership
 from app.models import (
     Conversation,
     ConversationType,
@@ -24,7 +24,7 @@ from app.schemas import (
     MessageResponse,
     PaginatedMessageResponse,
 )
-from app.utils import get_conversation_by_id
+from app.sync_legacy.queries import get_conversation_by_id
 
 router = APIRouter(prefix="/{workspace_id}/conversations", tags=["conversations"])
 

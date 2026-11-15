@@ -9,10 +9,13 @@ from fastapi import HTTPException, status
 from openai import OpenAI
 
 from app.config import settings
-from app.database import DbSession
+from app.sync_legacy.database import DbSession
 from app.models import ConversationType, Message, SenderType
 from app.schemas import MessageResponse
-from app.utils import get_conversation_by_id_with_messages, get_workspace_task_index
+from app.sync_legacy.queries import (
+    get_conversation_by_id_with_messages,
+    get_workspace_task_index,
+)
 
 # Only ids, durations and error types are logged from this module - never the
 # conversation text, the system prompt, or the search query.

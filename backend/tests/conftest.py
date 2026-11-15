@@ -44,6 +44,7 @@ os.environ["REDIS_URL"] = os.environ.get(
 )
 
 from app.database import Base, get_db
+from app.sync_legacy.database import get_db as get_sync_db
 from app.main import app
 from app.redis_client import redis_client
 from tests.auth_helpers import (
@@ -150,22 +151,33 @@ async def db_session(test_engine, setup_database) -> AsyncGenerator[AsyncSession
 async def _flush_test_redis():
     """Isolated DB index (15) from dev/prod, flushed before every test so the
     rate limiters (register/login/password-reset) never bleed state across tests."""
-    redis_client.flushdb()
+    await redis_client.flushdb()
     yield
 
 
 @pytest.fixture
 async def client(
-    db_session: AsyncSession, sync_test_engine, _flush_test_redis
+    db_session: AsyncSession, test_engine, sync_test_engine, _flush_test_redis
 ) -> AsyncGenerator[AsyncClient]:
+    async_session_factory = async_sessionmaker(
+        bind=test_engine, class_=AsyncSession, expire_on_commit=False
+    )
     sync_session_factory = sessionmaker(bind=sync_test_engine)
 
-    # Each request gets its own session, exactly as in production.
-    def override_get_db():
+    # Each request gets its own session, exactly as in production. This
+    # replaces the app's get_db dependency, so every endpoint talks to the
+    # test database instead of the real one.
+    async def override_get_db():
+        async with async_session_factory() as session:
+            yield session
+
+    # TRANSITIONAL: the routers not converted yet still ask for a sync session.
+    def override_get_sync_db():
         with sync_session_factory() as session:
             yield session
 
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_sync_db] = override_get_sync_db
 
     # ASGITransport calls the app in memory, with no network involved.
     # follow_redirects matches what the previous TestClient did by default.

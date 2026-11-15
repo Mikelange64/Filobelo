@@ -5,18 +5,18 @@ from fastapi import APIRouter, status, HTTPException, UploadFile, Depends
 from PIL import UnidentifiedImageError
 from sqlalchemy import select
 
-from app.database import DbSession
+from app.sync_legacy.database import DbSession
 from app.config import settings
-from app.dependencies import require_membership, require_task_in_workspace
+from app.sync_legacy.dependencies import require_membership, require_task_in_workspace
 from app.models import Resource, ResourceType, WorkspaceMember
 from app.utils import (
     process_file,
     upload_file,
     delete_file,
-    get_resource_by_id,
     normalize_image,
     fetch_oembed_thumbnail,
 )
+from app.sync_legacy.queries import get_resource_by_id
 from app.schemas import (
     LinkCreate,
     LinkResponse,

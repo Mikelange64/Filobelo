@@ -6,10 +6,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import joinedload
 
-from app.auth import CurrentUser
+from app.sync_legacy.auth import CurrentUser
 from app.config import settings
-from app.database import DbSession
-from app.dependencies import (
+from app.sync_legacy.database import DbSession
+from app.sync_legacy.dependencies import (
     get_target_membership,
     handle_membership_departure,
     require_admin,
@@ -26,7 +26,7 @@ from app.schemas import (
     WorkspaceResponse,
     WorkspaceUpdate,
 )
-from app.utils import get_workspace_by_id
+from app.sync_legacy.queries import get_workspace_by_id
 from app.utils.email_utils import send_join_invite_email, send_member_added_email
 
 router = APIRouter(tags=["workspaces"])

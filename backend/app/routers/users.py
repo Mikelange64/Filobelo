@@ -10,18 +10,17 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.auth import (
-    CurrentUser,
     LoginForm,
     create_access_token,
     generate_reset_tokens,
-    get_current_user,
     hash_password,
     hash_reset_token,
     verify_password,
 )
+from app.sync_legacy.auth import CurrentUser, get_current_user
 from app.config import settings
-from app.database import DbSession
-from app.dependencies import handle_membership_departure
+from app.sync_legacy.database import DbSession
+from app.sync_legacy.dependencies import handle_membership_departure
 from app.models import (
     PasswordResetToken,
     RefreshToken,
@@ -30,7 +29,7 @@ from app.models import (
     Workspace,
     WorkspaceMember,
 )
-from app.redis_client import (
+from app.sync_legacy.redis_client import (
     login_limiter,
     password_reset_limiter,
     register_limiter,
@@ -52,12 +51,12 @@ from app.schemas import (
 )
 from app.utils import (
     delete_profile_image,
-    get_user_by_id,
     process_profile_image,
     send_password_reset_email,
     send_verification_email,
     upload_profile_image,
 )
+from app.sync_legacy.queries import get_user_by_id
 
 router = APIRouter(tags=["users"])
 logger = logging.getLogger(__name__)

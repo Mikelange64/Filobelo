@@ -3,7 +3,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select, func
-from app.database import DbSession
+from app.sync_legacy.database import DbSession
 from app.models import Task, TaskStatus, WorkspaceMember
 from app.schemas import (
     PaginatedTaskResponse,
@@ -13,11 +13,8 @@ from app.schemas import (
     TaskStatusUpdate,
     TaskUpdate,
 )
-from app.dependencies import (
-    get_target_membership,
-    require_membership,
-)
-from app.utils import get_task_by_id
+from app.sync_legacy.dependencies import get_target_membership, require_membership
+from app.sync_legacy.queries import get_task_by_id
 
 
 router = APIRouter(prefix="/{workspace_id}/tasks", tags=["tasks"])

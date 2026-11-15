@@ -14,7 +14,7 @@ from app.auth import CurrentUser
 logger = logging.getLogger(__name__)
 
 
-def require_admin(
+async def require_admin(
     workspace_id: int, current_user: CurrentUser, db: DbSession
 ) -> WorkspaceMember:
     query = select(WorkspaceMember).where(
@@ -22,7 +22,8 @@ def require_admin(
         WorkspaceMember.workspace_id == workspace_id,
         WorkspaceMember.role == "admin"
     )
-    is_admin = db.execute(query).scalars().first()
+    result = await db.execute(query)
+    is_admin = result.scalars().first()
 
     if not is_admin:
         logger.warning(
@@ -37,14 +38,15 @@ def require_admin(
     return is_admin
 
 
-def require_membership(
+async def require_membership(
     workspace_id: int, current_user: CurrentUser, db: DbSession
 )-> WorkspaceMember :
     query = select(WorkspaceMember).where(
         WorkspaceMember.user_id == current_user.id,
         WorkspaceMember.workspace_id == workspace_id,
     )
-    is_member = db.execute(query).scalars().first()
+    result = await db.execute(query)
+    is_member = result.scalars().first()
 
     if not is_member:
         # Also fires when the workspace id does not exist at all.
@@ -60,7 +62,7 @@ def require_membership(
     return is_member
 
 
-def require_task_in_workspace(workspace_id: int, task_id: int, db: DbSession) -> Task:
+async def require_task_in_workspace(workspace_id: int, task_id: int, db: DbSession) -> Task:
     """404s unless task_id belongs to the workspace_id in the same URL.
 
     require_membership only proves the caller belongs to the URL's workspace;
@@ -73,26 +75,27 @@ def require_task_in_workspace(workspace_id: int, task_id: int, db: DbSession) ->
     # app.utils.__init__ pulls in modules that do.
     from app.utils.queries import get_task_by_id
 
-    return get_task_by_id(task_id, workspace_id, db)
+    return await get_task_by_id(task_id, workspace_id, db)
 
 
-def get_target_membership(
+async def get_target_membership(
     workspace_id: int, user_id: int, db: DbSession
 ) -> WorkspaceMember | None :
     
-    is_member = db.execute(
+    result = await db.execute(
         select(WorkspaceMember)
         .where(
             WorkspaceMember.user_id == user_id,
             WorkspaceMember.workspace_id == workspace_id
         )
-    ).scalars().first()
+    )
+    is_member = result.scalars().first()
 
     return is_member
 
 
 
-def handle_membership_departure(membership: WorkspaceMember, db: DbSession) -> None:
+async def handle_membership_departure(membership: WorkspaceMember, db: DbSession) -> None:
     """Call whenever a WorkspaceMember row is about to go away (leave, kick,
     or the user's whole account being deleted), before committing.
 
@@ -117,22 +120,23 @@ def handle_membership_departure(membership: WorkspaceMember, db: DbSession) -> N
     Both are low-probability enough that they're being tracked rather than
     fixed right now.
     """
-    other_members = db.execute(
+    result = await db.execute(
         select(WorkspaceMember).where(
             WorkspaceMember.workspace_id == membership.workspace_id,
             WorkspaceMember.user_id != membership.user_id,
         )
-    ).scalars().all()
+    )
+    other_members = result.scalars().all()
 
     # Note for both log lines below: the caller commits after this returns, so
     # they describe what is about to be saved.
     if not other_members:
-        workspace = db.get(Workspace, membership.workspace_id)
+        workspace = await db.get(Workspace, membership.workspace_id)
         logger.info(
             "Workspace deleted: last member departed workspace_id=%s last_member_user_id=%s",
             membership.workspace_id, membership.user_id,
         )
-        db.delete(workspace)
+        await db.delete(workspace)
         return
 
     if membership.role == "admin" and not any(m.role == "admin" for m in other_members):
@@ -144,10 +148,10 @@ def handle_membership_departure(membership: WorkspaceMember, db: DbSession) -> N
             membership.workspace_id, membership.user_id, successor.user_id,
         )
 
-    db.delete(membership)
+    await db.delete(membership)
 
 
-def require_superuser(current_user: CurrentUser) -> User:
+async def require_superuser(current_user: CurrentUser) -> User:
     if not current_user.is_superuser:
         logger.warning(
             "Forbidden: superuser required user_id=%s", current_user.id

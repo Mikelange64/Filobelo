@@ -21,6 +21,9 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/users/login")
 # =================================== JWT ACCESS TOKEN ===================================
 
 
+# Argon2 is deliberately slow (tens of milliseconds of CPU), so these two stay
+# plain sync functions and the async routes call them through
+# run_in_threadpool, which keeps the event loop free for other requests.
 def hash_password(password: str) -> str:
     return pw_hasher.hash(password)
 
@@ -63,7 +66,7 @@ def verify_access_token(token: str) -> bool | str | None:
         return payload.get("sub")
 
 
-def get_current_user(
+async def get_current_user(
     token: Annotated[str, Depends(oauth2_scheme)],
     db: DbSession,
 ):
@@ -85,7 +88,7 @@ def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    result = db.execute(select(User).where(User.id == user_id))
+    result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalars().first()
 
     if not user:

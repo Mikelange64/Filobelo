@@ -1,6 +1,6 @@
 from datetime import UTC, datetime, timedelta
 
-from app.database import SessionLocal
+from app.sync_legacy.database import SessionLocal
 from app.models import Folder, Task, TaskStatus, User, Workspace, WorkspaceMember
 from app.auth import hash_password
 

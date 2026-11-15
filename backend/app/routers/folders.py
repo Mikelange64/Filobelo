@@ -2,11 +2,11 @@ from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy import update as sql_update
 
-from app.auth import CurrentUser
-from app.database import DbSession
+from app.sync_legacy.auth import CurrentUser
+from app.sync_legacy.database import DbSession
 from app.models import Folder, WorkspaceMember
 from app.schemas import FolderCreate, FolderResponse, FolderUpdate
-from app.utils.queries import get_folder_by_id
+from app.sync_legacy.queries import get_folder_by_id
 
 router = APIRouter(tags=["folders"])
 

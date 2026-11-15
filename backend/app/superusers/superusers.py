@@ -4,11 +4,11 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 
-from app.database import DbSession
-from app.dependencies import require_superuser
+from app.sync_legacy.database import DbSession
+from app.sync_legacy.dependencies import require_superuser
 from app.models import User
 from app.schemas import PaginatedSuperUserResponse, SuperUserResponse
-from app.utils import get_user_by_id
+from app.sync_legacy.queries import get_user_by_id
 
 router = APIRouter(tags=["superusers"])
 
