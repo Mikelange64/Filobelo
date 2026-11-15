@@ -5,18 +5,18 @@ from fastapi import APIRouter, status, HTTPException, UploadFile, Depends
 from PIL import UnidentifiedImageError
 from sqlalchemy import select
 
-from app.sync_legacy.database import DbSession
+from app.database import DbSession
 from app.config import settings
-from app.sync_legacy.dependencies import require_membership, require_task_in_workspace
+from app.dependencies import require_membership, require_task_in_workspace
 from app.models import Resource, ResourceType, WorkspaceMember
 from app.utils import (
+    delete_file,
+    fetch_oembed_thumbnail,
+    get_resource_by_id,
+    normalize_image,
     process_file,
     upload_file,
-    delete_file,
-    normalize_image,
-    fetch_oembed_thumbnail,
 )
-from app.sync_legacy.queries import get_resource_by_id
 from app.schemas import (
     LinkCreate,
     LinkResponse,
@@ -39,10 +39,10 @@ router = APIRouter(
 )
 
 
-def _get_typed_resource(
+async def _get_typed_resource(
     resource_id: int, task_id: int, expected_type: ResourceType, db: DbSession
 ) -> Resource:
-    resource = get_resource_by_id(resource_id, task_id, db)
+    resource = await get_resource_by_id(resource_id, task_id, db)
     if resource.type != expected_type:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Resource not found"
@@ -50,32 +50,34 @@ def _get_typed_resource(
     return resource
 
 
-def _save_resource(resource: Resource, db: DbSession) -> Resource:
+async def _save_resource(resource: Resource, db: DbSession) -> Resource:
     db.add(resource)
-    db.commit()
-    db.refresh(resource)
+    await db.commit()
+    await db.refresh(resource)
     return resource
 
 
-def _list_by_type(task_id: int, resource_type: ResourceType, db: DbSession) -> list[Resource]:
-    return db.execute(
+async def _list_by_type(task_id: int, resource_type: ResourceType, db: DbSession) -> list[Resource]:
+    result = await db.execute(
         select(Resource)
         .where(Resource.task_id == task_id, Resource.type == resource_type)
         .order_by(Resource.created_at)
-    ).scalars().all() # type: ignore[return-value]
+    )
+    return result.scalars().all() # type: ignore[return-value]
 
 
 @router.get( "/", response_model=list[ResourceSummary], dependencies=[Depends(require_membership)])
-def list_resources(task_id: int, db: DbSession):
-    return db.execute(
+async def list_resources(task_id: int, db: DbSession):
+    result = await db.execute(
         select(Resource).where(Resource.task_id == task_id).order_by(Resource.created_at)
-    ).scalars().all()
+    )
+    return result.scalars().all()
 
 
 # =============================================== LINKS ======================================================
 
 @router.post("/links", response_model=LinkResponse, status_code=status.HTTP_201_CREATED)
-def add_link(
+async def add_link(
     task_id: int,
     data: LinkCreate,
     db: DbSession,
@@ -89,23 +91,23 @@ def add_link(
         url           = str(data.url),
         thumbnail_url = fetch_oembed_thumbnail(str(data.url)),
     )
-    return _save_resource(new_link, db)
+    return await _save_resource(new_link, db)
 
 
 @router.get("/links", response_model=list[LinkResponse], dependencies=[Depends(require_membership)]
 )
-def list_links(task_id: int, db: DbSession):
-    return _list_by_type(task_id, ResourceType.LINK, db)
+async def list_links(task_id: int, db: DbSession):
+    return await _list_by_type(task_id, ResourceType.LINK, db)
 
 
 @router.get("/links/{link_id}", response_model=LinkResponse, dependencies=[Depends(require_membership)])
-def get_link(task_id: int, link_id: int, db: DbSession):
-    return _get_typed_resource(link_id, task_id, ResourceType.LINK, db)
+async def get_link(task_id: int, link_id: int, db: DbSession):
+    return await _get_typed_resource(link_id, task_id, ResourceType.LINK, db)
 
 
 @router.patch("/links/{link_id}", response_model=LinkResponse, dependencies=[Depends(require_membership)])
-def update_link(task_id: int, link_id: int, data: LinkUpdate, db: DbSession):
-    resource = _get_typed_resource(link_id, task_id, ResourceType.LINK, db)
+async def update_link(task_id: int, link_id: int, data: LinkUpdate, db: DbSession):
+    resource = await _get_typed_resource(link_id, task_id, ResourceType.LINK, db)
 
     update = data.model_dump(exclude_unset=True)
     for field, value in update.items():
@@ -115,15 +117,15 @@ def update_link(task_id: int, link_id: int, data: LinkUpdate, db: DbSession):
     if "url" in update:
         resource.thumbnail_url = fetch_oembed_thumbnail(resource.url)
 
-    db.commit()
-    db.refresh(resource)
+    await db.commit()
+    await db.refresh(resource)
     return resource
 
 
 # =============================================== NOTES ======================================================
 
 @router.post("/notes", response_model=NoteResponse, status_code=status.HTTP_201_CREATED)
-def add_note(
+async def add_note(
     task_id: int,
     data: NoteCreate,
     db: DbSession,
@@ -136,41 +138,41 @@ def add_note(
         title      = data.title,
         content    = data.content,
     )
-    return _save_resource(new_note, db)
+    return await _save_resource(new_note, db)
 
 
 @router.get("/notes", response_model=list[NoteResponse], dependencies=[Depends(require_membership)])
-def list_notes(task_id: int, db: DbSession):
-    return _list_by_type(task_id, ResourceType.NOTE, db)
+async def list_notes(task_id: int, db: DbSession):
+    return await _list_by_type(task_id, ResourceType.NOTE, db)
 
 
 @router.get("/notes/{note_id}", response_model=NoteResponse, dependencies=[Depends(require_membership)])
-def get_note(task_id: int, note_id: int, db: DbSession):
-    return _get_typed_resource(note_id, task_id, ResourceType.NOTE, db)
+async def get_note(task_id: int, note_id: int, db: DbSession):
+    return await _get_typed_resource(note_id, task_id, ResourceType.NOTE, db)
 
 
 @router.patch("/notes/{note_id}", response_model=NoteResponse, dependencies=[Depends(require_membership)])
-def update_note(task_id: int, note_id: int, data: NoteUpdate, db: DbSession):
-    resource = _get_typed_resource(note_id, task_id, ResourceType.NOTE, db)
+async def update_note(task_id: int, note_id: int, data: NoteUpdate, db: DbSession):
+    resource = await _get_typed_resource(note_id, task_id, ResourceType.NOTE, db)
 
     update = data.model_dump(exclude_unset=True)
     for field, value in update.items():
         setattr(resource, field, value)
 
-    db.commit()
-    db.refresh(resource)
+    await db.commit()
+    await db.refresh(resource)
     return resource
 
 
 # =============================================== FILES ======================================================
 
 @router.get("/files", response_model=list[FileResponse], dependencies=[Depends(require_membership)])
-def list_files(task_id: int, db: DbSession):
-    return _list_by_type(task_id, ResourceType.FILE, db)
+async def list_files(task_id: int, db: DbSession):
+    return await _list_by_type(task_id, ResourceType.FILE, db)
 
 
 @router.post("/files", response_model=FileResponse, status_code=status.HTTP_201_CREATED)
-def upload_resource_file(
+async def upload_resource_file(
     task_id: int,
     file: UploadFile,
     db: DbSession,
@@ -219,7 +221,7 @@ def upload_resource_file(
         file_key   = file_key,
         mime_type  = mime,
     )
-    return _save_resource(new_resource, db)
+    return await _save_resource(new_resource, db)
 
 
 # =============================================== DELETE (any type) ==========================================
@@ -229,11 +231,11 @@ def upload_resource_file(
     status_code=status.HTTP_204_NO_CONTENT,
     dependencies=[Depends(require_membership)],
 )
-def delete_resource(task_id: int, resource_id: int, db: DbSession):
-    resource = get_resource_by_id(resource_id, task_id, db)
+async def delete_resource(task_id: int, resource_id: int, db: DbSession):
+    resource = await get_resource_by_id(resource_id, task_id, db)
 
     if resource.type == ResourceType.FILE:
         delete_file(resource.file_key)
 
-    db.delete(resource)
-    db.commit()
+    await db.delete(resource)
+    await db.commit()
