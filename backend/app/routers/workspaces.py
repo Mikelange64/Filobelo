@@ -2,7 +2,7 @@ import logging
 from datetime import UTC, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
@@ -27,7 +27,11 @@ from app.schemas import (
     WorkspaceUpdate,
 )
 from app.utils import get_workspace_by_id
-from app.utils.email_utils import send_join_invite_email, send_member_added_email
+from app.utils.email_utils import (
+    send_join_invite_email,
+    send_logging_failure,
+    send_member_added_email,
+)
 
 router = APIRouter(tags=["workspaces"])
 
@@ -387,6 +391,7 @@ async def add_user(
     current_user: CurrentUser,
     db: DbSession,
     member: Annotated[WorkspaceMember, Depends(require_admin)],
+    background_tasks: BackgroundTasks,
 ):
     if await get_target_membership(workspace_id, user_id, db):
         raise HTTPException(
@@ -411,21 +416,21 @@ async def add_user(
         "Workspace member added workspace_id=%s user_id=%s", workspace_id, user_id
     )
 
-    try:
-        await send_member_added_email(
-            to_email=target_user.email,
-            invitee_username=target_user.username,
-            inviter_username=current_user.username,
-            workspace_title=workspace.title,
-            workspace_url=f"{settings.frontend_url}/workspaces/{workspace_id}",
-        )
-    except Exception:
-        # Still deliberately non-fatal (the member was added); just no
-        # longer silent.
-        logger.exception(
-            "Failed to send member-added email workspace_id=%s user_id=%s",
-            workspace_id, user_id,
-        )
+    # Sent after the response goes out. Still deliberately non-fatal (the
+    # member was added); a failure is logged by send_logging_failure.
+    background_tasks.add_task(
+        send_logging_failure,
+        send_member_added_email,
+        logger,
+        "Failed to send member-added email workspace_id=%s user_id=%s",
+        workspace_id,
+        user_id,
+        to_email=target_user.email,
+        invitee_username=target_user.username,
+        inviter_username=current_user.username,
+        workspace_title=workspace.title,
+        workspace_url=f"{settings.frontend_url}/workspaces/{workspace_id}",
+    )
 
     return _workspace_response(await get_workspace_by_id(workspace_id, db), member)
 

@@ -1,4 +1,8 @@
-from .email_utils import send_password_reset_email, send_verification_email
+from .email_utils import (
+    send_logging_failure,
+    send_password_reset_email,
+    send_verification_email,
+)
 from .file_utils import process_file, upload_file, delete_file, normalize_image
 from .image_utils import (
     delete_profile_image,
@@ -34,6 +38,7 @@ __all__ = [
     # EMAIL UTILS
     "send_password_reset_email",
     "send_verification_email",
+    "send_logging_failure",
 
     # FILE UTILS
     "process_file",

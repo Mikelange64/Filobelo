@@ -1,3 +1,5 @@
+import logging
+from collections.abc import Awaitable, Callable
 from email.message import EmailMessage
 from pathlib import Path
 
@@ -45,6 +47,28 @@ async def send_email(
         start_tls=False if implicit_tls else settings.mail_use_tls,
         timeout=10,
     )
+
+
+async def send_logging_failure(
+    send: Callable[..., Awaitable[None]],
+    logger: logging.Logger,
+    failure_message: str,
+    *failure_args: object,
+    **email_kwargs: object,
+) -> None:
+    """Sends one email and, if that fails, logs it instead of raising.
+
+    Made to be handed to FastAPI's BackgroundTasks, so the email goes out
+    after the response has been sent and the user is not kept waiting on the
+    mail server. Nothing is listening for an exception at that point, so a
+    failure is written to the log (with its traceback) under the caller's own
+    logger and message - the same line the route used to log when it sent
+    the email itself.
+    """
+    try:
+        await send(**email_kwargs)
+    except Exception:
+        logger.exception(failure_message, *failure_args)
 
 
 async def send_password_reset_email(to_email: str, username: str, token: str) -> None:

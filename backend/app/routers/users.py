@@ -3,7 +3,16 @@ from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 from botocore.exceptions import ClientError
-from fastapi import APIRouter, Depends, Form, HTTPException, Query, UploadFile, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    Form,
+    HTTPException,
+    Query,
+    UploadFile,
+    status,
+)
 from PIL import UnidentifiedImageError
 from sqlalchemy import delete as sql_delete
 from sqlalchemy import func, or_, select
@@ -56,6 +65,7 @@ from app.utils import (
     delete_profile_image,
     get_user_by_id,
     process_profile_image,
+    send_logging_failure,
     send_password_reset_email,
     send_verification_email,
     upload_profile_image,
@@ -95,8 +105,10 @@ async def _read_profile_image(file: UploadFile) -> tuple[bytes, str]:
 
 
 @router.post("", response_model=UserPrivate, status_code=status.HTTP_201_CREATED)
-async def create_user(user: UserCreate, db: DbSession):
-    return await _register_user(user, db)
+async def create_user(
+    user: UserCreate, db: DbSession, background_tasks: BackgroundTasks
+):
+    return await _register_user(user, db, background_tasks)
 
 
 # Same registration, sent as a multipart form so it can carry a profile
@@ -109,13 +121,17 @@ async def create_user(user: UserCreate, db: DbSession):
 async def create_user_with_picture(
     user: Annotated[UserCreate, Form()],
     db: DbSession,
+    background_tasks: BackgroundTasks,
     file: UploadFile | None = None,
 ):
-    return await _register_user(user, db, picture=file)
+    return await _register_user(user, db, background_tasks, picture=file)
 
 
 async def _register_user(
-    user: UserCreate, db: AsyncSession, picture: UploadFile | None = None
+    user: UserCreate,
+    db: AsyncSession,
+    background_tasks: BackgroundTasks,
+    picture: UploadFile | None = None,
 ):
     await register_limiter(user, db)
 
@@ -182,14 +198,20 @@ async def _register_user(
             await db.commit()
             await db.refresh(new_user)
 
-    try:
-        await send_verification_email(
-            to_email=new_user.email, username=new_user.username, token=token
-        )
-    except Exception:
-        logger.exception(
-            "Failed to send verification email on signup for user_id=%s", new_user.id
-        )
+    # Sent after the response goes out, so signup does not wait on the mail
+    # server. The client was never told about a failed send anyway (the
+    # account exists either way, and the sign-in page can resend the link); a
+    # failure is logged by send_logging_failure, as before.
+    background_tasks.add_task(
+        send_logging_failure,
+        send_verification_email,
+        logger,
+        "Failed to send verification email on signup for user_id=%s",
+        new_user.id,
+        to_email=new_user.email,
+        username=new_user.username,
+        token=token,
+    )
 
     return new_user
 
@@ -471,7 +493,9 @@ async def verify_email(request_data: EmailVerification, db: DbSession):
 
 @router.post("/resend-verification", status_code=status.HTTP_202_ACCEPTED)
 async def resend_verification_email(
-    db: DbSession, request_data: ResendVerificationRequest
+    db: DbSession,
+    request_data: ResendVerificationRequest,
+    background_tasks: BackgroundTasks,
 ):
     await resend_verification_limiter(request_data, db)
 
@@ -504,14 +528,16 @@ async def resend_verification_email(
 
         logger.info("Verification email re-requested user_id=%s", user.id)
 
-        try:
-            await send_verification_email(
-                to_email=user.email, username=user.username, token=token
-            )
-        except Exception:
-            logger.exception(
-                "Failed to resend verification email for user_id=%s", user.id
-            )
+        background_tasks.add_task(
+            send_logging_failure,
+            send_verification_email,
+            logger,
+            "Failed to resend verification email for user_id=%s",
+            user.id,
+            to_email=user.email,
+            username=user.username,
+            token=token,
+        )
 
     return {
         "message": "If an account exists and isn't verified yet, a new verification link has been sent"
@@ -524,7 +550,11 @@ async def resend_verification_email(
 
 
 @router.post("/forgot-password", status_code=status.HTTP_202_ACCEPTED)
-async def forgot_password(db: DbSession, request_data: ForgotPasswordRequest):
+async def forgot_password(
+    db: DbSession,
+    request_data: ForgotPasswordRequest,
+    background_tasks: BackgroundTasks,
+):
     await password_reset_limiter(request_data, db)
 
     result = await db.execute(
@@ -552,14 +582,16 @@ async def forgot_password(db: DbSession, request_data: ForgotPasswordRequest):
 
         logger.info("Password reset requested user_id=%s", user.id)
 
-        try:
-            await send_password_reset_email(
-                to_email=user.email, username=user.username, token=token
-            )
-        except Exception:
-            logger.exception(
-                "Failed to send password reset email for user_id=%s", user.id
-            )
+        background_tasks.add_task(
+            send_logging_failure,
+            send_password_reset_email,
+            logger,
+            "Failed to send password reset email for user_id=%s",
+            user.id,
+            to_email=user.email,
+            username=user.username,
+            token=token,
+        )
     else:
         # The response is identical either way (so callers cannot tell which
         # emails have accounts); only the log shows the difference.
