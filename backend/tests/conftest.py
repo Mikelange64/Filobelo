@@ -9,9 +9,12 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 from moto import mock_aws
 from PIL import Image
-from sqlalchemy import create_engine, text
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.ext.asyncio import (
+    AsyncConnection,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 from sqlalchemy.pool import NullPool
 
 # The test database and Redis index are created, flushed and dropped by each
@@ -44,7 +47,6 @@ os.environ["REDIS_URL"] = os.environ.get(
 )
 
 from app.database import Base, get_db
-from app.sync_legacy.database import get_db as get_sync_db
 from app.main import app
 from app.redis_client import redis_client
 from tests.auth_helpers import (
@@ -90,53 +92,41 @@ async def setup_database(test_engine):
     await test_engine.dispose()
 
 
-# ----------------------------------------------------------------------------------------
-# TRANSITIONAL (async rewrite): removed in the cleanup phase.
-#
-# While the routers are converted one at a time, some requests use the sync
-# session and some the async one. Those are two different database
-# connections, and one connection cannot see another's uncommitted rows, so
-# the usual "wrap the test in a transaction and roll it back" isolation cannot
-# work yet. Until every router is async, each request commits for real (as in
-# production) and the tables are emptied after every test instead. The
-# rollback fixture from the reference project replaces this at the end.
-# ----------------------------------------------------------------------------------------
+# Transactional rollback pattern: the tables are created once for the whole
+# session, each test runs inside one database transaction, and that
+# transaction is rolled back when the test ends, undoing everything it did.
+@pytest.fixture
+async def db_connection(test_engine, setup_database) -> AsyncGenerator[AsyncConnection]:
+    conn = await test_engine.connect()  # one connection for the whole test
+    trans = await conn.begin()          # the transaction that gets rolled back
 
-
-@pytest.fixture(scope="session")
-def sync_test_engine():
-    engine = create_engine(os.environ["DATABASE_URL"], poolclass=NullPool)
-    yield engine
-    engine.dispose()
-
-
-async def _empty_all_tables(engine) -> None:
-    tables = ", ".join(f'"{t.name}"' for t in Base.metadata.sorted_tables)
-    async with engine.begin() as conn:
-        # Fail instead of hanging forever if a test left a transaction open.
-        await conn.execute(text("SET LOCAL lock_timeout = '10s'"))
-        await conn.execute(text(f"TRUNCATE TABLE {tables} CASCADE"))
+    try:
+        yield conn
+    finally:
+        await trans.rollback()
+        await conn.close()
 
 
 @pytest.fixture
-async def db_session(test_engine, setup_database) -> AsyncGenerator[AsyncSession]:
-    test_async_session = async_sessionmaker(
-        bind=test_engine,
+def test_async_session(db_connection) -> async_sessionmaker[AsyncSession]:
+    # Sessions are bound to this test's connection, not to the engine, so
+    # everything they do lands inside the transaction above.
+    # join_transaction_mode="create_savepoint" is the "fake commit": when the
+    # app commits, SQLAlchemy releases a savepoint instead of really
+    # committing, so the outer transaction can still be rolled back.
+    return async_sessionmaker(
+        bind=db_connection,
         class_=AsyncSession,
         expire_on_commit=False,
+        join_transaction_mode="create_savepoint",
     )
 
+
+@pytest.fixture
+async def db_session(test_async_session) -> AsyncGenerator[AsyncSession]:
+    """The session a test uses to read or prepare rows directly."""
     async with test_async_session() as session:
-        # Requests run on their own connections for now (see the note above),
-        # so a row this session has only flushed would be invisible to them
-        # and would hold a lock they wait on. Committing instead makes a
-        # test's own setup visible, which is what flush gave it before.
-        session.flush = session.commit
-        try:
-            yield session
-        finally:
-            await session.close()
-            await _empty_all_tables(test_engine)
+        yield session
 
 
 @pytest.fixture
@@ -149,30 +139,28 @@ async def _flush_test_redis():
 
 @pytest.fixture
 async def client(
-    db_session: AsyncSession, test_engine, sync_test_engine, _flush_test_redis
+    db_session: AsyncSession, test_async_session, _flush_test_redis
 ) -> AsyncGenerator[AsyncClient]:
-    async_session_factory = async_sessionmaker(
-        bind=test_engine, class_=AsyncSession, expire_on_commit=False
-    )
-    sync_session_factory = sessionmaker(bind=sync_test_engine)
-
-    # Each request gets its own session, exactly as in production. This
-    # replaces the app's get_db dependency, so every endpoint talks to the
-    # test database instead of the real one.
+    # Replaces the app's get_db dependency, so every endpoint works on the
+    # test database, inside this test's transaction.
+    #
+    # Each request gets its own session, exactly as in production, rather
+    # than sharing the test's db_session. A shared session remembers what
+    # earlier requests loaded, which would hide a relationship a route forgot
+    # to load (the MissingGreenlet error production would hit). They all use
+    # the same connection, so they still see each other's rows.
     async def override_get_db():
-        async with async_session_factory() as session:
-            yield session
-
-    # TRANSITIONAL: the routers not converted yet still ask for a sync session.
-    def override_get_sync_db():
-        with sync_session_factory() as session:
+        async with test_async_session() as session:
             yield session
 
     app.dependency_overrides[get_db] = override_get_db
-    app.dependency_overrides[get_sync_db] = override_get_sync_db
 
     # ASGITransport calls the app in memory, with no network involved.
     # follow_redirects matches what the previous TestClient did by default.
+    #
+    # AsyncClient with ASGITransport does not run the app's lifespan hook.
+    # That is fine here: it only tidies up logging and warms/closes
+    # connections the tests do not use.
     async with AsyncClient(
         transport=ASGITransport(app=app),
         base_url="http://test",

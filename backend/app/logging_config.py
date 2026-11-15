@@ -81,10 +81,13 @@ LOG_FORMAT = (
 
 # A ContextVar is a variable with a separate value per request being handled,
 # even when several run at the same time. It holds a small dict rather than
-# two plain values for one reason: the routes here are sync functions, which
-# FastAPI runs in a worker thread with a *copy* of the context. A plain value
-# set inside the route (the user id, once auth has run) would be set on the
-# copy and lost. Mutating a shared dict is visible from both sides.
+# two plain values. That dates from when the routes were sync functions, which
+# FastAPI runs in a worker thread with a *copy* of the context: a plain value
+# set inside the route (the user id, once auth has run) was set on the copy
+# and lost, while mutating a shared dict is visible from both sides. The
+# routes are async now and run in the request's own context, so the dict is
+# no longer strictly needed; it is kept because it also stays correct for
+# anything that does run in a worker thread (run_in_threadpool).
 _request_context: ContextVar[dict | None] = ContextVar("request_context", default=None)
 
 
