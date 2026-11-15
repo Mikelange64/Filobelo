@@ -11,8 +11,15 @@ from PIL import Image
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-os.environ["DATABASE_URL"] = (
-    "postgresql+psycopg://mikelange64@localhost/test_workspaceapp"
+# The test database and Redis index are created, flushed and dropped by each
+# pytest session, so two sessions pointed at the same ones corrupt each other.
+# Set TEST_DATABASE_URL / TEST_REDIS_URL to give a second checkout its own:
+#
+#   TEST_DATABASE_URL=postgresql+psycopg://mikelange64@localhost/test_workspaceapp_async \
+#   TEST_REDIS_URL=redis://localhost:6379/14 uv run pytest
+os.environ["DATABASE_URL"] = os.environ.get(
+    "TEST_DATABASE_URL",
+    "postgresql+psycopg://mikelange64@localhost/test_workspaceapp",
 )
 os.environ["SECRET_KEY"] = "test-secret-key-for-testing-only"
 os.environ["S3_BUCKET_NAME"] = "test-bucket"
@@ -29,7 +36,9 @@ os.environ["MAIL_PASSWORD"] = ""
 os.environ["MAIL_FROM"] = "test@example.com"
 os.environ["MAIL_USE_TLS"] = "False"
 os.environ["FRONTEND_URL"] = "http://localhost:3000"
-os.environ["REDIS_URL"] = "redis://localhost:6379/15"
+os.environ["REDIS_URL"] = os.environ.get(
+    "TEST_REDIS_URL", "redis://localhost:6379/15"
+)
 
 from app.database import Base, get_db
 from app.main import app
