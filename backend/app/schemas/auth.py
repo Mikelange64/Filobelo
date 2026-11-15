@@ -4,9 +4,9 @@ from pydantic import BaseModel, EmailStr, Field
 # =================================== JWT TOKEN SCHEMA ===================================
 
 class Token(BaseModel):
-    access_token  : str
-    refresh_token : str
-    token_type    : str
+    access_token:  str
+    refresh_token: str
+    token_type:    str
 
 
 class RefreshRequest(BaseModel):
@@ -16,7 +16,7 @@ class RefreshRequest(BaseModel):
 # ================================= PASSWORD RESET TOKENS ================================
 
 class EmailVerification(BaseModel):
-    token : str
+    token: str
 
 
 class ResendVerificationRequest(BaseModel):

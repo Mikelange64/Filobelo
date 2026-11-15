@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 // Redesign in progress: Topbar removed, replaced by SidebarV2 (search, theme,
 // calendar, and notifications all moved into the sidebar). Old implementation
@@ -10,10 +11,11 @@ import NewWorkspaceModal from './components/Home/NewWorkspaceModal'
 import ProfileModal from './components/Profile/ProfileModal'
 import CalendarModal from './components/Calendar/CalendarModal'
 import CompletedWorkspacesModal from './components/Home/CompletedWorkspacesModal'
+import ArchivedWorkspacesModal from './components/Home/ArchivedWorkspacesModal'
 import Toast from './components/shared/Toast'
 import { useAuth } from './context/AuthContext'
 import {
-  authFetch,
+  getAllWorkspaces,
   createWorkspace,
   patchWorkspacePreferences,
   leaveWorkspace,
@@ -25,7 +27,12 @@ import {
   completeWorkspace,
   reopenWorkspace,
 } from './api/client'
+import { keys, writeCache } from './api/queryClient'
 import './App.css'
+
+// Stable fallback for "not loaded yet" so components downstream don't see a
+// brand new [] on every render.
+const EMPTY = []
 
 function toAvatarUrl(imagePath) {
   return imagePath?.startsWith('https://') ? imagePath : null
@@ -67,8 +74,40 @@ function AppShell() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
-  const [workspaces, setWorkspaces] = useState([])
-  const [folders, setFolders] = useState([])
+  const queryClient = useQueryClient()
+
+  // Server data lives in the query cache rather than in useState: it is
+  // fetched once, shared with anything else that asks for the same key, and
+  // refreshed in the background when stale instead of on every navigation.
+  const workspacesQuery = useQuery({
+    queryKey: keys.workspaces,
+    queryFn: async () => (await getAllWorkspaces()).map(normalizeWorkspace),
+  })
+  const foldersQuery = useQuery({ queryKey: keys.folders, queryFn: getFolders })
+  const completedCountQuery = useQuery({
+    queryKey: keys.completedCount,
+    queryFn: async () => (await getCompletedWorkspaces(0, 1)).total,
+  })
+
+  const workspaces = workspacesQuery.data ?? EMPTY
+  const folders = foldersQuery.data ?? EMPTY
+  const completedTotal = completedCountQuery.data ?? 0
+
+  // Same call shape as the useState setters these replaced, so every handler
+  // below (including its optimistic update + rollback) is unchanged - it now
+  // just reads and writes the cache.
+  const setWorkspaces = (updater) =>
+    writeCache(keys.workspaces, (old) =>
+      typeof updater === 'function' ? updater(old ?? EMPTY) : updater
+    )
+  const setFolders = (updater) =>
+    writeCache(keys.folders, (old) =>
+      typeof updater === 'function' ? updater(old ?? EMPTY) : updater
+    )
+  const setCompletedTotal = (updater) =>
+    writeCache(keys.completedCount, (old) =>
+      typeof updater === 'function' ? updater(old ?? 0) : updater
+    )
   // const [searchValue, setSearchValue] = useState('') // Topbar-only; SidebarV2 filters locally
   const [showNewModal, setShowNewModal] = useState(false)
   const [showProfileModal, setShowProfileModal] = useState(false)
@@ -76,43 +115,41 @@ function AppShell() {
   const [calendarPrefillDate, setCalendarPrefillDate] = useState(null)
   const [toast, setToast] = useState(null)
   const [showCompletedModal, setShowCompletedModal] = useState(false)
-  const [completedTotal, setCompletedTotal] = useState(0)
+  const [showArchivedModal, setShowArchivedModal] = useState(false)
+  // Stable identity matters: Toast restarts its auto-dismiss timer whenever
+  // onDismiss changes, so an inline arrow here would reset the countdown on
+  // every re-render of this component and toasts would linger.
+  const dismissToast = useCallback(() => setToast(null), [])
 
   function showComingSoon() {
     setToast('Currently unavailable — coming soon')
   }
 
-  async function loadData() {
-    try {
-      const [wsData, folderData, completedData] = await Promise.all([
-        authFetch('/workspaces'),
-        getFolders(),
-        getCompletedWorkspaces(0, 1),
-      ])
-      setWorkspaces(wsData.workspaces.map(normalizeWorkspace))
-      setFolders(folderData)
-      setCompletedTotal(completedData.total)
-    } catch {
-      setToast('Failed to load workspaces — please refresh')
-    }
-  }
-
-  // Initial load
+  // Only when there is nothing to show at all - a failed background refresh
+  // with a cached list still on screen isn't worth interrupting the user for.
+  const initialLoadFailed =
+    (workspacesQuery.isError && workspacesQuery.data === undefined) ||
+    (foldersQuery.isError && foldersQuery.data === undefined)
   useEffect(() => {
-    loadData()
-  }, [])
+    if (initialLoadFailed) setToast('Failed to load workspaces — please refresh')
+  }, [initialLoadFailed])
 
-  // Re-fetch whenever the user navigates back to home
-  const isFirstRender = useRef(true)
+  // Arriving on home always revalidates the workspace list and completed
+  // count. Several things done inside a workspace change what the home cards
+  // show without being pushed up here (member count after an invite, task
+  // count, a workspace reopened after it was dropped from this list), so a
+  // "still fresh" cached list can't be trusted on return. The cached list is
+  // still painted immediately - the refetch just swaps in behind it. Folders
+  // only change from this screen, so they refetch only when stale.
   useEffect(() => {
-    if (isFirstRender.current) {
-      isFirstRender.current = false
-      return
-    }
-    if (location.pathname === '/') {
-      loadData()
-    }
-  }, [location.pathname])
+    if (location.pathname !== '/') return
+    // cancelRefetch: false -> if a fetch is already running (e.g. the very
+    // first load), reuse it instead of throwing it away and starting again.
+    const reuseInFlight = { cancelRefetch: false }
+    queryClient.invalidateQueries({ queryKey: keys.workspaces }, reuseInFlight)
+    queryClient.invalidateQueries({ queryKey: keys.completedCount }, reuseInFlight)
+    queryClient.refetchQueries({ queryKey: keys.folders, stale: true })
+  }, [location.pathname, queryClient])
 
   const currentUser = {
     name: user?.username,
@@ -128,6 +165,12 @@ function AppShell() {
   //       ws.title.toLowerCase().includes(searchValue.toLowerCase())
   //     )
   //   : []
+
+  // Archived = hidden by this user for themselves. Completed workspaces have
+  // their own list, so they're kept out of this one.
+  const archivedWorkspaces = workspaces.filter(
+    (ws) => ws.isArchived && !ws.isCompleted
+  )
 
   const upcomingTasks = activeWorkspaces.flatMap((ws) =>
     ws.tasks
@@ -176,6 +219,20 @@ function AppShell() {
     }
   }
 
+  async function handleUnarchive(id) {
+    setWorkspaces((prev) =>
+      prev.map((w) => (w.id === id ? { ...w, isArchived: false } : w))
+    )
+    try {
+      await patchWorkspacePreferences(id, { is_archived: false })
+    } catch (err) {
+      setWorkspaces((prev) =>
+        prev.map((w) => (w.id === id ? { ...w, isArchived: true } : w))
+      )
+      setToast(err.detail ?? 'Could not restore workspace')
+    }
+  }
+
   async function handleLeave(id) {
     const ws = workspaces.find((w) => w.id === id)
     if (!ws) return
@@ -199,24 +256,47 @@ function AppShell() {
     }
   }
 
-  async function handleCreateFolder(name, color) {
-    const folder = await createFolder(name, color)
+  async function handleCreateFolder(name, color, parentId = null) {
+    const folder = await createFolder(name, color, parentId)
     setFolders((prev) => [...prev, folder])
   }
 
+  // data uses the API's field names (name / color / parent_id). The server is
+  // the judge of an invalid move (cycle, foreign parent), so this is not
+  // optimistic - the cache only changes once the PATCH has succeeded.
   async function handleUpdateFolder(id, data) {
     const updated = await updateFolder(id, data)
     setFolders((prev) => prev.map((f) => (f.id === id ? updated : f)))
   }
 
+  // Mirrors the server: only this folder is removed; its direct subfolders and
+  // the workspaces filed directly in it move up to its parent (top level if it
+  // had none). Rollback restores exactly the rows this call moved, by id, so
+  // it cannot clobber an unrelated change made while the request was in flight.
   async function handleDeleteFolder(id) {
     const folder = folders.find((f) => f.id === id)
-    setFolders((prev) => prev.filter((f) => f.id !== id))
-    setWorkspaces((prev) => prev.map((w) => w.folderId === id ? { ...w, folderId: null } : w))
+    if (!folder) return
+    const newParentId = folder.parent_id ?? null
+    const childIds = folders.filter((f) => f.parent_id === id).map((f) => f.id)
+    const movedWorkspaceIds = workspaces.filter((w) => w.folderId === id).map((w) => w.id)
+
+    setFolders((prev) =>
+      prev
+        .filter((f) => f.id !== id)
+        .map((f) => (f.parent_id === id ? { ...f, parent_id: newParentId } : f))
+    )
+    setWorkspaces((prev) => prev.map((w) => w.folderId === id ? { ...w, folderId: newParentId } : w))
     try {
       await deleteFolder(id)
-    } catch {
-      setFolders((prev) => [...prev, folder])
+    } catch (err) {
+      setFolders((prev) => [
+        ...prev.map((f) => (childIds.includes(f.id) ? { ...f, parent_id: id } : f)),
+        folder,
+      ])
+      setWorkspaces((prev) =>
+        prev.map((w) => (movedWorkspaceIds.includes(w.id) ? { ...w, folderId: id } : w))
+      )
+      setToast(err?.message ?? 'Could not delete folder')
     }
   }
 
@@ -266,6 +346,10 @@ function AppShell() {
     setWorkspaces((prev) => [normalizeWorkspace(ws), ...prev])
     setShowNewModal(false)
     setCalendarPrefillDate(null)
+    setShowCalendar(false)
+    // Creating a workspace is almost always followed by wanting to add tasks
+    // to it, so go straight there instead of leaving the user on Home.
+    navigate(`/workspaces/${ws.id}`)
   }
 
   const outletCtx = {
@@ -326,10 +410,13 @@ function AppShell() {
         onUpdateFolder={handleUpdateFolder}
         onDeleteFolder={handleDeleteFolder}
         onMoveToFolder={handleMoveToFolder}
+        onToast={setToast}
         onProfileClick={() => setShowProfileModal(true)}
         onCalendarToggle={() => setShowCalendar((v) => !v)}
         onNotificationsClick={showComingSoon}
         onLogoClick={() => navigate('/')}
+        archivedCount={archivedWorkspaces.length}
+        onOpenArchived={() => setShowArchivedModal(true)}
       />
 
       <div className="app-shell__main">
@@ -391,7 +478,16 @@ function AppShell() {
         />
       )}
 
-      {toast && <Toast message={toast} onDismiss={() => setToast(null)} />}
+      {showArchivedModal && (
+        <ArchivedWorkspacesModal
+          workspaces={archivedWorkspaces}
+          onClose={() => setShowArchivedModal(false)}
+          onSelectWorkspace={(id) => { setShowArchivedModal(false); handleSelectWorkspace(id) }}
+          onRestore={handleUnarchive}
+        />
+      )}
+
+      {toast && <Toast message={toast} onDismiss={dismissToast} />}
     </div>
   )
 }

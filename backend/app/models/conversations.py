@@ -90,7 +90,7 @@ class Message(Base):
         index=True
     )
     sender_type: Mapped[SenderType] = mapped_column(sqlEnum(SenderType), nullable=False)
-    content :    Mapped[str] = mapped_column(Text, nullable=False)
+    content:    Mapped[str] = mapped_column(Text, nullable=False)
     # List of {"title", "url"} dicts from the web_search tool, in the order
     # they were found - null for messages that never triggered a search.
     sources:    Mapped[list[dict] | None] = mapped_column(JSON, nullable=True, default=None)
@@ -101,6 +101,6 @@ class Message(Base):
     conversation: Mapped["Conversation"] = relationship(
         "Conversation", back_populates="messages",
     )
-    sender Mapped["User | None"] = relationship(
+    sender: Mapped["User | None"] = relationship(
         "User", foreign_keys=[sender_id], back_populates="messages_sent"
     )

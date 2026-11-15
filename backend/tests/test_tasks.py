@@ -711,3 +711,64 @@ def test_make_owner_nonexistent_task(
 
 
 # ========================================================================================
+
+
+# ========================================================================================
+# CROSS-WORKSPACE ISOLATION
+# ========================================================================================
+# The attacker is a legitimate member of their OWN workspace and puts that
+# workspace's id in the URL (so require_membership passes) alongside a task
+# id belonging to someone else's workspace.
+
+
+@pytest.mark.parametrize(
+    "method, suffix, body",
+    [
+        pytest.param("get", "", None, id="get"),
+        pytest.param("patch", "/", {"title": "hijacked"}, id="patch"),
+        pytest.param(
+            "put",
+            "",
+            {"title": "hijacked", "content": "x", "color": "#000000", "status": "DONE"},
+            id="put",
+        ),
+        pytest.param("patch", "/status", {"status": "DONE"}, id="status"),
+        pytest.param("delete", "", None, id="delete"),
+    ],
+)
+def test_task_not_reachable_through_another_workspace(
+    client, user_token, workspace, second_user_token, method, suffix, body
+):
+    victim_task = create_task(client, user_token, workspace["id"])
+    attacker_ws = create_workspace(client, second_user_token, title="Attacker WS")
+
+    response = client.request(
+        method,
+        f"/api/workspaces/{attacker_ws['id']}/tasks/{victim_task['id']}{suffix}",
+        json=body,
+        headers=auth_header(second_user_token),
+    )
+    assert response.status_code == 404
+
+    # and the task is untouched
+    check = client.get(
+        f"/api/workspaces/{workspace['id']}/tasks/{victim_task['id']}",
+        headers=auth_header(user_token),
+    )
+    assert check.status_code == 200
+    assert check.json()["title"] == victim_task["title"]
+    assert check.json()["status"] == victim_task["status"]
+
+
+def test_task_reassign_not_reachable_through_another_workspace(
+    client, user_token, workspace, second_user, second_user_token
+):
+    victim_task = create_task(client, user_token, workspace["id"])
+    attacker_ws = create_workspace(client, second_user_token, title="Attacker WS")
+
+    response = client.patch(
+        f"/api/workspaces/{attacker_ws['id']}/tasks/{victim_task['id']}/owner"
+        f"?user_id={second_user['id']}",
+        headers=auth_header(second_user_token),
+    )
+    assert response.status_code == 404

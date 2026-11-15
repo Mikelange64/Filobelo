@@ -37,6 +37,12 @@ def _check_rate_limit(identifier: str, kind: str, window: int, max_num: int) -> 
         return
 
     if count > max_num:
+        # identifier is a user id when the account exists, otherwise the
+        # email/username that was typed (%r escapes it - see logging_config.py).
+        logger.warning(
+            "Rate limit hit kind=%s identifier=%r count=%s limit=%s window_s=%s",
+            kind, identifier, count, max_num, window,
+        )
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Too many requests, please try again later.",

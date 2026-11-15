@@ -288,6 +288,18 @@
   box-shadow: none;
 }
 
+/* Custom value typed in place of the "Custom" button: same footprint as a
+   segmented button so swapping one for the other doesn't move anything. */
+.nwm-max-custom-input--inline {
+  width: 82px;
+  padding: 9px 12px;
+  border-color: var(--color-brand-primary);
+}
+
+.nwm-max-custom-input--invalid {
+  border-color: var(--color-error-text);
+}
+
 .nwm-max-custom-back {
   display: flex;
   align-items: center;

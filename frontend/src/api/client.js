@@ -79,11 +79,16 @@ async function attemptRefresh() {
 export async function authFetch(path, options = {}) {
   const { access } = getTokens()
 
-    const makeHeaders = (token) => ({
-    'Content-Type': 'application/json',
+  // A FormData body (file uploads) must NOT get a Content-Type from us: the
+  // browser sets multipart/form-data itself, including the boundary string
+  // the server needs to split the parts. Everything else is JSON.
+  const isFormData = options.body instanceof FormData
+
+  const makeHeaders = (token) => ({
+    ...(!isFormData && { 'Content-Type': 'application/json' }),
     ...(token && { Authorization: `Bearer ${token}` }),
     ...options.headers,
-    })
+  })
 
   let res = await fetch(`${BASE_URL}${path}`, { ...options, headers: makeHeaders(access) })
 
@@ -187,6 +192,22 @@ export function leaveWorkspace(id) {
 }
 
 // Workspace lists
+
+// The sidebar, search, calendar and home view all work off the full list held
+// in AppShell, so this walks every page rather than stopping at the server's
+// default page size (which silently hid everything past the first 20).
+export async function getAllWorkspaces(pageSize = 100) {
+  const all = []
+  let skip = 0
+  while (true) {
+    const page = await authFetch(`/workspaces?skip=${skip}&limit=${pageSize}`)
+    all.push(...page.workspaces)
+    if (!page.has_more || page.workspaces.length === 0) break
+    skip += page.workspaces.length
+  }
+  return all
+}
+
 export function getCompletedWorkspaces(skip = 0, limit = 20) {
   return authFetch(`/workspaces/completed?skip=${skip}&limit=${limit}`)
 }
@@ -260,8 +281,8 @@ export function getFolders() {
   return authFetch('/folders')
 }
 
-export function createFolder(name, color) {
-  return authFetch('/folders', { method: 'POST', body: JSON.stringify({ name, color }) })
+export function createFolder(name, color, parentId = null) {
+  return authFetch('/folders', { method: 'POST', body: JSON.stringify({ name, color, parent_id: parentId }) })
 }
 
 export function updateFolder(id, data) {
@@ -328,18 +349,13 @@ export async function resetPassword(token, newPassword) {
   return parseResponse(res)
 }
 
-// Avatar upload — multipart, so Content-Type must NOT be set manually
-// (the browser sets it with the correct boundary).
-export async function uploadAvatarRequest(file) {
-  const { access } = getTokens()
+// Avatar upload — multipart. Goes through authFetch like every other
+// authenticated call so an expired access token is refreshed and the upload
+// retried, instead of failing after ~30 idle minutes.
+export function uploadAvatarRequest(file) {
   const form = new FormData()
   form.append('file', file)
-  const res = await fetch(`${BASE_URL}/users/me/picture`, {
-    method: 'PATCH',
-    headers: { Authorization: `Bearer ${access}` },
-    body: form,
-  })
-  return parseResponse(res)
+  return authFetch('/users/me/picture', { method: 'PATCH', body: form })
 }
 
 // Resources (scoped to a workspace + task)
@@ -382,16 +398,13 @@ export function deleteResource(workspaceId, taskId, resourceId) {
 }
 
 // File resource upload — multipart, same pattern as uploadAvatarRequest.
-export async function uploadResourceFile(workspaceId, taskId, file) {
-  const { access } = getTokens()
+export function uploadResourceFile(workspaceId, taskId, file) {
   const form = new FormData()
   form.append('file', file)
-  const res = await fetch(`${BASE_URL}/workspaces/${workspaceId}/tasks/${taskId}/resource/files`, {
+  return authFetch(`/workspaces/${workspaceId}/tasks/${taskId}/resource/files`, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${access}` },
     body: form,
   })
-  return parseResponse(res)
 }
 
 // Conversations (scoped to a workspace)
@@ -424,8 +437,14 @@ export function deleteConversation(workspaceId, conversationId) {
   })
 }
 
-export function listMessages(workspaceId, conversationId, skip = 0, limit = 100) {
-  return authFetch(`/workspaces/${workspaceId}/conversations/${conversationId}/messages?skip=${skip}&limit=${limit}`)
+// Messages always come back oldest-first. With no cursor this is the newest
+// `limit` messages; `beforeId` pages back to older ones, `afterId` fetches
+// only what is newer (polling). `has_more` refers to the direction being read.
+export function listMessages(workspaceId, conversationId, { limit = 50, beforeId, afterId } = {}) {
+  const params = new URLSearchParams({ limit })
+  if (beforeId != null) params.set('before_id', beforeId)
+  if (afterId != null) params.set('after_id', afterId)
+  return authFetch(`/workspaces/${workspaceId}/conversations/${conversationId}/messages?${params}`)
 }
 
 export function sendMessage(workspaceId, conversationId, data) {

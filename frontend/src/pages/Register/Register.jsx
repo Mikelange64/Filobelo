@@ -109,7 +109,13 @@ function Register() {
         <p className="auth-card__subtext">Get started with Filobelo</p>
 
         <form className="auth-form" onSubmit={handleSubmit} noValidate>
-          {/* Avatar picker */}
+          {/* Avatar picker — hidden for now (kept, not deleted).
+              It let people choose a photo that was then silently thrown away:
+              the upload endpoint needs a signed-in user, and a new account
+              can't sign in until its email is verified, so there is no way
+              to send the file from this screen. Until registration itself
+              accepts a photo on the backend, the picture is set from
+              Settings > Account after the first sign-in.
           <div className="auth-form__group auth-form__group--avatar">
             <input
               ref={fileInputRef}
@@ -137,6 +143,7 @@ function Register() {
               </span>
             </button>
           </div>
+          */}
 
           <div className="auth-form__group">
             <label className="auth-form__label" htmlFor="reg-username">

@@ -1,10 +1,9 @@
+import hashlib
+import secrets
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 import jwt
-import hashlib
-import secrets
-
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from pwdlib import PasswordHash
@@ -12,6 +11,7 @@ from sqlalchemy import select
 
 from app.config import settings
 from app.database import DbSession
+from app.logging_config import set_user_id
 from app.models.users import User
 
 pw_hasher = PasswordHash.recommended()
@@ -57,14 +57,15 @@ def verify_access_token(token: str) -> bool | str | None:
             algorithms=["HS256"],
             options={"require": ["exp", "sub"]},
         )
-    except (jwt.PyJWTError, ValueError):
+    except jwt.PyJWTError, ValueError:
         return False
     else:
         return payload.get("sub")
 
 
 def get_current_user(
-    token: Annotated[str, Depends(oauth2_scheme)], db: DbSession,
+    token: Annotated[str, Depends(oauth2_scheme)],
+    db: DbSession,
 ):
     user_id = verify_access_token(token)
 
@@ -94,6 +95,10 @@ def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    # Lets every log line for this request show who made it (see
+    # app/logging_config.py). The user is already loaded, so this is free.
+    set_user_id(user.id)
+
     return user
 
 
@@ -103,11 +108,12 @@ LoginForm = Annotated[OAuth2PasswordRequestForm, Depends()]
 
 # ================================= PASSWORD RESET TOKEN =================================
 
+
 # url safe base 64 characters
 def generate_reset_tokens() -> str:
     return secrets.token_urlsafe(32)
 
 
 # SHA256 instead of argon2, tokens are longer and harder to brute force
-def hash_reset_token(token: str) -> str :
-   return hashlib.sha256(token.encode()).hexdigest()
+def hash_reset_token(token: str) -> str:
+    return hashlib.sha256(token.encode()).hexdigest()

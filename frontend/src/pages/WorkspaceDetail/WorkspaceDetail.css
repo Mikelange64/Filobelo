@@ -2559,3 +2559,26 @@ a.resource-row__title:hover {
 .settings-complete-btn--reopen:hover {
     background: var(--color-bg-canvas-hover);
 }
+
+/* Conversation thread: control at the top of the list that pages in older messages */
+.conversation-thread__load-earlier {
+    align-self: center;
+    flex-shrink: 0;
+    padding: 4px 12px;
+    border: none;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--color-text-muted);
+    font-size: 0.78rem;
+    font-family: inherit;
+    cursor: pointer;
+}
+
+.conversation-thread__load-earlier:hover:not(:disabled) {
+    background: var(--color-bg-canvas-hover);
+    color: var(--color-text-primary);
+}
+
+.conversation-thread__load-earlier:disabled {
+    cursor: default;
+}

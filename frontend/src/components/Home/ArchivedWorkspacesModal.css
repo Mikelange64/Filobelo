@@ -1,0 +1,28 @@
+.aw-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.aw-row__open {
+  flex: 1;
+  min-width: 0;
+}
+
+.aw-row__restore {
+  flex-shrink: 0;
+  padding: 6px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-text-primary);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s, border-color 0.15s;
+}
+
+.aw-row__restore:hover {
+  background: var(--color-bg-canvas-hover);
+  border-color: var(--color-brand-primary);
+}

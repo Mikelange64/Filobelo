@@ -1,4 +1,6 @@
 import json
+import logging
+import time
 from datetime import UTC, datetime
 from typing import Literal
 
@@ -11,6 +13,10 @@ from app.database import DbSession
 from app.models import ConversationType, Message, SenderType
 from app.schemas import MessageResponse
 from app.utils import get_conversation_by_id_with_messages, get_workspace_task_index
+
+# Only ids, durations and error types are logged from this module - never the
+# conversation text, the system prompt, or the search query.
+logger = logging.getLogger(__name__)
 
 MODEL = "deepseek-v4-flash"
 API_KEY = settings.deepseek_api_key.get_secret_value()
@@ -96,16 +102,27 @@ class FilobeloBot:
             *history,
         ]
 
+        started = time.perf_counter()
         try:
             message, sources = self._run_completion(messages)
         except Exception as e:
+            logger.exception(
+                "Bot reply failed: model call raised conversation_id=%s workspace_id=%s after %.0fms",
+                conversation_id, workspace_id, (time.perf_counter() - started) * 1000,
+            )
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="AI service unavailable",
             ) from e
 
+        duration_ms = (time.perf_counter() - started) * 1000
+
         reply = message.content
         if not reply:
+            logger.error(
+                "Bot reply failed: model returned an empty reply conversation_id=%s workspace_id=%s after %.0fms",
+                conversation_id, workspace_id, duration_ms,
+            )
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="AI service unavailable",
@@ -124,6 +141,11 @@ class FilobeloBot:
         db.add(new_message)
         db.commit()
         db.refresh(new_message)
+
+        logger.info(
+            "Bot replied conversation_id=%s workspace_id=%s in %.0fms sources=%s",
+            conversation_id, workspace_id, duration_ms, len(sources),
+        )
 
         response = MessageResponse.model_validate(new_message)
         return response
@@ -199,6 +221,7 @@ class FilobeloBot:
         if not settings.tavily_api_key:
             return "Web search is not available right now.", []
 
+        started = time.perf_counter()
         try:
             response = httpx.post(
                 "https://api.tavily.com/search",
@@ -212,6 +235,13 @@ class FilobeloBot:
             response.raise_for_status()
             results = response.json().get("results", [])
         except Exception as e:
+            # The bot carries on without results, so this is the only trace
+            # of the failure. The error text names the Tavily URL and status
+            # but not the API key (that travels in the request body).
+            logger.error(
+                "Web search failed after %.0fms: %s: %s",
+                (time.perf_counter() - started) * 1000, type(e).__name__, e,
+            )
             return f"Search failed: {e}", []
 
         if not results:

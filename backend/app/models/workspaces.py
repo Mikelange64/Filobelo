@@ -22,7 +22,7 @@ class Workspace(Base):
     # Historical record only - the creator has no special privileges beyond
     # having been the first admin, so this survives its creator's account
     # deletion instead of blocking it or taking the workspace down with them.
-    creator_id : Mapped[int | None] = mapped_column(
+    creator_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     title:       Mapped[str] = mapped_column(String(50), nullable=False)
@@ -35,7 +35,7 @@ class Workspace(Base):
     tasks: Mapped[list["Task"]] = relationship(
         "Task", back_populates="workspace", cascade="all, delete-orphan"
     )
-    conversations : Mapped[list["Conversation"]] = relationship(
+    conversations: Mapped[list["Conversation"]] = relationship(
         "Conversation", back_populates="workspace", cascade="all, delete-orphan"
     )
 
@@ -86,7 +86,7 @@ class Folder(Base):
     # Subfolders: NULL = top level. No depth limit. SET NULL at the DB level is
     # only a safety net (e.g. account deletion removing folders in any order) -
     # the delete endpoint re-parents children explicitly before deleting.
-    parent_id  : Mapped[int | None] = mapped_column(
+    parent_id:  Mapped[int | None] = mapped_column(
         Integer, ForeignKey("folders.id", ondelete="SET NULL"), nullable=True, default=None, index=True
     )
     name:       Mapped[str] = mapped_column(String(50), nullable=False)

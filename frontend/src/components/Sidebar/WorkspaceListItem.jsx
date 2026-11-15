@@ -1,8 +1,39 @@
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import useDismissableMenu from '../../hooks/useDismissableMenu'
 import StatusDot from '../shared/StatusDot'
+import ConfirmModal from '../shared/ConfirmModal'
 import { getWorkspaceUrgency } from '../../utils/workspaceStatus'
 import './WorkspaceListItem.css'
+
+// Flat list -> depth-first order with a depth per folder, for the indented
+// "Move to folder" picker. A folder whose parent isn't in the list is shown
+// at the top level, and the visited set guards against a cyclic parent chain,
+// so no folder can ever be silently dropped or loop forever.
+function flattenFolderTree(folders) {
+  const ids = new Set(folders.map((f) => f.id))
+  const childrenOf = new Map()
+  for (const f of folders) {
+    const key = f.parent_id != null && ids.has(f.parent_id) ? f.parent_id : null
+    if (!childrenOf.has(key)) childrenOf.set(key, [])
+    childrenOf.get(key).push(f)
+  }
+  const out = []
+  const visited = new Set()
+  function walk(parentKey, depth) {
+    for (const f of childrenOf.get(parentKey) ?? []) {
+      if (visited.has(f.id)) continue
+      visited.add(f.id)
+      out.push({ folder: f, depth })
+      walk(f.id, depth + 1)
+    }
+  }
+  walk(null, 0)
+  for (const f of folders) {
+    if (!visited.has(f.id)) out.push({ folder: f, depth: 0 })
+  }
+  return out
+}
 
 function WorkspaceListItem({
   workspace,
@@ -16,6 +47,7 @@ function WorkspaceListItem({
 }) {
   const [menuOpen, setMenuOpen, menuRef] = useDismissableMenu()
   const [folderPicker, setFolderPicker] = useState(false)
+  const [confirmLeave, setConfirmLeave] = useState(false)
   const urgency = getWorkspaceUrgency(workspace)
   const isSoleMember = workspace.numOfMembers === 1
 
@@ -93,7 +125,7 @@ function WorkspaceListItem({
             <li role="none" className="workspace-item__menu-divider" aria-hidden="true" />
             <li role="none">
               <button type="button" role="menuitem" className="workspace-item__menu-item workspace-item__menu-item--danger"
-                onClick={() => handleMenuAction(onLeave)}>
+                onClick={() => { setMenuOpen(false); setConfirmLeave(true) }}>
                 {isSoleMember ? 'Delete' : 'Leave'}
               </button>
             </li>
@@ -101,7 +133,7 @@ function WorkspaceListItem({
         )}
 
         {menuOpen && folderPicker && (
-          <ul className="workspace-item__menu-list" role="menu">
+          <ul className="workspace-item__menu-list workspace-item__menu-list--folders" role="menu">
             <li role="none">
               <button type="button" className="workspace-item__menu-item workspace-item__menu-item--back"
                 onClick={() => setFolderPicker(false)}>
@@ -109,13 +141,14 @@ function WorkspaceListItem({
               </button>
             </li>
             <li role="none" className="workspace-item__menu-divider" aria-hidden="true" />
-            {folders.map((folder) => (
+            {flattenFolderTree(folders).map(({ folder, depth }) => (
               <li key={folder.id} role="none">
                 <button type="button" role="menuitem"
                   className={`workspace-item__menu-item workspace-item__menu-item--folder${workspace.folderId === folder.id ? ' workspace-item__menu-item--active' : ''}`}
+                  style={depth > 0 ? { paddingLeft: 10 + depth * 14 } : undefined}
                   onClick={() => handleMoveToFolder(folder.id)}>
                   <span className="workspace-item__folder-swatch" style={{ backgroundColor: folder.color }} />
-                  {folder.name}
+                  <span className="workspace-item__folder-label">{folder.name}</span>
                   {workspace.folderId === folder.id && <CheckIcon />}
                 </button>
               </li>
@@ -123,6 +156,28 @@ function WorkspaceListItem({
           </ul>
         )}
       </div>
+
+      {/* Portalled to <body>: outside the row menu (which has just closed) and
+          outside the sidebar's scroll container, so it can't be clipped. */}
+      {confirmLeave && createPortal(
+        <ConfirmModal
+          title={isSoleMember ? 'Delete workspace?' : 'Leave workspace?'}
+          message={isSoleMember
+            ? "You're the only member, so this permanently deletes the workspace and all its tasks. There is no undo."
+            : 'You will lose access to its tasks and conversations.'}
+          confirmLabel={isSoleMember ? 'Delete' : 'Leave'}
+          danger
+          onConfirm={async () => {
+            try {
+              await onLeave?.(workspace.id)
+            } finally {
+              setConfirmLeave(false)
+            }
+          }}
+          onCancel={() => setConfirmLeave(false)}
+        />,
+        document.body
+      )}
     </div>
   )
 }

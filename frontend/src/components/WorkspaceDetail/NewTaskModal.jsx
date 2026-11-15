@@ -221,9 +221,6 @@ function NewTaskModal({ workspace, currentUserId, onClose, onCreate }) {
               required
             />
           </div>
-          <p className="ntm-color-caption">
-            Color helps tell tasks apart at a glance — especially once Gantt view lands.
-          </p>
 
           {error && <p className="ntm-error" role="alert">{error}</p>}
 

@@ -24,6 +24,15 @@ class ErrorBoundary extends Component {
         <div className="error-boundary">
           <p className="error-boundary__title">Something went wrong.</p>
           <p className="error-boundary__detail">{this.state.error.message}</p>
+          {/* A full reload is the reliable way out: it rebuilds the component
+              tree and refetches everything, whatever state caused the crash. */}
+          <button
+            type="button"
+            className="error-boundary__reload"
+            onClick={() => window.location.reload()}
+          >
+            Reload the app
+          </button>
         </div>
       )
     }
