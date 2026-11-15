@@ -9,13 +9,10 @@ from fastapi import HTTPException, status
 from openai import OpenAI
 
 from app.config import settings
-from app.sync_legacy.database import DbSession
+from app.database import DbSession
 from app.models import ConversationType, Message, SenderType
 from app.schemas import MessageResponse
-from app.sync_legacy.queries import (
-    get_conversation_by_id_with_messages,
-    get_workspace_task_index,
-)
+from app.utils import get_conversation_by_id_with_messages, get_workspace_task_index
 
 # Only ids, durations and error types are logged from this module - never the
 # conversation text, the system prompt, or the search query.
@@ -83,13 +80,13 @@ class FilobeloBot:
     def __init__(self):
         self.client = OpenAI(api_key=API_KEY, base_url="https://api.deepseek.com")
 
-    def reply(
+    async def reply(
         self,
         conversation_id: int,
         workspace_id: int,
         db: DbSession,
     ) -> MessageResponse:
-        conversation = get_conversation_by_id_with_messages(
+        conversation = await get_conversation_by_id_with_messages(
             conversation_id, workspace_id, db
         )
 
@@ -99,7 +96,7 @@ class FilobeloBot:
             )
 
         history = self._build_history(conversation.messages)
-        system_prompt = self._build_system_prompt(workspace_id, db)
+        system_prompt = await self._build_system_prompt(workspace_id, db)
         messages = [
             {"role": "system", "content": system_prompt},
             *history,
@@ -142,8 +139,8 @@ class FilobeloBot:
         conversation.last_message_at = now
 
         db.add(new_message)
-        db.commit()
-        db.refresh(new_message)
+        await db.commit()
+        await db.refresh(new_message)
 
         logger.info(
             "Bot replied conversation_id=%s workspace_id=%s in %.0fms sources=%s",
@@ -268,8 +265,8 @@ class FilobeloBot:
         ]
 
     @staticmethod
-    def _build_system_prompt(workspace_id: int, db: DbSession) -> str:
-        tasks = get_workspace_task_index(workspace_id, db)
+    async def _build_system_prompt(workspace_id: int, db: DbSession) -> str:
+        tasks = await get_workspace_task_index(workspace_id, db)
 
         if not tasks:
             return BASE_SYSTEM_PROMPT + "\n\nThis workspace currently has no tasks."

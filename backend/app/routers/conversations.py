@@ -3,11 +3,12 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import and_, func, or_, select
+from sqlalchemy.orm import selectinload
 
-from app.sync_legacy.auth import CurrentUser
+from app.auth import CurrentUser
 from app.bot_service import filobelo_bot
-from app.sync_legacy.database import DbSession
-from app.sync_legacy.dependencies import require_membership
+from app.database import DbSession
+from app.dependencies import require_membership
 from app.models import (
     Conversation,
     ConversationType,
@@ -24,7 +25,7 @@ from app.schemas import (
     MessageResponse,
     PaginatedMessageResponse,
 )
-from app.sync_legacy.queries import get_conversation_by_id
+from app.utils import get_conversation_by_id, get_conversation_by_id_with_messages
 
 router = APIRouter(prefix="/{workspace_id}/conversations", tags=["conversations"])
 
@@ -34,7 +35,7 @@ recent_router = APIRouter(prefix="/conversations", tags=["conversations"])
 
 
 @recent_router.get("/recent", response_model=list[ConversationWithWorkspace])
-def list_recent_conversations(
+async def list_recent_conversations(
     current_user: CurrentUser,
     db: DbSession,
     limit: int = 4,
@@ -42,15 +43,17 @@ def list_recent_conversations(
     member_workspace_ids = select(WorkspaceMember.workspace_id).where(
         WorkspaceMember.user_id == current_user.id
     )
-    rows = db.execute(
+    result = await db.execute(
         select(Conversation, Workspace.title)
+        .options(selectinload(Conversation.messages))
         .join(Workspace, Workspace.id == Conversation.workspace_id)
         .where(Conversation.workspace_id.in_(member_workspace_ids))
         .order_by(
             func.coalesce(Conversation.last_message_at, Conversation.created_at).desc()
         )
         .limit(limit)
-    ).all()
+    )
+    rows = result.all()
 
     return [
         ConversationWithWorkspace(
@@ -59,6 +62,17 @@ def list_recent_conversations(
         )
         for conversation, title in rows
     ]
+
+
+async def _refresh_conversation(conversation: Conversation, db: DbSession) -> None:
+    """Reloads a conversation after a commit, ready to be returned.
+
+    ConversationResponse.last_message is read from conversation.messages. A
+    plain db.refresh() only re-reads the columns, and an async session cannot
+    load the messages later on first access, so they are refreshed by name.
+    """
+    await db.refresh(conversation)
+    await db.refresh(conversation, attribute_names=["messages"])
 
 
 def _require_creator_or_admin(
@@ -74,7 +88,7 @@ def _require_creator_or_admin(
 @router.post(
     "/", response_model=ConversationResponse, status_code=status.HTTP_201_CREATED
 )
-def create_conversation(
+async def create_conversation(
     workspace_id: int,
     data: ConversationCreate,
     db: DbSession,
@@ -94,8 +108,8 @@ def create_conversation(
         title=data.title,
     )
     db.add(new_conversation)
-    db.commit()
-    db.refresh(new_conversation)
+    await db.commit()
+    await _refresh_conversation(new_conversation, db)
     return new_conversation
 
 
@@ -104,21 +118,19 @@ def create_conversation(
     response_model=list[ConversationResponse],
     dependencies=[Depends(require_membership)],
 )
-def list_conversations(workspace_id: int, db: DbSession):
-    return (
-        db.execute(
-            select(Conversation)
-            .where(Conversation.workspace_id == workspace_id)
-            .order_by(
-                Conversation.is_pinned.desc(),
-                func.coalesce(
-                    Conversation.last_message_at, Conversation.created_at
-                ).desc(),
-            )
+async def list_conversations(workspace_id: int, db: DbSession):
+    result = await db.execute(
+        select(Conversation)
+        .options(selectinload(Conversation.messages))
+        .where(Conversation.workspace_id == workspace_id)
+        .order_by(
+            Conversation.is_pinned.desc(),
+            func.coalesce(
+                Conversation.last_message_at, Conversation.created_at
+            ).desc(),
         )
-        .scalars()
-        .all()
     )
+    return result.scalars().all()
 
 
 @router.get(
@@ -126,42 +138,42 @@ def list_conversations(workspace_id: int, db: DbSession):
     response_model=ConversationResponse,
     dependencies=[Depends(require_membership)],
 )
-def get_conversation(conversation_id: int, workspace_id: int, db: DbSession):
-    return get_conversation_by_id(conversation_id, workspace_id, db)
+async def get_conversation(conversation_id: int, workspace_id: int, db: DbSession):
+    return await get_conversation_by_id_with_messages(conversation_id, workspace_id, db)
 
 
 @router.patch("/{conversation_id}", response_model=ConversationResponse)
-def update_conversation(
+async def update_conversation(
     conversation_id: int,
     workspace_id: int,
     data: ConversationUpdate,
     db: DbSession,
     member: Annotated[WorkspaceMember, Depends(require_membership)],
 ):
-    conversation = get_conversation_by_id(conversation_id, workspace_id, db)
+    conversation = await get_conversation_by_id(conversation_id, workspace_id, db)
     _require_creator_or_admin(conversation, member)
 
     update = data.model_dump(exclude_unset=True)
     for field, value in update.items():
         setattr(conversation, field, value)
 
-    db.commit()
-    db.refresh(conversation)
+    await db.commit()
+    await _refresh_conversation(conversation, db)
     return conversation
 
 
 @router.delete("/{conversation_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_conversation(
+async def delete_conversation(
     conversation_id: int,
     workspace_id: int,
     db: DbSession,
     member: Annotated[WorkspaceMember, Depends(require_membership)],
 ):
-    conversation = get_conversation_by_id(conversation_id, workspace_id, db)
+    conversation = await get_conversation_by_id(conversation_id, workspace_id, db)
     _require_creator_or_admin(conversation, member)
 
-    db.delete(conversation)
-    db.commit()
+    await db.delete(conversation)
+    await db.commit()
 
 
 # =============================================== MESSAGES ===================================================
@@ -172,7 +184,7 @@ def delete_conversation(
     response_model=MessageResponse,
     status_code=status.HTTP_201_CREATED,
 )
-def send_message(
+async def send_message(
     conversation_id: int,
     workspace_id: int,
     data: MessageCreate,
@@ -180,7 +192,7 @@ def send_message(
     member: Annotated[WorkspaceMember, Depends(require_membership)],
     current_user: CurrentUser,
 ):
-    conversation = get_conversation_by_id(conversation_id, workspace_id, db)
+    conversation = await get_conversation_by_id(conversation_id, workspace_id, db)
 
     if conversation.type == ConversationType.BOT and not current_user.is_premium:
         raise HTTPException(
@@ -198,28 +210,25 @@ def send_message(
     )
     conversation.last_message_at = now
     db.add(new_message)
-    db.commit()
-    db.refresh(new_message)
+    await db.commit()
+    await db.refresh(new_message)
 
     if conversation.type == ConversationType.BOT:
-        return filobelo_bot.reply(conversation_id, workspace_id, db)
+        return await filobelo_bot.reply(conversation_id, workspace_id, db)
 
     return new_message
 
 
-def _get_cursor_message(message_id: int, conversation_id: int, db: DbSession) -> Message:
+async def _get_cursor_message(message_id: int, conversation_id: int, db: DbSession) -> Message:
     # scoped to conversation_id (itself already scoped to the workspace) so a
     # cursor can never be used to position inside, or read from, another
     # conversation by guessing a message id
-    message = (
-        db.execute(
-            select(Message).where(
-                Message.id == message_id, Message.conversation_id == conversation_id
-            )
+    result = await db.execute(
+        select(Message).where(
+            Message.id == message_id, Message.conversation_id == conversation_id
         )
-        .scalars()
-        .first()
     )
+    message = result.scalars().first()
     if not message:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Message not found"
@@ -232,7 +241,7 @@ def _get_cursor_message(message_id: int, conversation_id: int, db: DbSession) ->
     response_model=PaginatedMessageResponse,
     dependencies=[Depends(require_membership)],
 )
-def list_messages(
+async def list_messages(
     conversation_id: int,
     workspace_id: int,
     db: DbSession,
@@ -257,7 +266,7 @@ def list_messages(
             detail="Use only one of skip, before_id or after_id",
         )
 
-    conversation = get_conversation_by_id(conversation_id, workspace_id, db)
+    conversation = await get_conversation_by_id(conversation_id, workspace_id, db)
 
     base = select(Message).where(Message.conversation_id == conversation_id)
     oldest_first = (Message.created_at.asc(), Message.id.asc())
@@ -267,7 +276,7 @@ def list_messages(
         # Cursor reads (scrolling back, polling) do not count as opening the
         # conversation, so they stay read-only - no write per poll.
         if before_id is not None:
-            cursor = _get_cursor_message(before_id, conversation_id, db)
+            cursor = await _get_cursor_message(before_id, conversation_id, db)
             query = base.where(
                 or_(
                     Message.created_at < cursor.created_at,
@@ -280,7 +289,7 @@ def list_messages(
         elif after_id == 0:
             query = base.order_by(*oldest_first)
         else:
-            cursor = _get_cursor_message(after_id, conversation_id, db)
+            cursor = await _get_cursor_message(after_id, conversation_id, db)
             query = base.where(
                 or_(
                     Message.created_at > cursor.created_at,
@@ -291,33 +300,31 @@ def list_messages(
                 )
             ).order_by(*oldest_first)
 
-        messages = list(db.execute(query.limit(limit + 1)).scalars().all())
+        result = await db.execute(query.limit(limit + 1))
+        messages = list(result.scalars().all())
         has_more = len(messages) > limit
         messages = messages[:limit]
         if before_id is not None:
             messages.reverse()
     else:
         conversation.last_opened_at = datetime.now(UTC)
-        db.commit()
+        await db.commit()
 
         if skip is not None:
-            messages = list(
-                db.execute(base.order_by(*oldest_first).offset(skip).limit(limit))
-                .scalars()
-                .all()
+            result = await db.execute(
+                base.order_by(*oldest_first).offset(skip).limit(limit)
             )
+            messages = list(result.scalars().all())
             has_more = None  # derived from total below
         else:
-            messages = list(
-                db.execute(base.order_by(*newest_first).limit(limit + 1))
-                .scalars()
-                .all()
-            )
+            result = await db.execute(base.order_by(*newest_first).limit(limit + 1))
+            messages = list(result.scalars().all())
             has_more = len(messages) > limit
             messages = messages[:limit]
             messages.reverse()
 
-    total = db.execute(select(func.count()).select_from(base.subquery())).scalar() or 0
+    result = await db.execute(select(func.count()).select_from(base.subquery()))
+    total = result.scalar() or 0
     if has_more is None:
         has_more = skip + limit < total
 
@@ -333,24 +340,21 @@ def list_messages(
 @router.delete(
     "/{conversation_id}/messages/{message_id}", status_code=status.HTTP_204_NO_CONTENT
 )
-def delete_message(
+async def delete_message(
     conversation_id: int,
     workspace_id: int,
     message_id: int,
     db: DbSession,
     member: Annotated[WorkspaceMember, Depends(require_membership)],
 ):
-    get_conversation_by_id(conversation_id, workspace_id, db)
+    await get_conversation_by_id(conversation_id, workspace_id, db)
 
-    message = (
-        db.execute(
-            select(Message).where(
-                Message.id == message_id, Message.conversation_id == conversation_id
-            )
+    result = await db.execute(
+        select(Message).where(
+            Message.id == message_id, Message.conversation_id == conversation_id
         )
-        .scalars()
-        .first()
     )
+    message = result.scalars().first()
 
     if not message:
         raise HTTPException(
@@ -363,5 +367,5 @@ def delete_message(
             detail="Only the sender or an admin can delete this message",
         )
 
-    db.delete(message)
-    db.commit()
+    await db.delete(message)
+    await db.commit()

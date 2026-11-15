@@ -41,12 +41,12 @@ async def add_message(db_session, conversation_id, content, sender_type=SenderTy
 
 
 @pytest.mark.anyio
-async def test_reply_creates_bot_message(client, db_session, sync_db_session, user, premium_user, user_token, workspace, fake_bot_client):
+async def test_reply_creates_bot_message(client, db_session, user, premium_user, user_token, workspace, fake_bot_client):
     conversation = await create_bot_conversation(client, user_token, workspace["id"])
     await add_message(db_session, conversation["id"], "Hello Filobelo", sender_id=user["id"])
     fake_bot_client.output_text = "Hi there, how can I help?"
 
-    reply = filobelo_bot.reply(conversation["id"], workspace["id"], sync_db_session)
+    reply = await filobelo_bot.reply(conversation["id"], workspace["id"], db_session)
 
     assert reply.content == "Hi there, how can I help?"
     assert reply.sender_type == SenderType.BOT
@@ -56,13 +56,13 @@ async def test_reply_creates_bot_message(client, db_session, sync_db_session, us
 
 @pytest.mark.anyio
 async def test_reply_updates_conversation_last_message_at(
-    client, db_session, sync_db_session, user, premium_user, user_token, workspace, fake_bot_client
+    client, db_session, user, premium_user, user_token, workspace, fake_bot_client
 ):
     conversation = await create_bot_conversation(client, user_token, workspace["id"])
     assert conversation["last_message_at"] is None
     await add_message(db_session, conversation["id"], "Hello", sender_id=user["id"])
 
-    filobelo_bot.reply(conversation["id"], workspace["id"], sync_db_session)
+    await filobelo_bot.reply(conversation["id"], workspace["id"], db_session)
 
     response = await client.get(
         f"/api/workspaces/{workspace['id']}/conversations/{conversation['id']}",
@@ -73,7 +73,7 @@ async def test_reply_updates_conversation_last_message_at(
 
 @pytest.mark.anyio
 async def test_reply_rejects_non_bot_conversation(
-    client, db_session, sync_db_session, user_token, workspace, fake_bot_client
+    client, db_session, user_token, workspace, fake_bot_client
 ):
     response = await client.post(
         f"/api/workspaces/{workspace['id']}/conversations/",
@@ -83,41 +83,41 @@ async def test_reply_rejects_non_bot_conversation(
     conversation = response.json()
 
     with pytest.raises(HTTPException) as exc_info:
-        filobelo_bot.reply(conversation["id"], workspace["id"], sync_db_session)
+        await filobelo_bot.reply(conversation["id"], workspace["id"], db_session)
     assert exc_info.value.status_code == 404
 
 
 @pytest.mark.anyio
 async def test_reply_raises_503_on_client_error(
-    client, db_session, sync_db_session, premium_user, user_token, workspace, fake_bot_client
+    client, db_session, premium_user, user_token, workspace, fake_bot_client
 ):
     conversation = await create_bot_conversation(client, user_token, workspace["id"])
     fake_bot_client.exception = RuntimeError("network blip")
 
     with pytest.raises(HTTPException) as exc_info:
-        filobelo_bot.reply(conversation["id"], workspace["id"], sync_db_session)
+        await filobelo_bot.reply(conversation["id"], workspace["id"], db_session)
     assert exc_info.value.status_code == 503
 
 
 @pytest.mark.anyio
 async def test_reply_raises_503_on_empty_output_text(
-    client, db_session, sync_db_session, premium_user, user_token, workspace, fake_bot_client
+    client, db_session, premium_user, user_token, workspace, fake_bot_client
 ):
     conversation = await create_bot_conversation(client, user_token, workspace["id"])
     fake_bot_client.output_text = ""
 
     with pytest.raises(HTTPException) as exc_info:
-        filobelo_bot.reply(conversation["id"], workspace["id"], sync_db_session)
+        await filobelo_bot.reply(conversation["id"], workspace["id"], db_session)
     assert exc_info.value.status_code == 503
 
 
 @pytest.mark.anyio
 async def test_reply_calls_deepseek_with_expected_model(
-    client, db_session, sync_db_session, premium_user, user_token, workspace, fake_bot_client
+    client, db_session, premium_user, user_token, workspace, fake_bot_client
 ):
     conversation = await create_bot_conversation(client, user_token, workspace["id"])
 
-    filobelo_bot.reply(conversation["id"], workspace["id"], sync_db_session)
+    await filobelo_bot.reply(conversation["id"], workspace["id"], db_session)
 
     assert len(fake_bot_client.calls) == 1
     call = fake_bot_client.calls[0]
@@ -128,7 +128,7 @@ async def test_reply_calls_deepseek_with_expected_model(
 
 @pytest.mark.anyio
 async def test_reply_sends_prior_messages_as_history(
-    client, db_session, sync_db_session, user, premium_user, user_token, workspace, fake_bot_client
+    client, db_session, user, premium_user, user_token, workspace, fake_bot_client
 ):
     conversation = await create_bot_conversation(client, user_token, workspace["id"])
     await add_message(db_session, conversation["id"], "First question", sender_id=user["id"])
@@ -138,7 +138,7 @@ async def test_reply_sends_prior_messages_as_history(
     )
     await add_message(db_session, conversation["id"], "Follow-up question", sender_id=user["id"])
 
-    filobelo_bot.reply(conversation["id"], workspace["id"], sync_db_session)
+    await filobelo_bot.reply(conversation["id"], workspace["id"], db_session)
 
     # First message is the system prompt - history is everything after it.
     sent_history = fake_bot_client.calls[0]["messages"][1:]
@@ -180,8 +180,8 @@ async def test_build_history_empty_for_no_messages():
 
 
 @pytest.mark.anyio
-async def test_build_system_prompt_no_tasks(db_session, sync_db_session, workspace):
-    prompt = filobelo_bot._build_system_prompt(workspace["id"], sync_db_session)
+async def test_build_system_prompt_no_tasks(db_session, workspace):
+    prompt = await filobelo_bot._build_system_prompt(workspace["id"], db_session)
 
     assert prompt.startswith(BASE_SYSTEM_PROMPT)
     assert "no tasks" in prompt.lower()
@@ -189,7 +189,7 @@ async def test_build_system_prompt_no_tasks(db_session, sync_db_session, workspa
 
 @pytest.mark.anyio
 async def test_build_system_prompt_includes_task_and_resource_index(
-    client, db_session, sync_db_session, user, user_token, workspace
+    client, db_session, user, user_token, workspace
 ):
     task = await create_task(client, user_token, workspace["id"], title="Plan launch")
     resource = Resource(
@@ -202,7 +202,7 @@ async def test_build_system_prompt_includes_task_and_resource_index(
     db_session.add(resource)
     await db_session.flush()
 
-    prompt = filobelo_bot._build_system_prompt(workspace["id"], sync_db_session)
+    prompt = await filobelo_bot._build_system_prompt(workspace["id"], db_session)
 
     assert f'Task #{task["id"]} "Plan launch"' in prompt
     assert f'LINK #{resource.id} "Marketing brief"' in prompt
@@ -210,10 +210,10 @@ async def test_build_system_prompt_includes_task_and_resource_index(
 
 @pytest.mark.anyio
 async def test_build_system_prompt_lists_task_with_no_resources(
-    client, db_session, sync_db_session, user_token, workspace
+    client, db_session, user_token, workspace
 ):
     task = await create_task(client, user_token, workspace["id"], title="Empty task")
 
-    prompt = filobelo_bot._build_system_prompt(workspace["id"], sync_db_session)
+    prompt = await filobelo_bot._build_system_prompt(workspace["id"], db_session)
 
     assert f'Task #{task["id"]} "Empty task"' in prompt

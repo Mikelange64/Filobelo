@@ -119,14 +119,6 @@ async def _empty_all_tables(engine) -> None:
 
 
 @pytest.fixture
-def sync_db_session(setup_database, sync_test_engine):
-    """A sync session for the few tests that call a not-yet-converted sync
-    function directly (the bot service)."""
-    with sessionmaker(bind=sync_test_engine)() as session:
-        yield session
-
-
-@pytest.fixture
 async def db_session(test_engine, setup_database) -> AsyncGenerator[AsyncSession]:
     test_async_session = async_sessionmaker(
         bind=test_engine,
