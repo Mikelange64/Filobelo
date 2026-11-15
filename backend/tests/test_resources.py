@@ -1,7 +1,7 @@
 from io import BytesIO
 
 import pytest
-from fastapi.testclient import TestClient
+from httpx import AsyncClient
 
 from tests.auth_helpers import (
     auth_header,
@@ -21,9 +21,9 @@ resourceprefix = "/api/workspaces"
 
 
 @pytest.fixture
-def task(client, user_token, workspace):
+async def task(client, user_token, workspace):
     """Create and return a task owned by the default user in their workspace."""
-    return create_task(client, user_token, workspace["id"])
+    return await create_task(client, user_token, workspace["id"])
 
 
 @pytest.fixture
@@ -36,15 +36,15 @@ def resource_path(workspace_id: int, task_id: int, suffix: str = "") -> str:
     return f"{resourceprefix}/{workspace_id}/tasks/{task_id}/resource{suffix}"
 
 
-def create_link(
-    client: TestClient,
+async def create_link(
+    client: AsyncClient,
     token: str,
     workspace_id: int,
     task_id: int,
     title: str = "My Link",
     url: str = "https://example.com",
 ) -> dict:
-    response = client.post(
+    response = await client.post(
         resource_path(workspace_id, task_id, "/links"),
         json={"title": title, "url": url},
         headers=auth_header(token),
@@ -53,15 +53,15 @@ def create_link(
     return response.json()
 
 
-def create_note(
-    client: TestClient,
+async def create_note(
+    client: AsyncClient,
     token: str,
     workspace_id: int,
     task_id: int,
     title: str = "My Note",
     content: str = "Some content",
 ) -> dict:
-    response = client.post(
+    response = await client.post(
         resource_path(workspace_id, task_id, "/notes"),
         json={"title": title, "content": content},
         headers=auth_header(token),
@@ -70,11 +70,11 @@ def create_note(
     return response.json()
 
 
-def outsider_headers(client: TestClient, db_session) -> dict:
+async def outsider_headers(client: AsyncClient, db_session) -> dict:
     """Create, verify, and log in a user with no relationship to the test workspace."""
-    create_test_user(client, username="outsider", email="outsider@example.com")
-    verify_user_in_db(db_session, "outsider@example.com")
-    token = login_user(client, email="outsider@example.com")
+    await create_test_user(client, username="outsider", email="outsider@example.com")
+    await verify_user_in_db(db_session, "outsider@example.com")
+    token = await login_user(client, email="outsider@example.com")
     return auth_header(token)
 
 
@@ -91,8 +91,9 @@ def assert_unauthorized(response):
 # ========================================================================================
 
 
-def test_create_link_success(client: TestClient, user_auth_headers, workspace, task):
-    response = client.post(
+@pytest.mark.anyio
+async def test_create_link_success(client: AsyncClient, user_auth_headers, workspace, task):
+    response = await client.post(
         resource_path(workspace["id"], task["id"], "/links"),
         json={"title": "Docs", "url": "https://example.com/docs"},
         headers=user_auth_headers,
@@ -106,8 +107,9 @@ def test_create_link_success(client: TestClient, user_auth_headers, workspace, t
     assert "created_at" in data
 
 
-def test_create_link_invalid_url(client: TestClient, user_auth_headers, workspace, task):
-    response = client.post(
+@pytest.mark.anyio
+async def test_create_link_invalid_url(client: AsyncClient, user_auth_headers, workspace, task):
+    response = await client.post(
         resource_path(workspace["id"], task["id"], "/links"),
         json={"title": "Bad", "url": "not-a-url"},
         headers=user_auth_headers,
@@ -115,26 +117,29 @@ def test_create_link_invalid_url(client: TestClient, user_auth_headers, workspac
     assert response.status_code == 422
 
 
-def test_create_link_non_member(client: TestClient, db_session, workspace, task):
-    response = client.post(
+@pytest.mark.anyio
+async def test_create_link_non_member(client: AsyncClient, db_session, workspace, task):
+    response = await client.post(
         resource_path(workspace["id"], task["id"], "/links"),
         json={"title": "Docs", "url": "https://example.com"},
-        headers=outsider_headers(client, db_session),
+        headers=await outsider_headers(client, db_session),
     )
     assert_forbidden(response)
 
 
-def test_create_link_no_auth(client: TestClient, workspace, task):
-    response = client.post(
+@pytest.mark.anyio
+async def test_create_link_no_auth(client: AsyncClient, workspace, task):
+    response = await client.post(
         resource_path(workspace["id"], task["id"], "/links"),
         json={"title": "Docs", "url": "https://example.com"},
     )
     assert_unauthorized(response)
 
 
-def test_get_link_success(client: TestClient, user_auth_headers, user_token, workspace, task):
-    link = create_link(client, user_token, workspace["id"], task["id"])
-    response = client.get(
+@pytest.mark.anyio
+async def test_get_link_success(client: AsyncClient, user_auth_headers, user_token, workspace, task):
+    link = await create_link(client, user_token, workspace["id"], task["id"])
+    response = await client.get(
         resource_path(workspace["id"], task["id"], f"/links/{link['id']}"),
         headers=user_auth_headers,
     )
@@ -142,33 +147,36 @@ def test_get_link_success(client: TestClient, user_auth_headers, user_token, wor
     assert response.json()["id"] == link["id"]
 
 
-def test_get_link_not_found(client: TestClient, user_auth_headers, workspace, task):
-    response = client.get(
+@pytest.mark.anyio
+async def test_get_link_not_found(client: AsyncClient, user_auth_headers, workspace, task):
+    response = await client.get(
         resource_path(workspace["id"], task["id"], "/links/99999"),
         headers=user_auth_headers,
     )
     assert response.status_code == 404
 
 
-def test_get_note_through_link_getter_returns_404(
-    client: TestClient, user_auth_headers, user_token, workspace, task
+@pytest.mark.anyio
+async def test_get_note_through_link_getter_returns_404(
+    client: AsyncClient, user_auth_headers, user_token, workspace, task
 ):
     """A note's id should not be retrievable through the link-typed getter."""
-    note = create_note(client, user_token, workspace["id"], task["id"])
-    response = client.get(
+    note = await create_note(client, user_token, workspace["id"], task["id"])
+    response = await client.get(
         resource_path(workspace["id"], task["id"], f"/links/{note['id']}"),
         headers=user_auth_headers,
     )
     assert response.status_code == 404
 
 
-def test_list_links_excludes_other_types(
-    client: TestClient, user_auth_headers, user_token, workspace, task
+@pytest.mark.anyio
+async def test_list_links_excludes_other_types(
+    client: AsyncClient, user_auth_headers, user_token, workspace, task
 ):
-    create_link(client, user_token, workspace["id"], task["id"], title="A")
-    create_link(client, user_token, workspace["id"], task["id"], title="B")
-    create_note(client, user_token, workspace["id"], task["id"])
-    response = client.get(
+    await create_link(client, user_token, workspace["id"], task["id"], title="A")
+    await create_link(client, user_token, workspace["id"], task["id"], title="B")
+    await create_note(client, user_token, workspace["id"], task["id"])
+    response = await client.get(
         resource_path(workspace["id"], task["id"], "/links"), headers=user_auth_headers
     )
     assert response.status_code == 200
@@ -177,9 +185,10 @@ def test_list_links_excludes_other_types(
     assert {d["title"] for d in data} == {"A", "B"}
 
 
-def test_update_link_partial(client: TestClient, user_auth_headers, user_token, workspace, task):
-    link = create_link(client, user_token, workspace["id"], task["id"], title="Old")
-    response = client.patch(
+@pytest.mark.anyio
+async def test_update_link_partial(client: AsyncClient, user_auth_headers, user_token, workspace, task):
+    link = await create_link(client, user_token, workspace["id"], task["id"], title="Old")
+    response = await client.patch(
         resource_path(workspace["id"], task["id"], f"/links/{link['id']}"),
         json={"title": "New"},
         headers=user_auth_headers,
@@ -190,9 +199,10 @@ def test_update_link_partial(client: TestClient, user_auth_headers, user_token, 
     assert data["url"] == link["url"]
 
 
-def test_update_link_url(client: TestClient, user_auth_headers, user_token, workspace, task):
-    link = create_link(client, user_token, workspace["id"], task["id"])
-    response = client.patch(
+@pytest.mark.anyio
+async def test_update_link_url(client: AsyncClient, user_auth_headers, user_token, workspace, task):
+    link = await create_link(client, user_token, workspace["id"], task["id"])
+    response = await client.patch(
         resource_path(workspace["id"], task["id"], f"/links/{link['id']}"),
         json={"url": "https://example.com/updated"},
         headers=user_auth_headers,
@@ -201,11 +211,12 @@ def test_update_link_url(client: TestClient, user_auth_headers, user_token, work
     assert response.json()["url"] == "https://example.com/updated"
 
 
-def test_update_link_empty_body_noop(
-    client: TestClient, user_auth_headers, user_token, workspace, task
+@pytest.mark.anyio
+async def test_update_link_empty_body_noop(
+    client: AsyncClient, user_auth_headers, user_token, workspace, task
 ):
-    link = create_link(client, user_token, workspace["id"], task["id"])
-    response = client.patch(
+    link = await create_link(client, user_token, workspace["id"], task["id"])
+    response = await client.patch(
         resource_path(workspace["id"], task["id"], f"/links/{link['id']}"),
         json={},
         headers=user_auth_headers,
@@ -215,8 +226,9 @@ def test_update_link_empty_body_noop(
     assert response.json()["title"] == link["title"]
 
 
-def test_update_link_not_found(client: TestClient, user_auth_headers, workspace, task):
-    response = client.patch(
+@pytest.mark.anyio
+async def test_update_link_not_found(client: AsyncClient, user_auth_headers, workspace, task):
+    response = await client.patch(
         resource_path(workspace["id"], task["id"], "/links/99999"),
         json={"title": "Ghost"},
         headers=user_auth_headers,
@@ -224,15 +236,16 @@ def test_update_link_not_found(client: TestClient, user_auth_headers, workspace,
     assert response.status_code == 404
 
 
-def test_update_link_by_other_workspace_member_allowed(
-    client: TestClient, user_token, workspace, task, second_user, second_user_token
+@pytest.mark.anyio
+async def test_update_link_by_other_workspace_member_allowed(
+    client: AsyncClient, user_token, workspace, task, second_user, second_user_token
 ):
     """Any workspace member can edit shared resources - there's no creator-only restriction."""
     from tests.auth_helpers import add_workspace_member
 
-    add_workspace_member(client, user_token, workspace["id"], second_user["id"])
-    link = create_link(client, user_token, workspace["id"], task["id"], title="Original")
-    response = client.patch(
+    await add_workspace_member(client, user_token, workspace["id"], second_user["id"])
+    link = await create_link(client, user_token, workspace["id"], task["id"], title="Original")
+    response = await client.patch(
         resource_path(workspace["id"], task["id"], f"/links/{link['id']}"),
         json={"title": "Edited by teammate"},
         headers=auth_header(second_user_token),
@@ -252,8 +265,9 @@ class _FakeOembedResponse:
         return self._json_data
 
 
-def test_create_link_with_oembed_provider_gets_thumbnail(
-    client: TestClient, user_auth_headers, workspace, task, monkeypatch
+@pytest.mark.anyio
+async def test_create_link_with_oembed_provider_gets_thumbnail(
+    client: AsyncClient, user_auth_headers, workspace, task, monkeypatch
 ):
     def fake_get(url, params=None, timeout=None, follow_redirects=None):
         assert url == "https://www.youtube.com/oembed"
@@ -262,7 +276,7 @@ def test_create_link_with_oembed_provider_gets_thumbnail(
 
     monkeypatch.setattr("app.utils.oembed.httpx.get", fake_get)
 
-    response = client.post(
+    response = await client.post(
         resource_path(workspace["id"], task["id"], "/links"),
         json={"title": "Cool video", "url": "https://www.youtube.com/watch?v=abc123"},
         headers=user_auth_headers,
@@ -271,15 +285,16 @@ def test_create_link_with_oembed_provider_gets_thumbnail(
     assert response.json()["thumbnail_url"] == "https://i.ytimg.com/vi/abc123/hqdefault.jpg"
 
 
-def test_create_link_non_provider_skips_oembed_call(
-    client: TestClient, user_auth_headers, workspace, task, monkeypatch
+@pytest.mark.anyio
+async def test_create_link_non_provider_skips_oembed_call(
+    client: AsyncClient, user_auth_headers, workspace, task, monkeypatch
 ):
     def fake_get(*args, **kwargs):
         raise AssertionError("should not call oEmbed for a non-provider domain")
 
     monkeypatch.setattr("app.utils.oembed.httpx.get", fake_get)
 
-    response = client.post(
+    response = await client.post(
         resource_path(workspace["id"], task["id"], "/links"),
         json={"title": "Some site", "url": "https://example.com/article"},
         headers=user_auth_headers,
@@ -288,8 +303,9 @@ def test_create_link_non_provider_skips_oembed_call(
     assert response.json()["thumbnail_url"] is None
 
 
-def test_create_link_oembed_failure_does_not_block_creation(
-    client: TestClient, user_auth_headers, workspace, task, monkeypatch
+@pytest.mark.anyio
+async def test_create_link_oembed_failure_does_not_block_creation(
+    client: AsyncClient, user_auth_headers, workspace, task, monkeypatch
 ):
     import httpx
 
@@ -298,7 +314,7 @@ def test_create_link_oembed_failure_does_not_block_creation(
 
     monkeypatch.setattr("app.utils.oembed.httpx.get", fake_get)
 
-    response = client.post(
+    response = await client.post(
         resource_path(workspace["id"], task["id"], "/links"),
         json={"title": "Cool video", "url": "https://youtu.be/abc123"},
         headers=user_auth_headers,
@@ -307,8 +323,9 @@ def test_create_link_oembed_failure_does_not_block_creation(
     assert response.json()["thumbnail_url"] is None
 
 
-def test_create_link_oembed_non_https_thumbnail_ignored(
-    client: TestClient, user_auth_headers, workspace, task, monkeypatch
+@pytest.mark.anyio
+async def test_create_link_oembed_non_https_thumbnail_ignored(
+    client: AsyncClient, user_auth_headers, workspace, task, monkeypatch
 ):
     """A provider returning something other than a plain https thumbnail URL is discarded, not trusted as-is."""
     monkeypatch.setattr(
@@ -316,7 +333,7 @@ def test_create_link_oembed_non_https_thumbnail_ignored(
         lambda *a, **k: _FakeOembedResponse({"thumbnail_url": "javascript:alert(1)"}),
     )
 
-    response = client.post(
+    response = await client.post(
         resource_path(workspace["id"], task["id"], "/links"),
         json={"title": "Sketchy", "url": "https://youtu.be/abc"},
         headers=user_auth_headers,
@@ -325,10 +342,11 @@ def test_create_link_oembed_non_https_thumbnail_ignored(
     assert response.json()["thumbnail_url"] is None
 
 
-def test_update_link_url_refreshes_thumbnail(
-    client: TestClient, user_auth_headers, user_token, workspace, task, monkeypatch
+@pytest.mark.anyio
+async def test_update_link_url_refreshes_thumbnail(
+    client: AsyncClient, user_auth_headers, user_token, workspace, task, monkeypatch
 ):
-    link = create_link(client, user_token, workspace["id"], task["id"])
+    link = await create_link(client, user_token, workspace["id"], task["id"])
     assert link.get("thumbnail_url") is None
 
     monkeypatch.setattr(
@@ -336,7 +354,7 @@ def test_update_link_url_refreshes_thumbnail(
         lambda *a, **k: _FakeOembedResponse({"thumbnail_url": "https://i.ytimg.com/vi/xyz/hqdefault.jpg"}),
     )
 
-    response = client.patch(
+    response = await client.patch(
         resource_path(workspace["id"], task["id"], f"/links/{link['id']}"),
         json={"url": "https://www.youtube.com/watch?v=xyz"},
         headers=user_auth_headers,
@@ -350,8 +368,9 @@ def test_update_link_url_refreshes_thumbnail(
 # ========================================================================================
 
 
-def test_create_note_success(client: TestClient, user_auth_headers, workspace, task):
-    response = client.post(
+@pytest.mark.anyio
+async def test_create_note_success(client: AsyncClient, user_auth_headers, workspace, task):
+    response = await client.post(
         resource_path(workspace["id"], task["id"], "/notes"),
         json={"title": "Meeting Notes", "content": "Discussed X and Y."},
         headers=user_auth_headers,
@@ -363,9 +382,10 @@ def test_create_note_success(client: TestClient, user_auth_headers, workspace, t
     assert data["type"] == "NOTE"
 
 
-def test_create_note_empty_content_allowed(client: TestClient, user_auth_headers, workspace, task):
+@pytest.mark.anyio
+async def test_create_note_empty_content_allowed(client: AsyncClient, user_auth_headers, workspace, task):
     """NoteCreate has no min_length on content, matching TaskCreate's own convention."""
-    response = client.post(
+    response = await client.post(
         resource_path(workspace["id"], task["id"], "/notes"),
         json={"title": "Empty", "content": ""},
         headers=user_auth_headers,
@@ -373,9 +393,10 @@ def test_create_note_empty_content_allowed(client: TestClient, user_auth_headers
     assert response.status_code == 201
 
 
-def test_get_note_success(client: TestClient, user_auth_headers, user_token, workspace, task):
-    note = create_note(client, user_token, workspace["id"], task["id"])
-    response = client.get(
+@pytest.mark.anyio
+async def test_get_note_success(client: AsyncClient, user_auth_headers, user_token, workspace, task):
+    note = await create_note(client, user_token, workspace["id"], task["id"])
+    response = await client.get(
         resource_path(workspace["id"], task["id"], f"/notes/{note['id']}"),
         headers=user_auth_headers,
     )
@@ -383,12 +404,13 @@ def test_get_note_success(client: TestClient, user_auth_headers, user_token, wor
     assert response.json()["content"] == note["content"]
 
 
-def test_list_notes_excludes_other_types(
-    client: TestClient, user_auth_headers, user_token, workspace, task
+@pytest.mark.anyio
+async def test_list_notes_excludes_other_types(
+    client: AsyncClient, user_auth_headers, user_token, workspace, task
 ):
-    create_note(client, user_token, workspace["id"], task["id"], title="A")
-    create_link(client, user_token, workspace["id"], task["id"])
-    response = client.get(
+    await create_note(client, user_token, workspace["id"], task["id"], title="A")
+    await create_link(client, user_token, workspace["id"], task["id"])
+    response = await client.get(
         resource_path(workspace["id"], task["id"], "/notes"), headers=user_auth_headers
     )
     assert response.status_code == 200
@@ -397,9 +419,10 @@ def test_list_notes_excludes_other_types(
     assert data[0]["title"] == "A"
 
 
-def test_update_note_content(client: TestClient, user_auth_headers, user_token, workspace, task):
-    note = create_note(client, user_token, workspace["id"], task["id"])
-    response = client.patch(
+@pytest.mark.anyio
+async def test_update_note_content(client: AsyncClient, user_auth_headers, user_token, workspace, task):
+    note = await create_note(client, user_token, workspace["id"], task["id"])
+    response = await client.patch(
         resource_path(workspace["id"], task["id"], f"/notes/{note['id']}"),
         json={"content": "Updated content"},
         headers=user_auth_headers,
@@ -408,12 +431,13 @@ def test_update_note_content(client: TestClient, user_auth_headers, user_token, 
     assert response.json()["content"] == "Updated content"
 
 
-def test_update_note_empty_content_allowed(
-    client: TestClient, user_auth_headers, user_token, workspace, task
+@pytest.mark.anyio
+async def test_update_note_empty_content_allowed(
+    client: AsyncClient, user_auth_headers, user_token, workspace, task
 ):
     """Clearing a note's content back to empty is a legitimate edit, not a validation error."""
-    note = create_note(client, user_token, workspace["id"], task["id"])
-    response = client.patch(
+    note = await create_note(client, user_token, workspace["id"], task["id"])
+    response = await client.patch(
         resource_path(workspace["id"], task["id"], f"/notes/{note['id']}"),
         json={"content": ""},
         headers=user_auth_headers,
@@ -422,11 +446,12 @@ def test_update_note_empty_content_allowed(
     assert response.json()["content"] == ""
 
 
-def test_get_link_through_note_getter_returns_404(
-    client: TestClient, user_auth_headers, user_token, workspace, task
+@pytest.mark.anyio
+async def test_get_link_through_note_getter_returns_404(
+    client: AsyncClient, user_auth_headers, user_token, workspace, task
 ):
-    link = create_link(client, user_token, workspace["id"], task["id"])
-    response = client.get(
+    link = await create_link(client, user_token, workspace["id"], task["id"])
+    response = await client.get(
         resource_path(workspace["id"], task["id"], f"/notes/{link['id']}"),
         headers=user_auth_headers,
     )
@@ -438,10 +463,11 @@ def test_get_link_through_note_getter_returns_404(
 # ========================================================================================
 
 
-def test_upload_file_success(
-    client: TestClient, user_auth_headers, workspace, task, mocked_s3, fake_pdf_bytes
+@pytest.mark.anyio
+async def test_upload_file_success(
+    client: AsyncClient, user_auth_headers, workspace, task, mocked_s3, fake_pdf_bytes
 ):
-    response = client.post(
+    response = await client.post(
         resource_path(workspace["id"], task["id"], "/files"),
         files={"file": ("report.pdf", fake_pdf_bytes, "application/pdf")},
         headers=user_auth_headers,
@@ -456,11 +482,12 @@ def test_upload_file_success(
     assert "response-content-disposition=attachment" in data["file_path"]
 
 
-def test_upload_file_too_large(client: TestClient, user_auth_headers, workspace, task, mocked_s3):
+@pytest.mark.anyio
+async def test_upload_file_too_large(client: AsyncClient, user_auth_headers, workspace, task, mocked_s3):
     from app.config import settings
 
     oversized = b"%PDF-1.4\n" + b"0" * (settings.max_file_upload_size_bytes + 1)
-    response = client.post(
+    response = await client.post(
         resource_path(workspace["id"], task["id"], "/files"),
         files={"file": ("big.pdf", BytesIO(oversized), "application/pdf")},
         headers=user_auth_headers,
@@ -469,12 +496,13 @@ def test_upload_file_too_large(client: TestClient, user_auth_headers, workspace,
     assert "File too large" in response.json()["message"]
 
 
-def test_upload_file_unrecognizable_content_rejected(
-    client: TestClient, user_auth_headers, workspace, task, mocked_s3
+@pytest.mark.anyio
+async def test_upload_file_unrecognizable_content_rejected(
+    client: AsyncClient, user_auth_headers, workspace, task, mocked_s3
 ):
     """Content with no magic bytes and not valid UTF-8 either can't be classified at all."""
     garbage = b"\xff\xfe\xfd\xfc" * 10
-    response = client.post(
+    response = await client.post(
         resource_path(workspace["id"], task["id"], "/files"),
         files={"file": ("mystery.bin", garbage, "application/octet-stream")},
         headers=user_auth_headers,
@@ -483,11 +511,12 @@ def test_upload_file_unrecognizable_content_rejected(
     assert "Invalid file" in response.json()["message"]
 
 
-def test_upload_file_plain_text_accepted(
-    client: TestClient, user_auth_headers, workspace, task, mocked_s3
+@pytest.mark.anyio
+async def test_upload_file_plain_text_accepted(
+    client: AsyncClient, user_auth_headers, workspace, task, mocked_s3
 ):
     """Plain text has no magic bytes for filetype to sniff, so it's detected via UTF-8 decode instead."""
-    response = client.post(
+    response = await client.post(
         resource_path(workspace["id"], task["id"], "/files"),
         files={"file": ("note.txt", b"just plain text, no magic bytes here", "text/plain")},
         headers=user_auth_headers,
@@ -496,11 +525,12 @@ def test_upload_file_plain_text_accepted(
     assert response.json()["mime_type"] == "text/plain"
 
 
-def test_upload_file_utf8_content_wrong_extension_rejected(
-    client: TestClient, user_auth_headers, workspace, task, mocked_s3
+@pytest.mark.anyio
+async def test_upload_file_utf8_content_wrong_extension_rejected(
+    client: AsyncClient, user_auth_headers, workspace, task, mocked_s3
 ):
     """Valid UTF-8 alone isn't enough - CSV/JSON/etc. shouldn't be silently accepted as text/plain."""
-    response = client.post(
+    response = await client.post(
         resource_path(workspace["id"], task["id"], "/files"),
         files={"file": ("data.csv", b"col1,col2\n1,2", "text/csv")},
         headers=user_auth_headers,
@@ -509,12 +539,13 @@ def test_upload_file_utf8_content_wrong_extension_rejected(
     assert "Invalid file" in response.json()["message"]
 
 
-def test_upload_file_recognized_but_disallowed_type_rejected(
-    client: TestClient, user_auth_headers, workspace, task, mocked_s3
+@pytest.mark.anyio
+async def test_upload_file_recognized_but_disallowed_type_rejected(
+    client: AsyncClient, user_auth_headers, workspace, task, mocked_s3
 ):
     """A real, sniffable format (zip) that isn't in ALLOWED_MIME_TYPES should still be rejected."""
     zip_header = b"PK\x03\x04" + b"0" * 20
-    response = client.post(
+    response = await client.post(
         resource_path(workspace["id"], task["id"], "/files"),
         files={"file": ("archive.zip", zip_header, "application/zip")},
         headers=user_auth_headers,
@@ -523,11 +554,12 @@ def test_upload_file_recognized_but_disallowed_type_rejected(
     assert "Invalid file" in response.json()["message"]
 
 
-def test_upload_file_image_accepted(
-    client: TestClient, user_auth_headers, workspace, task, mocked_s3, test_image
+@pytest.mark.anyio
+async def test_upload_file_image_accepted(
+    client: AsyncClient, user_auth_headers, workspace, task, mocked_s3, test_image
 ):
     """Images are allowed file resources and get a real presigned file_path."""
-    response = client.post(
+    response = await client.post(
         resource_path(workspace["id"], task["id"], "/files"),
         files={"file": ("image.jpg", test_image, "image/jpeg")},
         headers=user_auth_headers,
@@ -538,12 +570,13 @@ def test_upload_file_image_accepted(
     assert data["file_path"]
 
 
-def test_upload_image_with_bad_data_rejected(
-    client: TestClient, user_auth_headers, workspace, task, mocked_s3
+@pytest.mark.anyio
+async def test_upload_image_with_bad_data_rejected(
+    client: AsyncClient, user_auth_headers, workspace, task, mocked_s3
 ):
     """Magic bytes alone aren't a full validity check - Pillow may still fail to decode it."""
     fake_png = b"\x89PNG\r\n\x1a\n" + b"0" * 20
-    response = client.post(
+    response = await client.post(
         resource_path(workspace["id"], task["id"], "/files"),
         files={"file": ("image.png", fake_png, "image/png")},
         headers=user_auth_headers,
@@ -552,8 +585,9 @@ def test_upload_image_with_bad_data_rejected(
     assert "Invalid image" in response.json()["message"]
 
 
-def test_upload_oversized_image_is_downscaled(
-    client: TestClient, user_auth_headers, workspace, task, mocked_s3
+@pytest.mark.anyio
+async def test_upload_oversized_image_is_downscaled(
+    client: AsyncClient, user_auth_headers, workspace, task, mocked_s3
 ):
     """Images over the max dimension get proportionally downscaled before storage."""
     from PIL import Image as PILImage
@@ -564,7 +598,7 @@ def test_upload_oversized_image_is_downscaled(
     buf = BytesIO()
     huge.save(buf, "JPEG")
 
-    response = client.post(
+    response = await client.post(
         resource_path(workspace["id"], task["id"], "/files"),
         files={"file": ("huge.jpg", buf.getvalue(), "image/jpeg")},
         headers=user_auth_headers,
@@ -578,8 +612,9 @@ def test_upload_oversized_image_is_downscaled(
     assert stored_img.size[0] / stored_img.size[1] == pytest.approx(2, abs=0.01)
 
 
-def test_upload_gif_not_re_encoded(
-    client: TestClient, user_auth_headers, workspace, task, mocked_s3
+@pytest.mark.anyio
+async def test_upload_gif_not_re_encoded(
+    client: AsyncClient, user_auth_headers, workspace, task, mocked_s3
 ):
     """GIFs are passed through untouched - re-encoding would collapse animation to one frame."""
     from PIL import Image as PILImage
@@ -589,7 +624,7 @@ def test_upload_gif_not_re_encoded(
     gif.save(buf, "GIF")
     gif_bytes = buf.getvalue()
 
-    response = client.post(
+    response = await client.post(
         resource_path(workspace["id"], task["id"], "/files"),
         files={"file": ("clip.gif", gif_bytes, "image/gif")},
         headers=user_auth_headers,
@@ -602,25 +637,27 @@ def test_upload_gif_not_re_encoded(
     assert stored["Body"].read() == gif_bytes
 
 
-def test_upload_file_non_member(client: TestClient, db_session, workspace, task, mocked_s3, fake_pdf_bytes):
-    response = client.post(
+@pytest.mark.anyio
+async def test_upload_file_non_member(client: AsyncClient, db_session, workspace, task, mocked_s3, fake_pdf_bytes):
+    response = await client.post(
         resource_path(workspace["id"], task["id"], "/files"),
         files={"file": ("report.pdf", fake_pdf_bytes, "application/pdf")},
-        headers=outsider_headers(client, db_session),
+        headers=await outsider_headers(client, db_session),
     )
     assert_forbidden(response)
 
 
-def test_list_files_excludes_other_types(
-    client: TestClient, user_auth_headers, user_token, workspace, task, mocked_s3, fake_pdf_bytes
+@pytest.mark.anyio
+async def test_list_files_excludes_other_types(
+    client: AsyncClient, user_auth_headers, user_token, workspace, task, mocked_s3, fake_pdf_bytes
 ):
-    client.post(
+    await client.post(
         resource_path(workspace["id"], task["id"], "/files"),
         files={"file": ("report.pdf", fake_pdf_bytes, "application/pdf")},
         headers=auth_header(user_token),
     )
-    create_link(client, user_token, workspace["id"], task["id"])
-    response = client.get(
+    await create_link(client, user_token, workspace["id"], task["id"])
+    response = await client.get(
         resource_path(workspace["id"], task["id"], "/files"), headers=user_auth_headers
     )
     assert response.status_code == 200
@@ -629,18 +666,19 @@ def test_list_files_excludes_other_types(
     assert data[0]["title"] == "report.pdf"
 
 
-def test_delete_file_removes_from_s3(
-    client: TestClient, user_auth_headers, workspace, task, mocked_s3, fake_pdf_bytes
+@pytest.mark.anyio
+async def test_delete_file_removes_from_s3(
+    client: AsyncClient, user_auth_headers, workspace, task, mocked_s3, fake_pdf_bytes
 ):
     from app.config import settings
 
-    upload = client.post(
+    upload = (await client.post(
         resource_path(workspace["id"], task["id"], "/files"),
         files={"file": ("report.pdf", fake_pdf_bytes, "application/pdf")},
         headers=user_auth_headers,
-    ).json()
+    )).json()
 
-    response = client.delete(
+    response = await client.delete(
         resource_path(workspace["id"], task["id"], f"/{upload['id']}"),
         headers=user_auth_headers,
     )
@@ -655,44 +693,48 @@ def test_delete_file_removes_from_s3(
 # ========================================================================================
 
 
-def test_delete_link_success(client: TestClient, user_auth_headers, user_token, workspace, task):
-    link = create_link(client, user_token, workspace["id"], task["id"])
-    response = client.delete(
+@pytest.mark.anyio
+async def test_delete_link_success(client: AsyncClient, user_auth_headers, user_token, workspace, task):
+    link = await create_link(client, user_token, workspace["id"], task["id"])
+    response = await client.delete(
         resource_path(workspace["id"], task["id"], f"/{link['id']}"),
         headers=user_auth_headers,
     )
     assert response.status_code == 204
 
-    get_response = client.get(
+    get_response = await client.get(
         resource_path(workspace["id"], task["id"], f"/links/{link['id']}"),
         headers=user_auth_headers,
     )
     assert get_response.status_code == 404
 
 
-def test_delete_resource_non_member_forbidden(
-    client: TestClient, db_session, user_token, workspace, task
+@pytest.mark.anyio
+async def test_delete_resource_non_member_forbidden(
+    client: AsyncClient, db_session, user_token, workspace, task
 ):
-    link = create_link(client, user_token, workspace["id"], task["id"])
-    response = client.delete(
+    link = await create_link(client, user_token, workspace["id"], task["id"])
+    response = await client.delete(
         resource_path(workspace["id"], task["id"], f"/{link['id']}"),
-        headers=outsider_headers(client, db_session),
+        headers=await outsider_headers(client, db_session),
     )
     assert_forbidden(response)
 
 
-def test_delete_resource_no_auth(client: TestClient, user_token, workspace, task):
-    link = create_link(client, user_token, workspace["id"], task["id"])
-    response = client.delete(resource_path(workspace["id"], task["id"], f"/{link['id']}"))
+@pytest.mark.anyio
+async def test_delete_resource_no_auth(client: AsyncClient, user_token, workspace, task):
+    link = await create_link(client, user_token, workspace["id"], task["id"])
+    response = await client.delete(resource_path(workspace["id"], task["id"], f"/{link['id']}"))
     assert_unauthorized(response)
 
 
-def test_list_resources_mixed_types(
-    client: TestClient, user_auth_headers, user_token, workspace, task
+@pytest.mark.anyio
+async def test_list_resources_mixed_types(
+    client: AsyncClient, user_auth_headers, user_token, workspace, task
 ):
-    create_link(client, user_token, workspace["id"], task["id"], title="Link")
-    create_note(client, user_token, workspace["id"], task["id"], title="Note")
-    response = client.get(
+    await create_link(client, user_token, workspace["id"], task["id"], title="Link")
+    await create_note(client, user_token, workspace["id"], task["id"], title="Note")
+    response = await client.get(
         resource_path(workspace["id"], task["id"], "/"), headers=user_auth_headers
     )
     assert response.status_code == 200
@@ -701,18 +743,20 @@ def test_list_resources_mixed_types(
     assert {d["type"] for d in data} == {"LINK", "NOTE"}
 
 
-def test_list_resources_empty(client: TestClient, user_auth_headers, workspace, task):
-    response = client.get(
+@pytest.mark.anyio
+async def test_list_resources_empty(client: AsyncClient, user_auth_headers, workspace, task):
+    response = await client.get(
         resource_path(workspace["id"], task["id"], "/"), headers=user_auth_headers
     )
     assert response.status_code == 200
     assert response.json() == []
 
 
-def test_list_resources_non_member(client: TestClient, db_session, workspace, task):
-    response = client.get(
+@pytest.mark.anyio
+async def test_list_resources_non_member(client: AsyncClient, db_session, workspace, task):
+    response = await client.get(
         resource_path(workspace["id"], task["id"], "/"),
-        headers=outsider_headers(client, db_session),
+        headers=await outsider_headers(client, db_session),
     )
     assert_forbidden(response)
 
@@ -726,10 +770,11 @@ def test_list_resources_non_member(client: TestClient, db_session, workspace, ta
 
 
 @pytest.fixture
-def attacker_ws(client, second_user_token):
-    return create_workspace(client, second_user_token, title="Attacker WS")
+async def attacker_ws(client, second_user_token):
+    return await create_workspace(client, second_user_token, title="Attacker WS")
 
 
+@pytest.mark.anyio
 @pytest.mark.parametrize(
     "method, suffix, body",
     [
@@ -743,13 +788,13 @@ def attacker_ws(client, second_user_token):
         pytest.param("post", "/notes", {"title": "x", "content": "y"}, id="add_note"),
     ],
 )
-def test_resources_of_foreign_task_not_reachable(
+async def test_resources_of_foreign_task_not_reachable(
     client, user_token, workspace, task, second_user_token, attacker_ws,
     method, suffix, body,
 ):
-    create_link(client, user_token, workspace["id"], task["id"])
+    await create_link(client, user_token, workspace["id"], task["id"])
 
-    response = client.request(
+    response = await client.request(
         method,
         resource_path(attacker_ws["id"], task["id"], suffix),
         json=body,
@@ -758,32 +803,33 @@ def test_resources_of_foreign_task_not_reachable(
     assert response.status_code == 404
 
     # nothing was added to the victim's task
-    listing = client.get(
+    listing = await client.get(
         resource_path(workspace["id"], task["id"], "/"), headers=auth_header(user_token)
     )
     assert len(listing.json()) == 1
 
 
-def test_resource_not_reachable_through_own_task(
+@pytest.mark.anyio
+async def test_resource_not_reachable_through_own_task(
     client, user_token, workspace, task, second_user_token, attacker_ws
 ):
     """Valid workspace + valid task of the attacker's own, but a resource id
     that belongs to a different task."""
-    victim_link = create_link(client, user_token, workspace["id"], task["id"])
-    attacker_task = create_task(client, second_user_token, attacker_ws["id"])
+    victim_link = await create_link(client, user_token, workspace["id"], task["id"])
+    attacker_task = await create_task(client, second_user_token, attacker_ws["id"])
     headers = auth_header(second_user_token)
     base = resource_path(attacker_ws["id"], attacker_task["id"])
 
-    assert client.get(f"{base}/links/{victim_link['id']}", headers=headers).status_code == 404
+    assert (await client.get(f"{base}/links/{victim_link['id']}", headers=headers)).status_code == 404
     assert (
-        client.patch(
+        (await client.patch(
             f"{base}/links/{victim_link['id']}", json={"title": "hijacked"}, headers=headers
-        ).status_code
+        )).status_code
         == 404
     )
-    assert client.delete(f"{base}/{victim_link['id']}", headers=headers).status_code == 404
+    assert (await client.delete(f"{base}/{victim_link['id']}", headers=headers)).status_code == 404
 
-    still_there = client.get(
+    still_there = await client.get(
         resource_path(workspace["id"], task["id"], f"/links/{victim_link['id']}"),
         headers=auth_header(user_token),
     )

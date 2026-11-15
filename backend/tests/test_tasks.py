@@ -1,5 +1,5 @@
 import pytest
-from fastapi.testclient import TestClient
+from httpx import AsyncClient
 
 from tests.auth_helpers import (
     add_workspace_member,
@@ -50,9 +50,9 @@ def assert_unauthorized(response):
 
 
 @pytest.fixture
-def task(client, user_token, workspace):
+async def task(client, user_token, workspace):
     """Create and return a task owned by the default user in their workspace."""
-    return create_task(client, user_token, workspace["id"])
+    return await create_task(client, user_token, workspace["id"])
 
 
 # ========================================================================================
@@ -60,8 +60,9 @@ def task(client, user_token, workspace):
 # ========================================================================================
 
 
-def test_create_task_as_admin_success(client: TestClient, user_auth_headers, workspace):
-    response = client.post(
+@pytest.mark.anyio
+async def test_create_task_as_admin_success(client: AsyncClient, user_auth_headers, workspace):
+    response = await client.post(
         f"{taskprefix}/{workspace['id']}/tasks/",
         json={
             "title": "My Task",
@@ -76,12 +77,13 @@ def test_create_task_as_admin_success(client: TestClient, user_auth_headers, wor
     assert response.json()["creator_id"] is not None
 
 
-def test_create_task_as_regular_member_success(
-    client: TestClient, user_token, user_auth_headers, workspace, second_user
+@pytest.mark.anyio
+async def test_create_task_as_regular_member_success(
+    client: AsyncClient, user_token, user_auth_headers, workspace, second_user
 ):
-    add_workspace_member(client, user_token, workspace["id"], second_user["id"])
-    member_token = login_user(client, email="user2@example.com")
-    response = client.post(
+    await add_workspace_member(client, user_token, workspace["id"], second_user["id"])
+    member_token = await login_user(client, email="user2@example.com")
+    response = await client.post(
         f"{taskprefix}/{workspace['id']}/tasks/",
         json={
             "title": "Member Task",
@@ -98,6 +100,7 @@ def test_create_task_as_regular_member_success(
     assert response.json()["owner_id"] == second_user["id"]
 
 
+@pytest.mark.anyio
 @pytest.mark.parametrize(
     "payload",
     [
@@ -107,11 +110,11 @@ def test_create_task_as_regular_member_success(
         ),
     ],
 )
-def test_create_task_validation_error(
-    client: TestClient, user_token, workspace, payload
+async def test_create_task_validation_error(
+    client: AsyncClient, user_token, workspace, payload
 ):
     payload["workspace_id"] = workspace["id"]
-    response = client.post(
+    response = await client.post(
         f"{taskprefix}/{workspace['id']}/tasks/",
         json=payload,
         headers=auth_header(user_token),
@@ -119,6 +122,7 @@ def test_create_task_validation_error(
     assert response.status_code == 422
 
 
+@pytest.mark.anyio
 @pytest.mark.parametrize(
     "token,expected_status",
     [
@@ -126,17 +130,17 @@ def test_create_task_validation_error(
         pytest.param(None, 401, id="no_auth"),
     ],
 )
-def test_create_task_auth_failures(
-    client: TestClient, db_session, user_token, workspace, token, expected_status
+async def test_create_task_auth_failures(
+    client: AsyncClient, db_session, user_token, workspace, token, expected_status
 ):
     headers = None
     if token == "outsider":
-        create_test_user(client, username="outsider", email="outsider@example.com")
-        verify_user_in_db(db_session, "outsider@example.com")
-        token = login_user(client, email="outsider@example.com")
+        await create_test_user(client, username="outsider", email="outsider@example.com")
+        await verify_user_in_db(db_session, "outsider@example.com")
+        token = await login_user(client, email="outsider@example.com")
         headers = auth_header(token)
     kwargs = {"headers": headers} if headers else {}
-    response = client.post(
+    response = await client.post(
         f"{taskprefix}/{workspace['id']}/tasks/",
         json={
             "title": "Hacker",
@@ -150,8 +154,9 @@ def test_create_task_auth_failures(
     assert response.status_code == expected_status
 
 
-def test_create_task_nonexistent_workspace(client: TestClient, user_auth_headers):
-    response = client.post(
+@pytest.mark.anyio
+async def test_create_task_nonexistent_workspace(client: AsyncClient, user_auth_headers):
+    response = await client.post(
         f"{taskprefix}/99999/tasks/",
         json={
             "title": "Ghost",
@@ -170,8 +175,9 @@ def test_create_task_nonexistent_workspace(client: TestClient, user_auth_headers
 # ========================================================================================
 
 
-def test_get_tasks_empty(client: TestClient, user_auth_headers, workspace):
-    response = client.get(
+@pytest.mark.anyio
+async def test_get_tasks_empty(client: AsyncClient, user_auth_headers, workspace):
+    response = await client.get(
         f"{taskprefix}/{workspace['id']}/tasks/", headers=user_auth_headers
     )
     assert response.status_code == 200
@@ -181,12 +187,13 @@ def test_get_tasks_empty(client: TestClient, user_auth_headers, workspace):
     assert data["has_more"] is False
 
 
-def test_get_tasks_multiple(
-    client: TestClient, user_token, user_auth_headers, workspace
+@pytest.mark.anyio
+async def test_get_tasks_multiple(
+    client: AsyncClient, user_token, user_auth_headers, workspace
 ):
-    create_task(client, user_token, workspace["id"], title="Task One")
-    create_task(client, user_token, workspace["id"], title="Task Two")
-    response = client.get(
+    await create_task(client, user_token, workspace["id"], title="Task One")
+    await create_task(client, user_token, workspace["id"], title="Task Two")
+    response = await client.get(
         f"{taskprefix}/{workspace['id']}/tasks/", headers=user_auth_headers
     )
     assert response.status_code == 200
@@ -195,6 +202,7 @@ def test_get_tasks_multiple(
     assert {t["title"] for t in data["tasks"]} == {"Task One", "Task Two"}
 
 
+@pytest.mark.anyio
 @pytest.mark.parametrize(
     "token,expected_status",
     [
@@ -202,20 +210,21 @@ def test_get_tasks_multiple(
         pytest.param(None, 401, id="no_auth"),
     ],
 )
-def test_get_tasks_auth_failures(client: TestClient, db_session, workspace, token, expected_status):
+async def test_get_tasks_auth_failures(client: AsyncClient, db_session, workspace, token, expected_status):
     headers = None
     if token == "outsider":
-        create_test_user(client, username="outsider", email="outsider@example.com")
-        verify_user_in_db(db_session, "outsider@example.com")
-        token = login_user(client, email="outsider@example.com")
+        await create_test_user(client, username="outsider", email="outsider@example.com")
+        await verify_user_in_db(db_session, "outsider@example.com")
+        token = await login_user(client, email="outsider@example.com")
         headers = auth_header(token)
     kwargs = {"headers": headers} if headers else {}
-    response = client.get(f"{taskprefix}/{workspace['id']}/tasks/", **kwargs)
+    response = await client.get(f"{taskprefix}/{workspace['id']}/tasks/", **kwargs)
     assert response.status_code == expected_status
 
 
-def test_get_tasks_nonexistent_workspace(client: TestClient, user_auth_headers):
-    response = client.get(f"{taskprefix}/99999/tasks/", headers=user_auth_headers)
+@pytest.mark.anyio
+async def test_get_tasks_nonexistent_workspace(client: AsyncClient, user_auth_headers):
+    response = await client.get(f"{taskprefix}/99999/tasks/", headers=user_auth_headers)
     assert_forbidden(response)
 
 
@@ -224,8 +233,9 @@ def test_get_tasks_nonexistent_workspace(client: TestClient, user_auth_headers):
 # ========================================================================================
 
 
-def test_get_task_success(client: TestClient, user_auth_headers, task):
-    response = client.get(
+@pytest.mark.anyio
+async def test_get_task_success(client: AsyncClient, user_auth_headers, task):
+    response = await client.get(
         f"{taskprefix}/{task['workspace_id']}/tasks/{task['id']}",
         headers=user_auth_headers,
     )
@@ -233,13 +243,15 @@ def test_get_task_success(client: TestClient, user_auth_headers, task):
     assert response.json()["id"] == task["id"]
 
 
-def test_get_task_nonexistent(client: TestClient, user_auth_headers, workspace):
-    response = client.get(
+@pytest.mark.anyio
+async def test_get_task_nonexistent(client: AsyncClient, user_auth_headers, workspace):
+    response = await client.get(
         f"{taskprefix}/{workspace['id']}/tasks/99999", headers=user_auth_headers
     )
     assert response.status_code == 404
 
 
+@pytest.mark.anyio
 @pytest.mark.parametrize(
     "token,expected_status",
     [
@@ -247,15 +259,15 @@ def test_get_task_nonexistent(client: TestClient, user_auth_headers, workspace):
         pytest.param(None, 401, id="no_auth"),
     ],
 )
-def test_get_task_auth_failures(client: TestClient, db_session, task, token, expected_status):
+async def test_get_task_auth_failures(client: AsyncClient, db_session, task, token, expected_status):
     headers = None
     if token == "outsider":
-        create_test_user(client, username="outsider", email="outsider@example.com")
-        verify_user_in_db(db_session, "outsider@example.com")
-        token = login_user(client, email="outsider@example.com")
+        await create_test_user(client, username="outsider", email="outsider@example.com")
+        await verify_user_in_db(db_session, "outsider@example.com")
+        token = await login_user(client, email="outsider@example.com")
         headers = auth_header(token)
     kwargs = {"headers": headers} if headers else {}
-    response = client.get(
+    response = await client.get(
         f"{taskprefix}/{task['workspace_id']}/tasks/{task['id']}", **kwargs
     )
     assert response.status_code == expected_status
@@ -266,6 +278,7 @@ def test_get_task_auth_failures(client: TestClient, db_session, task, token, exp
 # ========================================================================================
 
 
+@pytest.mark.anyio
 @pytest.mark.parametrize(
     "payload,expected",
     [
@@ -284,10 +297,10 @@ def test_get_task_auth_failures(client: TestClient, db_session, task, token, exp
         ),
     ],
 )
-def test_update_task_success(
-    client: TestClient, user_auth_headers, task, payload, expected
+async def test_update_task_success(
+    client: AsyncClient, user_auth_headers, task, payload, expected
 ):
-    response = client.patch(
+    response = await client.patch(
         f"{taskprefix}/{task['workspace_id']}/tasks/{task['id']}/",
         json=payload,
         headers=user_auth_headers,
@@ -295,8 +308,9 @@ def test_update_task_success(
     assert_updated_task(response, expected)
 
 
-def test_update_task_empty_body_noop(client: TestClient, user_auth_headers, task):
-    response = client.patch(
+@pytest.mark.anyio
+async def test_update_task_empty_body_noop(client: AsyncClient, user_auth_headers, task):
+    response = await client.patch(
         f"{taskprefix}/{task['workspace_id']}/tasks/{task['id']}/",
         json={},
         headers=user_auth_headers,
@@ -305,8 +319,9 @@ def test_update_task_empty_body_noop(client: TestClient, user_auth_headers, task
     assert response.json()["title"] == task["title"]
 
 
-def test_update_task_nonexistent(client: TestClient, user_auth_headers, workspace):
-    response = client.patch(
+@pytest.mark.anyio
+async def test_update_task_nonexistent(client: AsyncClient, user_auth_headers, workspace):
+    response = await client.patch(
         f"{taskprefix}/{workspace['id']}/tasks/99999/",
         json={"title": "Ghost"},
         headers=user_auth_headers,
@@ -314,6 +329,7 @@ def test_update_task_nonexistent(client: TestClient, user_auth_headers, workspac
     assert response.status_code == 404
 
 
+@pytest.mark.anyio
 @pytest.mark.parametrize(
     "token,expected_status",
     [
@@ -321,15 +337,15 @@ def test_update_task_nonexistent(client: TestClient, user_auth_headers, workspac
         pytest.param(None, 401, id="no_auth"),
     ],
 )
-def test_update_task_auth_failures(client: TestClient, db_session, task, token, expected_status):
+async def test_update_task_auth_failures(client: AsyncClient, db_session, task, token, expected_status):
     headers = None
     if token == "outsider":
-        create_test_user(client, username="outsider", email="outsider@example.com")
-        verify_user_in_db(db_session, "outsider@example.com")
-        token = login_user(client, email="outsider@example.com")
+        await create_test_user(client, username="outsider", email="outsider@example.com")
+        await verify_user_in_db(db_session, "outsider@example.com")
+        token = await login_user(client, email="outsider@example.com")
         headers = auth_header(token)
     kwargs = {"headers": headers} if headers else {}
-    response = client.patch(
+    response = await client.patch(
         f"{taskprefix}/{task['workspace_id']}/tasks/{task['id']}/",
         json={"title": "Hacked!"},
         **kwargs,
@@ -337,8 +353,9 @@ def test_update_task_auth_failures(client: TestClient, db_session, task, token, 
     assert response.status_code == expected_status
 
 
-def test_update_task_validation_error(client: TestClient, user_auth_headers, task):
-    response = client.patch(
+@pytest.mark.anyio
+async def test_update_task_validation_error(client: AsyncClient, user_auth_headers, task):
+    response = await client.patch(
         f"{taskprefix}/{task['workspace_id']}/tasks/{task['id']}/",
         json={"content": ""},
         headers=user_auth_headers,
@@ -351,10 +368,11 @@ def test_update_task_validation_error(client: TestClient, user_auth_headers, tas
 # ========================================================================================
 
 
-def test_full_update_task_as_owner_success(
-    client: TestClient, user, user_auth_headers, task
+@pytest.mark.anyio
+async def test_full_update_task_as_owner_success(
+    client: AsyncClient, user, user_auth_headers, task
 ):
-    response = client.put(
+    response = await client.put(
         f"{taskprefix}/{task['workspace_id']}/tasks/{task['id']}",
         json={
             "title": "Full Update",
@@ -368,10 +386,11 @@ def test_full_update_task_as_owner_success(
     assert_updated_task(response, {"title": "Full Update", "content": "Fully updated."})
 
 
-def test_full_update_task_as_owner_all_fields(
-    client: TestClient, user, user_auth_headers, task
+@pytest.mark.anyio
+async def test_full_update_task_as_owner_all_fields(
+    client: AsyncClient, user, user_auth_headers, task
 ):
-    response = client.put(
+    response = await client.put(
         f"{taskprefix}/{task['workspace_id']}/tasks/{task['id']}",
         json={
             "title": "Complete",
@@ -386,14 +405,15 @@ def test_full_update_task_as_owner_all_fields(
     assert response.status_code == 200
 
 
-def test_full_update_task_non_owner_member(
-    client: TestClient, db_session, user_token, user_auth_headers, task
+@pytest.mark.anyio
+async def test_full_update_task_non_owner_member(
+    client: AsyncClient, db_session, user_token, user_auth_headers, task
 ):
-    other_user = create_test_user(client, username="other", email="other@example.com")
-    add_workspace_member(client, user_token, task["workspace_id"], other_user["id"])
-    verify_user_in_db(db_session, "other@example.com")
-    other_token = login_user(client, email="other@example.com")
-    response = client.put(
+    other_user = await create_test_user(client, username="other", email="other@example.com")
+    await add_workspace_member(client, user_token, task["workspace_id"], other_user["id"])
+    await verify_user_in_db(db_session, "other@example.com")
+    other_token = await login_user(client, email="other@example.com")
+    response = await client.put(
         f"{taskprefix}/{task['workspace_id']}/tasks/{task['id']}",
         json={
             "title": "Nope",
@@ -408,6 +428,7 @@ def test_full_update_task_non_owner_member(
     assert "not authorized" in response.json()["message"].lower()
 
 
+@pytest.mark.anyio
 @pytest.mark.parametrize(
     "token,expected_status",
     [
@@ -415,17 +436,17 @@ def test_full_update_task_non_owner_member(
         pytest.param(None, 401, id="no_auth"),
     ],
 )
-def test_full_update_task_auth_failures(
-    client: TestClient, db_session, task, token, expected_status
+async def test_full_update_task_auth_failures(
+    client: AsyncClient, db_session, task, token, expected_status
 ):
     headers = None
     if token == "outsider":
-        create_test_user(client, username="outsider", email="outsider@example.com")
-        verify_user_in_db(db_session, "outsider@example.com")
-        token = login_user(client, email="outsider@example.com")
+        await create_test_user(client, username="outsider", email="outsider@example.com")
+        await verify_user_in_db(db_session, "outsider@example.com")
+        token = await login_user(client, email="outsider@example.com")
         headers = auth_header(token)
     kwargs = {"headers": headers} if headers else {}
-    response = client.put(
+    response = await client.put(
         f"{taskprefix}/{task['workspace_id']}/tasks/{task['id']}",
         json={
             "title": "Hack",
@@ -439,8 +460,9 @@ def test_full_update_task_auth_failures(
     assert response.status_code == expected_status
 
 
-def test_full_update_task_missing_fields(client: TestClient, user_auth_headers, task):
-    response = client.put(
+@pytest.mark.anyio
+async def test_full_update_task_missing_fields(client: AsyncClient, user_auth_headers, task):
+    response = await client.put(
         f"{taskprefix}/{task['workspace_id']}/tasks/{task['id']}",
         json={"title": "Missing Content"},
         headers=user_auth_headers,
@@ -448,8 +470,9 @@ def test_full_update_task_missing_fields(client: TestClient, user_auth_headers, 
     assert response.status_code == 422
 
 
-def test_full_update_task_nonexistent(client: TestClient, user_auth_headers, workspace):
-    response = client.put(
+@pytest.mark.anyio
+async def test_full_update_task_nonexistent(client: AsyncClient, user_auth_headers, workspace):
+    response = await client.put(
         f"{taskprefix}/{workspace['id']}/tasks/99999",
         json={
             "title": "Ghost",
@@ -468,51 +491,56 @@ def test_full_update_task_nonexistent(client: TestClient, user_auth_headers, wor
 # ========================================================================================
 
 
-def test_delete_task_as_admin_success(client: TestClient, user_auth_headers, task):
-    response = client.delete(
+@pytest.mark.anyio
+async def test_delete_task_as_admin_success(client: AsyncClient, user_auth_headers, task):
+    response = await client.delete(
         f"{taskprefix}/{task['workspace_id']}/tasks/{task['id']}",
         headers=user_auth_headers,
     )
     assert response.status_code == 204
 
 
-def test_delete_task_removes_task(client: TestClient, user_auth_headers, task):
-    client.delete(
+@pytest.mark.anyio
+async def test_delete_task_removes_task(client: AsyncClient, user_auth_headers, task):
+    await client.delete(
         f"{taskprefix}/{task['workspace_id']}/tasks/{task['id']}",
         headers=user_auth_headers,
     )
-    response = client.get(
+    response = await client.get(
         f"{taskprefix}/{task['workspace_id']}/tasks/{task['id']}",
         headers=user_auth_headers,
     )
     assert response.status_code == 404
 
 
-def test_delete_task_as_non_admin_member(
-    client: TestClient, user_token, user_auth_headers, task, second_user
+@pytest.mark.anyio
+async def test_delete_task_as_non_admin_member(
+    client: AsyncClient, user_token, user_auth_headers, task, second_user
 ):
-    add_workspace_member(client, user_token, task["workspace_id"], second_user["id"])
-    member_token = login_user(client, email="user2@example.com")
-    response = client.delete(
+    await add_workspace_member(client, user_token, task["workspace_id"], second_user["id"])
+    member_token = await login_user(client, email="user2@example.com")
+    response = await client.delete(
         f"{taskprefix}/{task['workspace_id']}/tasks/{task['id']}",
         headers=auth_header(member_token),
     )
     assert_forbidden(response)
 
 
-def test_delete_task_as_owner_non_admin(
-    client: TestClient, user_token, workspace, second_user
+@pytest.mark.anyio
+async def test_delete_task_as_owner_non_admin(
+    client: AsyncClient, user_token, workspace, second_user
 ):
-    add_workspace_member(client, user_token, workspace["id"], second_user["id"])
-    member_token = login_user(client, email="user2@example.com")
-    own_task = create_task(client, member_token, workspace["id"])
-    response = client.delete(
+    await add_workspace_member(client, user_token, workspace["id"], second_user["id"])
+    member_token = await login_user(client, email="user2@example.com")
+    own_task = await create_task(client, member_token, workspace["id"])
+    response = await client.delete(
         f"{taskprefix}/{workspace['id']}/tasks/{own_task['id']}",
         headers=auth_header(member_token),
     )
     assert response.status_code == 204
 
 
+@pytest.mark.anyio
 @pytest.mark.parametrize(
     "token,expected_status",
     [
@@ -520,22 +548,23 @@ def test_delete_task_as_owner_non_admin(
         pytest.param(None, 401, id="no_auth"),
     ],
 )
-def test_delete_task_auth_failures(client: TestClient, db_session, task, token, expected_status):
+async def test_delete_task_auth_failures(client: AsyncClient, db_session, task, token, expected_status):
     headers = None
     if token == "outsider":
-        create_test_user(client, username="outsider", email="outsider@example.com")
-        verify_user_in_db(db_session, "outsider@example.com")
-        token = login_user(client, email="outsider@example.com")
+        await create_test_user(client, username="outsider", email="outsider@example.com")
+        await verify_user_in_db(db_session, "outsider@example.com")
+        token = await login_user(client, email="outsider@example.com")
         headers = auth_header(token)
     kwargs = {"headers": headers} if headers else {}
-    response = client.delete(
+    response = await client.delete(
         f"{taskprefix}/{task['workspace_id']}/tasks/{task['id']}", **kwargs
     )
     assert response.status_code == expected_status
 
 
-def test_delete_task_nonexistent(client: TestClient, user_auth_headers, workspace):
-    response = client.delete(
+@pytest.mark.anyio
+async def test_delete_task_nonexistent(client: AsyncClient, user_auth_headers, workspace):
+    response = await client.delete(
         f"{taskprefix}/{workspace['id']}/tasks/99999", headers=user_auth_headers
     )
     assert response.status_code == 404
@@ -546,8 +575,9 @@ def test_delete_task_nonexistent(client: TestClient, user_auth_headers, workspac
 # ========================================================================================
 
 
-def test_update_task_status_as_owner_success(client: TestClient, user_auth_headers, task):
-    response = client.patch(
+@pytest.mark.anyio
+async def test_update_task_status_as_owner_success(client: AsyncClient, user_auth_headers, task):
+    response = await client.patch(
         f"{taskprefix}/{task['workspace_id']}/tasks/{task['id']}/status",
         json={"status": "DONE"},
         headers=user_auth_headers,
@@ -556,16 +586,17 @@ def test_update_task_status_as_owner_success(client: TestClient, user_auth_heade
     assert response.json()["status"] == "DONE"
 
 
-def test_update_task_status_as_admin_success(
-    client: TestClient, db_session, user_token, user_auth_headers, workspace
+@pytest.mark.anyio
+async def test_update_task_status_as_admin_success(
+    client: AsyncClient, db_session, user_token, user_auth_headers, workspace
 ):
     """Admin (non-owner) can also change task status."""
-    other_user = create_test_user(client, username="other", email="other@example.com")
-    add_workspace_member(client, user_token, workspace["id"], other_user["id"])
-    verify_user_in_db(db_session, "other@example.com")
-    other_token = login_user(client, email="other@example.com")
-    task = create_task(client, other_token, workspace["id"])
-    response = client.patch(
+    other_user = await create_test_user(client, username="other", email="other@example.com")
+    await add_workspace_member(client, user_token, workspace["id"], other_user["id"])
+    await verify_user_in_db(db_session, "other@example.com")
+    other_token = await login_user(client, email="other@example.com")
+    task = await create_task(client, other_token, workspace["id"])
+    response = await client.patch(
         f"{taskprefix}/{workspace['id']}/tasks/{task['id']}/status",
         json={"status": "DONE"},
         headers=user_auth_headers,
@@ -574,14 +605,15 @@ def test_update_task_status_as_admin_success(
     assert response.json()["status"] == "DONE"
 
 
-def test_update_task_status_any_member_allowed(
-    client: TestClient, db_session, user_token, user_auth_headers, task
+@pytest.mark.anyio
+async def test_update_task_status_any_member_allowed(
+    client: AsyncClient, db_session, user_token, user_auth_headers, task
 ):
-    other_user = create_test_user(client, username="other", email="other@example.com")
-    add_workspace_member(client, user_token, task["workspace_id"], other_user["id"])
-    verify_user_in_db(db_session, "other@example.com")
-    other_token = login_user(client, email="other@example.com")
-    response = client.patch(
+    other_user = await create_test_user(client, username="other", email="other@example.com")
+    await add_workspace_member(client, user_token, task["workspace_id"], other_user["id"])
+    await verify_user_in_db(db_session, "other@example.com")
+    other_token = await login_user(client, email="other@example.com")
+    response = await client.patch(
         f"{taskprefix}/{task['workspace_id']}/tasks/{task['id']}/status",
         json={"status": "IN_PROGRESS"},
         headers=auth_header(other_token),
@@ -590,8 +622,9 @@ def test_update_task_status_any_member_allowed(
     assert response.json()["status"] == "IN_PROGRESS"
 
 
-def test_update_task_status_nonexistent(client: TestClient, user_auth_headers, workspace):
-    response = client.patch(
+@pytest.mark.anyio
+async def test_update_task_status_nonexistent(client: AsyncClient, user_auth_headers, workspace):
+    response = await client.patch(
         f"{taskprefix}/{workspace['id']}/tasks/99999/status",
         json={"status": "DONE"},
         headers=user_auth_headers,
@@ -599,6 +632,7 @@ def test_update_task_status_nonexistent(client: TestClient, user_auth_headers, w
     assert response.status_code == 404
 
 
+@pytest.mark.anyio
 @pytest.mark.parametrize(
     "token,expected_status",
     [
@@ -606,15 +640,15 @@ def test_update_task_status_nonexistent(client: TestClient, user_auth_headers, w
         pytest.param(None, 401, id="no_auth"),
     ],
 )
-def test_update_task_status_auth_failures(client: TestClient, db_session, task, token, expected_status):
+async def test_update_task_status_auth_failures(client: AsyncClient, db_session, task, token, expected_status):
     headers = None
     if token == "outsider":
-        create_test_user(client, username="outsider", email="outsider@example.com")
-        verify_user_in_db(db_session, "outsider@example.com")
-        token = login_user(client, email="outsider@example.com")
+        await create_test_user(client, username="outsider", email="outsider@example.com")
+        await verify_user_in_db(db_session, "outsider@example.com")
+        token = await login_user(client, email="outsider@example.com")
         headers = auth_header(token)
     kwargs = {"headers": headers} if headers else {}
-    response = client.patch(
+    response = await client.patch(
         f"{taskprefix}/{task['workspace_id']}/tasks/{task['id']}/status",
         json={"status": "DONE"},
         **kwargs,
@@ -627,11 +661,12 @@ def test_update_task_status_auth_failures(client: TestClient, db_session, task, 
 # ========================================================================================
 
 
-def test_make_owner_success(
-    client: TestClient, user_token, user_auth_headers, task, second_user
+@pytest.mark.anyio
+async def test_make_owner_success(
+    client: AsyncClient, user_token, user_auth_headers, task, second_user
 ):
-    add_workspace_member(client, user_token, task["workspace_id"], second_user["id"])
-    response = client.patch(
+    await add_workspace_member(client, user_token, task["workspace_id"], second_user["id"])
+    response = await client.patch(
         f"{taskprefix}/{task['workspace_id']}/tasks/{task['id']}/owner",
         params={"user_id": second_user["id"]},
         headers=user_auth_headers,
@@ -639,8 +674,9 @@ def test_make_owner_success(
     assert response.status_code == 200
 
 
-def test_make_owner_self(client: TestClient, user, user_auth_headers, task):
-    response = client.patch(
+@pytest.mark.anyio
+async def test_make_owner_self(client: AsyncClient, user, user_auth_headers, task):
+    response = await client.patch(
         f"{taskprefix}/{task['workspace_id']}/tasks/{task['id']}/owner",
         params={"user_id": user["id"]},
         headers=user_auth_headers,
@@ -648,11 +684,12 @@ def test_make_owner_self(client: TestClient, user, user_auth_headers, task):
     assert response.status_code == 200
 
 
-def test_make_owner_target_not_member(client: TestClient, user_auth_headers, task):
-    stranger = create_test_user(
+@pytest.mark.anyio
+async def test_make_owner_target_not_member(client: AsyncClient, user_auth_headers, task):
+    stranger = await create_test_user(
         client, username="stranger", email="stranger@example.com"
     )
-    response = client.patch(
+    response = await client.patch(
         f"{taskprefix}/{task['workspace_id']}/tasks/{task['id']}/owner",
         params={"user_id": stranger["id"]},
         headers=user_auth_headers,
@@ -660,6 +697,7 @@ def test_make_owner_target_not_member(client: TestClient, user_auth_headers, tas
     assert_forbidden(response)
 
 
+@pytest.mark.anyio
 @pytest.mark.parametrize(
     "token,expected_status",
     [
@@ -667,8 +705,8 @@ def test_make_owner_target_not_member(client: TestClient, user_auth_headers, tas
         pytest.param(None, 401, id="no_auth"),
     ],
 )
-def test_make_owner_auth_failures(
-    client: TestClient,
+async def test_make_owner_auth_failures(
+    client: AsyncClient,
     db_session,
     user_token,
     user_auth_headers,
@@ -677,20 +715,20 @@ def test_make_owner_auth_failures(
     token,
     expected_status,
 ):
-    add_workspace_member(client, user_token, task["workspace_id"], second_user["id"])
+    await add_workspace_member(client, user_token, task["workspace_id"], second_user["id"])
     headers = None
     if token == "regular":
-        regular_user = create_test_user(
+        regular_user = await create_test_user(
             client, username="regular", email="regular@example.com"
         )
-        add_workspace_member(
+        await add_workspace_member(
             client, user_token, task["workspace_id"], regular_user["id"]
         )
-        verify_user_in_db(db_session, "regular@example.com")
-        regular_token = login_user(client, email="regular@example.com")
+        await verify_user_in_db(db_session, "regular@example.com")
+        regular_token = await login_user(client, email="regular@example.com")
         headers = auth_header(regular_token)
     kwargs = {"headers": headers} if headers else {}
-    response = client.patch(
+    response = await client.patch(
         f"{taskprefix}/{task['workspace_id']}/tasks/{task['id']}/owner",
         params={"user_id": second_user["id"]},
         **kwargs,
@@ -698,11 +736,12 @@ def test_make_owner_auth_failures(
     assert response.status_code == expected_status
 
 
-def test_make_owner_nonexistent_task(
-    client: TestClient, user_token, second_user, user_auth_headers, workspace
+@pytest.mark.anyio
+async def test_make_owner_nonexistent_task(
+    client: AsyncClient, user_token, second_user, user_auth_headers, workspace
 ):
-    add_workspace_member(client, user_token, workspace["id"], second_user["id"])
-    response = client.patch(
+    await add_workspace_member(client, user_token, workspace["id"], second_user["id"])
+    response = await client.patch(
         f"{taskprefix}/{workspace['id']}/tasks/99999/owner",
         params={"user_id": second_user["id"]},
         headers=user_auth_headers,
@@ -721,6 +760,7 @@ def test_make_owner_nonexistent_task(
 # id belonging to someone else's workspace.
 
 
+@pytest.mark.anyio
 @pytest.mark.parametrize(
     "method, suffix, body",
     [
@@ -736,13 +776,13 @@ def test_make_owner_nonexistent_task(
         pytest.param("delete", "", None, id="delete"),
     ],
 )
-def test_task_not_reachable_through_another_workspace(
+async def test_task_not_reachable_through_another_workspace(
     client, user_token, workspace, second_user_token, method, suffix, body
 ):
-    victim_task = create_task(client, user_token, workspace["id"])
-    attacker_ws = create_workspace(client, second_user_token, title="Attacker WS")
+    victim_task = await create_task(client, user_token, workspace["id"])
+    attacker_ws = await create_workspace(client, second_user_token, title="Attacker WS")
 
-    response = client.request(
+    response = await client.request(
         method,
         f"/api/workspaces/{attacker_ws['id']}/tasks/{victim_task['id']}{suffix}",
         json=body,
@@ -751,7 +791,7 @@ def test_task_not_reachable_through_another_workspace(
     assert response.status_code == 404
 
     # and the task is untouched
-    check = client.get(
+    check = await client.get(
         f"/api/workspaces/{workspace['id']}/tasks/{victim_task['id']}",
         headers=auth_header(user_token),
     )
@@ -760,13 +800,14 @@ def test_task_not_reachable_through_another_workspace(
     assert check.json()["status"] == victim_task["status"]
 
 
-def test_task_reassign_not_reachable_through_another_workspace(
+@pytest.mark.anyio
+async def test_task_reassign_not_reachable_through_another_workspace(
     client, user_token, workspace, second_user, second_user_token
 ):
-    victim_task = create_task(client, user_token, workspace["id"])
-    attacker_ws = create_workspace(client, second_user_token, title="Attacker WS")
+    victim_task = await create_task(client, user_token, workspace["id"])
+    attacker_ws = await create_workspace(client, second_user_token, title="Attacker WS")
 
-    response = client.patch(
+    response = await client.patch(
         f"/api/workspaces/{attacker_ws['id']}/tasks/{victim_task['id']}/owner"
         f"?user_id={second_user['id']}",
         headers=auth_header(second_user_token),

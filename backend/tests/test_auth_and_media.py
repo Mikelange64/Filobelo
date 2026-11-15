@@ -5,7 +5,7 @@ from io import BytesIO
 from unittest.mock import patch
 
 import pytest
-from fastapi.testclient import TestClient
+from httpx import AsyncClient
 from sqlalchemy import select
 
 from app.auth import hash_reset_token
@@ -34,12 +34,13 @@ def count_s3_objects(s3_client, bucket: str) -> int:
 # ========================================================================================
 
 
-def test_forgot_password_sends_email(client: TestClient, user):
+@pytest.mark.anyio
+async def test_forgot_password_sends_email(client: AsyncClient, user):
     """A valid email address triggers the password reset email."""
     target = "app.routers.users.send_password_reset_email"
 
     with patch(target) as mock_send:
-        response = client.post(
+        response = await client.post(
             f"{prefix}/forgot-password",
             json={"email": "test@example.com"},
         )
@@ -52,12 +53,13 @@ def test_forgot_password_sends_email(client: TestClient, user):
     assert "token" in call_kwargs
 
 
-def test_forgot_password_unknown_email_returns_same_status(client: TestClient):
+@pytest.mark.anyio
+async def test_forgot_password_unknown_email_returns_same_status(client: AsyncClient):
     """Unknown email returns 202 to avoid email enumeration."""
     target = "app.routers.users.send_password_reset_email"
 
     with patch(target) as mock_send:
-        response = client.post(
+        response = await client.post(
             f"{prefix}/forgot-password",
             json={"email": "unknown@example.com"},
         )
@@ -66,8 +68,9 @@ def test_forgot_password_unknown_email_returns_same_status(client: TestClient):
     mock_send.assert_not_called()
 
 
-def test_forgot_password_invalid_email_format(client: TestClient):
-    response = client.post(
+@pytest.mark.anyio
+async def test_forgot_password_invalid_email_format(client: AsyncClient):
+    response = await client.post(
         f"{prefix}/forgot-password",
         json={"email": "not-an-email"},
     )
@@ -79,23 +82,24 @@ def test_forgot_password_invalid_email_format(client: TestClient):
 # ========================================================================================
 
 
-def test_reset_password_success(client: TestClient, db_session):
+@pytest.mark.anyio
+async def test_reset_password_success(client: AsyncClient, db_session):
     """A valid reset token changes the user's password."""
-    create_test_user(client)
+    await create_test_user(client)
 
     # Generate a real reset token for the user
     token = secrets.token_urlsafe(32)
     token_hash = hash_reset_token(token)
-    user = db_session.execute(select(User)).scalars().first()
+    user = (await db_session.execute(select(User))).scalars().first()
     user.is_verified = True
     expires_at = datetime.now(UTC) + timedelta(hours=1)
     reset_token = PasswordResetToken(
         user_id=user.id, token_hash=token_hash, expires_at=expires_at
     )
     db_session.add(reset_token)
-    db_session.commit()
+    await db_session.commit()
 
-    response = client.post(
+    response = await client.post(
         f"{prefix}/reset-password",
         json={"token": token, "new_password": "newsecurepassword"},
     )
@@ -104,24 +108,25 @@ def test_reset_password_success(client: TestClient, db_session):
     assert response.json()["message"] == "Password changed successfully"
 
     # Verify the password actually changed (login with old password fails)
-    login_fails = client.post(
+    login_fails = await client.post(
         f"{prefix}/login",
         data={"username": "test@example.com", "password": "testpassword123"},
     )
     assert login_fails.status_code == 401
 
     # Login with new password works
-    login_ok = client.post(
+    login_ok = await client.post(
         f"{prefix}/login",
         data={"username": "test@example.com", "password": "newsecurepassword"},
     )
     assert login_ok.status_code == 200
 
 
-def test_reset_password_invalid_token(client: TestClient):
-    create_test_user(client)
+@pytest.mark.anyio
+async def test_reset_password_invalid_token(client: AsyncClient):
+    await create_test_user(client)
 
-    response = client.post(
+    response = await client.post(
         f"{prefix}/reset-password",
         json={"token": "totally-fake-token", "new_password": "newsecurepassword"},
     )
@@ -130,20 +135,21 @@ def test_reset_password_invalid_token(client: TestClient):
     assert "Invalid or expired reset token" in response.json()["message"]
 
 
-def test_reset_password_expired_token(client: TestClient, db_session):
+@pytest.mark.anyio
+async def test_reset_password_expired_token(client: AsyncClient, db_session):
     """An expired token returns 400 and is deleted."""
-    create_test_user(client)
+    await create_test_user(client)
     token = secrets.token_urlsafe(32)
     token_hash = hash_reset_token(token)
-    user = db_session.execute(select(User)).scalars().first()
+    user = (await db_session.execute(select(User))).scalars().first()
     expires_at = datetime.now(UTC) - timedelta(hours=1)  # expired
     reset_token = PasswordResetToken(
         user_id=user.id, token_hash=token_hash, expires_at=expires_at
     )
     db_session.add(reset_token)
-    db_session.commit()
+    await db_session.commit()
 
-    response = client.post(
+    response = await client.post(
         f"{prefix}/reset-password",
         json={"token": token, "new_password": "newsecurepassword"},
     )
@@ -152,20 +158,22 @@ def test_reset_password_expired_token(client: TestClient, db_session):
     assert "Invalid or expired reset token" in response.json()["message"]
 
     # The expired token should be cleaned up
-    remaining = db_session.execute(select(PasswordResetToken)).scalars().all()
+    remaining = (await db_session.execute(select(PasswordResetToken))).scalars().all()
     assert len(remaining) == 0
 
 
-def test_reset_password_missing_new_password(client: TestClient):
-    response = client.post(
+@pytest.mark.anyio
+async def test_reset_password_missing_new_password(client: AsyncClient):
+    response = await client.post(
         f"{prefix}/reset-password",
         json={"token": "some-token"},
     )
     assert response.status_code == 422
 
 
-def test_reset_password_new_password_too_short(client: TestClient):
-    response = client.post(
+@pytest.mark.anyio
+async def test_reset_password_new_password_too_short(client: AsyncClient):
+    response = await client.post(
         f"{prefix}/reset-password",
         json={"token": "some-token", "new_password": "short"},
     )
@@ -177,10 +185,11 @@ def test_reset_password_new_password_too_short(client: TestClient):
 # ========================================================================================
 
 
-def test_upload_profile_picture_success(
-    client: TestClient, user_auth_headers, mocked_s3, test_image
+@pytest.mark.anyio
+async def test_upload_profile_picture_success(
+    client: AsyncClient, user_auth_headers, mocked_s3, test_image
 ):
-    response = client.patch(
+    response = await client.patch(
         f"{prefix}/me/picture",
         files={"file": ("profile.jpg", BytesIO(test_image), "image/jpeg")},
         headers=user_auth_headers,
@@ -195,12 +204,13 @@ def test_upload_profile_picture_success(
     assert count_s3_objects(mocked_s3, "test-bucket") == 1
 
 
-def test_upload_profile_picture_replaces_old(
-    client: TestClient, user_auth_headers, mocked_s3, test_image
+@pytest.mark.anyio
+async def test_upload_profile_picture_replaces_old(
+    client: AsyncClient, user_auth_headers, mocked_s3, test_image
 ):
     """Uploading a second picture removes the old one from S3."""
     # First upload
-    client.patch(
+    await client.patch(
         f"{prefix}/me/picture",
         files={"file": ("first.jpg", BytesIO(test_image), "image/jpeg")},
         headers=user_auth_headers,
@@ -208,7 +218,7 @@ def test_upload_profile_picture_replaces_old(
     assert count_s3_objects(mocked_s3, "test-bucket") == 1
 
     # Second upload replaces
-    response = client.patch(
+    response = await client.patch(
         f"{prefix}/me/picture",
         files={"file": ("second.jpg", BytesIO(test_image), "image/jpeg")},
         headers=user_auth_headers,
@@ -218,19 +228,21 @@ def test_upload_profile_picture_replaces_old(
     assert count_s3_objects(mocked_s3, "test-bucket") == 1
 
 
-def test_upload_profile_picture_no_auth(client: TestClient, test_image):
-    response = client.patch(
+@pytest.mark.anyio
+async def test_upload_profile_picture_no_auth(client: AsyncClient, test_image):
+    response = await client.patch(
         f"{prefix}/me/picture",
         files={"file": ("profile.jpg", BytesIO(test_image), "image/jpeg")},
     )
     assert_auth_error(response)
 
 
-def test_upload_profile_picture_file_too_large(client: TestClient, user_auth_headers):
+@pytest.mark.anyio
+async def test_upload_profile_picture_file_too_large(client: AsyncClient, user_auth_headers):
     """Files exceeding max_upload_size_bytes should be rejected."""
     large_content = b"x" * (5 * 1024 * 1024 + 1)  # 5MB + 1 byte
 
-    response = client.patch(
+    response = await client.patch(
         f"{prefix}/me/picture",
         files={"file": ("large.jpg", BytesIO(large_content), "image/jpeg")},
         headers=user_auth_headers,
@@ -240,9 +252,10 @@ def test_upload_profile_picture_file_too_large(client: TestClient, user_auth_hea
     assert "File too large" in response.json()["message"]
 
 
-def test_upload_profile_picture_invalid_file(client: TestClient, user_auth_headers):
+@pytest.mark.anyio
+async def test_upload_profile_picture_invalid_file(client: AsyncClient, user_auth_headers):
     """Non-image files should be rejected."""
-    response = client.patch(
+    response = await client.patch(
         f"{prefix}/me/picture",
         files={"file": ("fake.txt", BytesIO(b"not an image"), "text/plain")},
         headers=user_auth_headers,
@@ -257,12 +270,13 @@ def test_upload_profile_picture_invalid_file(client: TestClient, user_auth_heade
 # ========================================================================================
 
 
-def test_delete_profile_picture_success(
-    client: TestClient, user_auth_headers, mocked_s3, test_image
+@pytest.mark.anyio
+async def test_delete_profile_picture_success(
+    client: AsyncClient, user_auth_headers, mocked_s3, test_image
 ):
     """Upload a picture then delete it."""
     # Upload first
-    client.patch(
+    await client.patch(
         f"{prefix}/me/picture",
         files={"file": ("profile.jpg", BytesIO(test_image), "image/jpeg")},
         headers=user_auth_headers,
@@ -270,7 +284,7 @@ def test_delete_profile_picture_success(
     assert count_s3_objects(mocked_s3, "test-bucket") == 1
 
     # Delete it
-    response = client.delete(f"{prefix}/me/picture", headers=user_auth_headers)
+    response = await client.delete(f"{prefix}/me/picture", headers=user_auth_headers)
 
     assert response.status_code == 200
     data = response.json()
@@ -280,16 +294,18 @@ def test_delete_profile_picture_success(
     assert count_s3_objects(mocked_s3, "test-bucket") == 0
 
 
-def test_delete_profile_picture_no_picture(client: TestClient, user_auth_headers):
+@pytest.mark.anyio
+async def test_delete_profile_picture_no_picture(client: AsyncClient, user_auth_headers):
     """Deleting when no picture exists returns 400."""
-    response = client.delete(f"{prefix}/me/picture", headers=user_auth_headers)
+    response = await client.delete(f"{prefix}/me/picture", headers=user_auth_headers)
 
     assert response.status_code == 400
     assert "No profile picture" in response.json()["message"]
 
 
-def test_delete_profile_picture_no_auth(client: TestClient):
-    response = client.delete(f"{prefix}/me/picture")
+@pytest.mark.anyio
+async def test_delete_profile_picture_no_auth(client: AsyncClient):
+    response = await client.delete(f"{prefix}/me/picture")
     assert_auth_error(response)
 
 
@@ -298,12 +314,13 @@ def test_delete_profile_picture_no_auth(client: TestClient):
 # ========================================================================================
 
 
-def test_delete_user_removes_s3_picture(
-    client: TestClient, user, user_auth_headers, mocked_s3, test_image
+@pytest.mark.anyio
+async def test_delete_user_removes_s3_picture(
+    client: AsyncClient, user, user_auth_headers, mocked_s3, test_image
 ):
     """When a user with a profile picture is deleted, the S3 object is also removed."""
     # Upload picture first
-    client.patch(
+    await client.patch(
         f"{prefix}/me/picture",
         files={"file": ("profile.jpg", BytesIO(test_image), "image/jpeg")},
         headers=user_auth_headers,
@@ -311,7 +328,7 @@ def test_delete_user_removes_s3_picture(
     assert count_s3_objects(mocked_s3, "test-bucket") == 1
 
     # Delete the user
-    response = client.delete(f"{prefix}/me", headers=user_auth_headers)
+    response = await client.delete(f"{prefix}/me", headers=user_auth_headers)
     assert response.status_code == 204
 
     # S3 object should be cleaned up
@@ -329,8 +346,9 @@ REGISTER_FORM = {
 }
 
 
-def test_register_with_picture_success(client: TestClient, mocked_s3, test_image):
-    response = client.post(
+@pytest.mark.anyio
+async def test_register_with_picture_success(client: AsyncClient, mocked_s3, test_image):
+    response = await client.post(
         f"{prefix}/with-picture",
         data=REGISTER_FORM,
         files={"file": ("profile.jpg", BytesIO(test_image), "image/jpeg")},
@@ -344,17 +362,19 @@ def test_register_with_picture_success(client: TestClient, mocked_s3, test_image
     assert count_s3_objects(mocked_s3, "test-bucket") == 1
 
 
-def test_register_with_picture_file_is_optional(client: TestClient, mocked_s3):
-    response = client.post(f"{prefix}/with-picture", data=REGISTER_FORM)
+@pytest.mark.anyio
+async def test_register_with_picture_file_is_optional(client: AsyncClient, mocked_s3):
+    response = await client.post(f"{prefix}/with-picture", data=REGISTER_FORM)
 
     assert response.status_code == 201
     assert count_s3_objects(mocked_s3, "test-bucket") == 0
 
 
-def test_register_with_picture_invalid_image_creates_no_account(
-    client: TestClient, mocked_s3
+@pytest.mark.anyio
+async def test_register_with_picture_invalid_image_creates_no_account(
+    client: AsyncClient, mocked_s3
 ):
-    response = client.post(
+    response = await client.post(
         f"{prefix}/with-picture",
         data=REGISTER_FORM,
         files={"file": ("fake.txt", BytesIO(b"not an image"), "text/plain")},
@@ -365,14 +385,15 @@ def test_register_with_picture_invalid_image_creates_no_account(
     assert count_s3_objects(mocked_s3, "test-bucket") == 0
 
     # The email is still free: nothing was created by the rejected attempt.
-    retry = client.post(f"{prefix}/with-picture", data=REGISTER_FORM)
+    retry = await client.post(f"{prefix}/with-picture", data=REGISTER_FORM)
     assert retry.status_code == 201
 
 
-def test_register_with_picture_file_too_large(client: TestClient, mocked_s3):
+@pytest.mark.anyio
+async def test_register_with_picture_file_too_large(client: AsyncClient, mocked_s3):
     large_content = b"x" * (5 * 1024 * 1024 + 1)
 
-    response = client.post(
+    response = await client.post(
         f"{prefix}/with-picture",
         data=REGISTER_FORM,
         files={"file": ("large.jpg", BytesIO(large_content), "image/jpeg")},
@@ -383,8 +404,9 @@ def test_register_with_picture_file_too_large(client: TestClient, mocked_s3):
     assert count_s3_objects(mocked_s3, "test-bucket") == 0
 
 
-def test_register_with_picture_validates_fields(client: TestClient, test_image):
-    response = client.post(
+@pytest.mark.anyio
+async def test_register_with_picture_validates_fields(client: AsyncClient, test_image):
+    response = await client.post(
         f"{prefix}/with-picture",
         data={**REGISTER_FORM, "password": "short"},
         files={"file": ("profile.jpg", BytesIO(test_image), "image/jpeg")},
@@ -393,12 +415,13 @@ def test_register_with_picture_validates_fields(client: TestClient, test_image):
     assert response.status_code == 422
 
 
-def test_register_with_picture_duplicate_email_uploads_nothing(
-    client: TestClient, mocked_s3, test_image
+@pytest.mark.anyio
+async def test_register_with_picture_duplicate_email_uploads_nothing(
+    client: AsyncClient, mocked_s3, test_image
 ):
-    client.post(f"{prefix}/with-picture", data=REGISTER_FORM)
+    await client.post(f"{prefix}/with-picture", data=REGISTER_FORM)
 
-    response = client.post(
+    response = await client.post(
         f"{prefix}/with-picture",
         data={**REGISTER_FORM, "username": "otherphotouser"},
         files={"file": ("profile.jpg", BytesIO(test_image), "image/jpeg")},
@@ -408,8 +431,9 @@ def test_register_with_picture_duplicate_email_uploads_nothing(
     assert count_s3_objects(mocked_s3, "test-bucket") == 0
 
 
-def test_register_with_picture_storage_failure_still_creates_account(
-    client: TestClient, test_image, monkeypatch
+@pytest.mark.anyio
+async def test_register_with_picture_storage_failure_still_creates_account(
+    client: AsyncClient, test_image, monkeypatch
 ):
     """If the bucket is unreachable the signup still succeeds, without a picture."""
 
@@ -418,7 +442,7 @@ def test_register_with_picture_storage_failure_still_creates_account(
 
     monkeypatch.setattr("app.routers.users.upload_profile_image", broken_upload)
 
-    response = client.post(
+    response = await client.post(
         f"{prefix}/with-picture",
         data=REGISTER_FORM,
         files={"file": ("profile.jpg", BytesIO(test_image), "image/jpeg")},
