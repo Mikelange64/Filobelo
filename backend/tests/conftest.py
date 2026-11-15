@@ -287,7 +287,7 @@ class FakeCompletions:
         self.exception: Exception | None = None
         self.calls: list[dict] = []
 
-    def create(self, **kwargs):
+    async def create(self, **kwargs):
         self.calls.append(kwargs)
         if self.exception is not None:
             raise self.exception

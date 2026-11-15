@@ -14,7 +14,14 @@ OEMBED_ENDPOINTS = {
 }
 
 
-def fetch_oembed_thumbnail(url: str) -> str | None:
+async def _http_get(url: str, **kwargs) -> httpx.Response:
+    # One short-lived client per lookup. Kept as its own function so tests can
+    # replace the outbound request without touching anything else.
+    async with httpx.AsyncClient() as client:
+        return await client.get(url, **kwargs)
+
+
+async def fetch_oembed_thumbnail(url: str) -> str | None:
     """Look up a real thumbnail for links from a small allowlist of providers
     with public, keyless oEmbed endpoints. Returns None for anything else,
     or if the provider is slow/unreachable/returns something unexpected -
@@ -26,7 +33,7 @@ def fetch_oembed_thumbnail(url: str) -> str | None:
         return None
 
     try:
-        response = httpx.get(
+        response = await _http_get(
             endpoint,
             params={"url": url, "format": "json"},
             timeout=5.0,

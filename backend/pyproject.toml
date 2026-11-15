@@ -6,6 +6,7 @@ Users can create tasks, set deadlines, and track completion rate in a free envir
 Meant for small projects like planning a trip, or larger projects involving multiple people.'''
 requires-python = ">=3.14"
 dependencies = [
+    "aiosmtplib>=5.1.1",
     "alembic>=1.18.4",
     "boto3>=1.43.30",
     "fastapi[standard]>=0.135.2",

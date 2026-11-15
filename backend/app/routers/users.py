@@ -70,13 +70,13 @@ logger = logging.getLogger(__name__)
 # =======================================================================================
 
 
-def _read_profile_image(file: UploadFile) -> tuple[bytes, str]:
+async def _read_profile_image(file: UploadFile) -> tuple[bytes, str]:
     """Reads an uploaded picture, enforces the size limit and re-encodes it
     as a 300x300 JPEG. Returns (bytes, new_filename). Raises 400 on a file
     that is too large or is not an image."""
     # Read one byte past the limit: enough to know it is too big without
     # pulling an arbitrarily large upload into memory.
-    content = file.file.read(settings.max_upload_size_bytes + 1)
+    content = await file.read(settings.max_upload_size_bytes + 1)
 
     if len(content) > settings.max_upload_size_bytes:
         raise HTTPException(
@@ -85,7 +85,8 @@ def _read_profile_image(file: UploadFile) -> tuple[bytes, str]:
         )
 
     try:
-        return process_profile_image(content)
+        # Pillow is CPU-bound: run it in a worker thread, off the event loop.
+        return await run_in_threadpool(process_profile_image, content)
     except (UnidentifiedImageError, ValueError) as err:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -120,7 +121,9 @@ async def _register_user(
 
     # Validated and re-encoded before anything is written, so a bad picture
     # rejects the signup instead of leaving an account behind.
-    processed_picture = _read_profile_image(picture) if picture is not None else None
+    processed_picture = (
+        await _read_profile_image(picture) if picture is not None else None
+    )
 
     result = await db.execute(
         select(User).where(func.lower(User.email) == user.email.lower())
@@ -169,7 +172,7 @@ async def _register_user(
     if processed_picture is not None:
         picture_bytes, picture_filename = processed_picture
         try:
-            upload_profile_image(picture_bytes, picture_filename)
+            await upload_profile_image(picture_bytes, picture_filename)
         except Exception:
             logger.exception(
                 "Profile picture upload failed on signup for user_id=%s", new_user.id
@@ -180,7 +183,7 @@ async def _register_user(
             await db.refresh(new_user)
 
     try:
-        send_verification_email(
+        await send_verification_email(
             to_email=new_user.email, username=new_user.username, token=token
         )
     except Exception:
@@ -409,7 +412,7 @@ async def delete_user(current_user: CurrentUser, db: DbSession):
     )
 
     if old_filename:
-        delete_profile_image(old_filename)
+        await delete_profile_image(old_filename)
 
 
 # ========================================================================================
@@ -502,7 +505,7 @@ async def resend_verification_email(
         logger.info("Verification email re-requested user_id=%s", user.id)
 
         try:
-            send_verification_email(
+            await send_verification_email(
                 to_email=user.email, username=user.username, token=token
             )
         except Exception:
@@ -550,7 +553,7 @@ async def forgot_password(db: DbSession, request_data: ForgotPasswordRequest):
         logger.info("Password reset requested user_id=%s", user.id)
 
         try:
-            send_password_reset_email(
+            await send_password_reset_email(
                 to_email=user.email, username=user.username, token=token
             )
         except Exception:
@@ -707,10 +710,10 @@ async def get_user(user_id: int, db: DbSession):
 async def upload_profile_picture(
     file: UploadFile, current_user: CurrentUser, db: DbSession
 ):
-    processed_bytes, new_filename = _read_profile_image(file)
+    processed_bytes, new_filename = await _read_profile_image(file)
 
     try:
-        upload_profile_image(processed_bytes, new_filename)
+        await upload_profile_image(processed_bytes, new_filename)
     except ClientError as err:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -724,7 +727,7 @@ async def upload_profile_picture(
     await db.refresh(current_user)
 
     if old_filename:
-        delete_profile_image(old_filename)
+        await delete_profile_image(old_filename)
 
     return current_user
 
@@ -743,5 +746,5 @@ async def delete_profile_picture(current_user: CurrentUser, db: DbSession,):
     await db.commit()
     await db.refresh(current_user)
 
-    delete_profile_image(old_filename)
+    await delete_profile_image(old_filename)
     return current_user

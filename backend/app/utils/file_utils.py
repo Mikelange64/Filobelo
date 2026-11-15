@@ -4,6 +4,7 @@ from io import BytesIO
 from app.config import settings
 import filetype
 from PIL import Image, ImageOps
+from starlette.concurrency import run_in_threadpool
 from app.utils.image_utils import _get_s3_client
 
 # Same convention as image_utils.py: log the S3 failure once here, re-raise.
@@ -119,13 +120,13 @@ def _delete_from_s3(key: str) -> None:
         raise
 
 
-def upload_file(file_bytes: bytes, filename: str, mime: str) -> None:
+async def upload_file(file_bytes: bytes, filename: str, mime: str) -> None:
     key = f"files/{filename}"
-    _upload_to_s3(file_bytes, key, mime)
+    await run_in_threadpool(_upload_to_s3, file_bytes, key, mime)
 
 
-def delete_file(filename: str | None) -> None:
+async def delete_file(filename: str | None) -> None:
     if filename is None:
         return
     key = f"files/{filename}"
-    _delete_from_s3(key)
+    await run_in_threadpool(_delete_from_s3, key)

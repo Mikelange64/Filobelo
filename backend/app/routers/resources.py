@@ -4,6 +4,7 @@ from botocore.exceptions import ClientError
 from fastapi import APIRouter, status, HTTPException, UploadFile, Depends
 from PIL import UnidentifiedImageError
 from sqlalchemy import select
+from starlette.concurrency import run_in_threadpool
 
 from app.database import DbSession
 from app.config import settings
@@ -89,7 +90,7 @@ async def add_link(
         type          = ResourceType.LINK,
         title         = data.title,
         url           = str(data.url),
-        thumbnail_url = fetch_oembed_thumbnail(str(data.url)),
+        thumbnail_url = await fetch_oembed_thumbnail(str(data.url)),
     )
     return await _save_resource(new_link, db)
 
@@ -115,7 +116,7 @@ async def update_link(task_id: int, link_id: int, data: LinkUpdate, db: DbSessio
         setattr(resource, field, str(value) if field == "url" else value)
 
     if "url" in update:
-        resource.thumbnail_url = fetch_oembed_thumbnail(resource.url)
+        resource.thumbnail_url = await fetch_oembed_thumbnail(resource.url)
 
     await db.commit()
     await db.refresh(resource)
@@ -178,7 +179,7 @@ async def upload_resource_file(
     db: DbSession,
     member: Annotated[WorkspaceMember, Depends(require_membership)],
 ):
-    content = file.file.read()
+    content = await file.read()
 
     if len(content) > settings.max_file_upload_size_bytes:
         raise HTTPException(
@@ -187,7 +188,11 @@ async def upload_resource_file(
         )
 
     try:
-        processed_bytes, file_key, mime = process_file(content, file.filename)
+        # Type sniffing and image re-encoding are CPU work on the whole file,
+        # so both run in a worker thread rather than on the event loop.
+        processed_bytes, file_key, mime = await run_in_threadpool(
+            process_file, content, file.filename
+        )
     except ValueError as err:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -196,7 +201,9 @@ async def upload_resource_file(
 
     if mime.startswith("image/"):
         try:
-            processed_bytes = normalize_image(processed_bytes, mime)
+            processed_bytes = await run_in_threadpool(
+                normalize_image, processed_bytes, mime
+            )
         except (UnidentifiedImageError, OSError) as err:
             # Magic bytes matched, but Pillow couldn't fully decode it (e.g.
             # truncated/corrupt data past the header).
@@ -206,7 +213,7 @@ async def upload_resource_file(
             ) from err
 
     try:
-        upload_file(processed_bytes, file_key, mime)
+        await upload_file(processed_bytes, file_key, mime)
     except ClientError as err:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -235,7 +242,7 @@ async def delete_resource(task_id: int, resource_id: int, db: DbSession):
     resource = await get_resource_by_id(resource_id, task_id, db)
 
     if resource.type == ResourceType.FILE:
-        delete_file(resource.file_key)
+        await delete_file(resource.file_key)
 
     await db.delete(resource)
     await db.commit()

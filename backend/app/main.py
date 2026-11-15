@@ -18,6 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
+from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.config import settings
@@ -25,6 +26,7 @@ from app.database import DbSession, engine
 from app.redis_client import redis_client
 from app.routers import conversations, folders, resources, tasks, users, workspaces
 from app.superusers import superusers
+from app.utils.image_utils import _get_s3_client
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +37,10 @@ async def lifespan(app: FastAPI):
     # after importing this file, so the uvicorn part is re-applied here (see
     # take_over_uvicorn_loggers in app/logging_config.py for the full story).
     take_over_uvicorn_loggers()
+    # Building the S3 client reads boto's service definitions from disk. Done
+    # once here, in a worker thread, so the first request that needs a file
+    # link does not pay for it on the event loop. No network call is made.
+    await run_in_threadpool(_get_s3_client)
     yield
     # Runs once when the server stops: close the database connection pool and
     # the Redis connections instead of leaving them to be dropped.

@@ -269,12 +269,12 @@ class _FakeOembedResponse:
 async def test_create_link_with_oembed_provider_gets_thumbnail(
     client: AsyncClient, user_auth_headers, workspace, task, monkeypatch
 ):
-    def fake_get(url, params=None, timeout=None, follow_redirects=None):
+    async def fake_get(url, params=None, timeout=None, follow_redirects=None):
         assert url == "https://www.youtube.com/oembed"
         assert params["url"] == "https://www.youtube.com/watch?v=abc123"
         return _FakeOembedResponse({"thumbnail_url": "https://i.ytimg.com/vi/abc123/hqdefault.jpg"})
 
-    monkeypatch.setattr("app.utils.oembed.httpx.get", fake_get)
+    monkeypatch.setattr("app.utils.oembed._http_get", fake_get)
 
     response = await client.post(
         resource_path(workspace["id"], task["id"], "/links"),
@@ -289,10 +289,10 @@ async def test_create_link_with_oembed_provider_gets_thumbnail(
 async def test_create_link_non_provider_skips_oembed_call(
     client: AsyncClient, user_auth_headers, workspace, task, monkeypatch
 ):
-    def fake_get(*args, **kwargs):
+    async def fake_get(*args, **kwargs):
         raise AssertionError("should not call oEmbed for a non-provider domain")
 
-    monkeypatch.setattr("app.utils.oembed.httpx.get", fake_get)
+    monkeypatch.setattr("app.utils.oembed._http_get", fake_get)
 
     response = await client.post(
         resource_path(workspace["id"], task["id"], "/links"),
@@ -309,10 +309,10 @@ async def test_create_link_oembed_failure_does_not_block_creation(
 ):
     import httpx
 
-    def fake_get(*args, **kwargs):
+    async def fake_get(*args, **kwargs):
         raise httpx.ConnectTimeout("timed out")
 
-    monkeypatch.setattr("app.utils.oembed.httpx.get", fake_get)
+    monkeypatch.setattr("app.utils.oembed._http_get", fake_get)
 
     response = await client.post(
         resource_path(workspace["id"], task["id"], "/links"),
@@ -328,10 +328,10 @@ async def test_create_link_oembed_non_https_thumbnail_ignored(
     client: AsyncClient, user_auth_headers, workspace, task, monkeypatch
 ):
     """A provider returning something other than a plain https thumbnail URL is discarded, not trusted as-is."""
-    monkeypatch.setattr(
-        "app.utils.oembed.httpx.get",
-        lambda *a, **k: _FakeOembedResponse({"thumbnail_url": "javascript:alert(1)"}),
-    )
+    async def fake_get(*a, **k):
+        return _FakeOembedResponse({"thumbnail_url": "javascript:alert(1)"})
+
+    monkeypatch.setattr("app.utils.oembed._http_get", fake_get)
 
     response = await client.post(
         resource_path(workspace["id"], task["id"], "/links"),
@@ -349,10 +349,10 @@ async def test_update_link_url_refreshes_thumbnail(
     link = await create_link(client, user_token, workspace["id"], task["id"])
     assert link.get("thumbnail_url") is None
 
-    monkeypatch.setattr(
-        "app.utils.oembed.httpx.get",
-        lambda *a, **k: _FakeOembedResponse({"thumbnail_url": "https://i.ytimg.com/vi/xyz/hqdefault.jpg"}),
-    )
+    async def fake_get(*a, **k):
+        return _FakeOembedResponse({"thumbnail_url": "https://i.ytimg.com/vi/xyz/hqdefault.jpg"})
+
+    monkeypatch.setattr("app.utils.oembed._http_get", fake_get)
 
     response = await client.patch(
         resource_path(workspace["id"], task["id"], f"/links/{link['id']}"),

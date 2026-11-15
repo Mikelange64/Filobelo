@@ -412,7 +412,7 @@ async def add_user(
     )
 
     try:
-        send_member_added_email(
+        await send_member_added_email(
             to_email=target_user.email,
             invitee_username=target_user.username,
             inviter_username=current_user.username,
@@ -454,7 +454,7 @@ async def invite_external(
     workspace = await get_workspace_by_id(workspace_id, db)
 
     try:
-        send_join_invite_email(
+        await send_join_invite_email(
             to_email=body.email,
             inviter_username=current_user.username,
             workspace_title=workspace.title,

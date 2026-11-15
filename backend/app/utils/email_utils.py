@@ -1,7 +1,7 @@
-import smtplib
 from email.message import EmailMessage
 from pathlib import Path
 
+import aiosmtplib
 from fastapi.templating import Jinja2Templates
 
 from app.config import settings
@@ -10,7 +10,7 @@ _TEMPLATES_DIR = Path(__file__).parent.parent.parent / "templates"
 templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
 
 
-def send_email(
+async def send_email(
     to_email: str, subject: str, plain_text: str, html_content: str | None = None
 ) -> None:
     message = EmailMessage()
@@ -27,32 +27,27 @@ def send_email(
             html_content, subtype="html"
         )  # or clients that do render html
 
-    # Port 465 = implicit SSL (SMTP_SSL); port 587 = STARTTLS upgrade (SMTP + starttls())
-    # timeout is required: without it a blocked/slow outbound connection hangs the
-    # request indefinitely, which is especially bad with a single uvicorn worker.
-    if settings.mail_port == 465:
-        with smtplib.SMTP_SSL(
-            settings.mail_host, settings.mail_port, timeout=10
-        ) as smtp:
-            if settings.mail_username and settings.mail_password:
-                smtp.login(
-                    settings.mail_username,
-                    settings.mail_password.get_secret_value(),
-                )
-            smtp.send_message(message)
-    else:
-        with smtplib.SMTP(settings.mail_host, settings.mail_port, timeout=10) as smtp:
-            if settings.mail_use_tls:
-                smtp.starttls()
-            if settings.mail_username and settings.mail_password:
-                smtp.login(
-                    settings.mail_username,
-                    settings.mail_password.get_secret_value(),
-                )
-            smtp.send_message(message)
+    # Port 465 = implicit SSL (use_tls); port 587 = STARTTLS upgrade (start_tls)
+    # timeout is required: without it a blocked/slow outbound connection would
+    # keep the request waiting indefinitely.
+    implicit_tls = settings.mail_port == 465
+
+    # Only log in when both a username and a password are configured.
+    use_login = bool(settings.mail_username and settings.mail_password)
+
+    await aiosmtplib.send(
+        message,
+        hostname=settings.mail_host,
+        port=settings.mail_port,
+        username=settings.mail_username if use_login else None,
+        password=settings.mail_password.get_secret_value() if use_login else None,
+        use_tls=implicit_tls,
+        start_tls=False if implicit_tls else settings.mail_use_tls,
+        timeout=10,
+    )
 
 
-def send_password_reset_email(to_email: str, username: str, token: str) -> None:
+async def send_password_reset_email(to_email: str, username: str, token: str) -> None:
     reset_url = f"{settings.frontend_url}/reset-password?token={token}"
 
     # we use this instead of TemplateResponse because TemplateResponse requires a request, this doesn't.
@@ -71,7 +66,7 @@ def send_password_reset_email(to_email: str, username: str, token: str) -> None:
     The Filobelo Team
     """
 
-    send_email(
+    await send_email(
         to_email=to_email,
         subject="Reset Your Password - Filobelo",
         plain_text=plain_text,
@@ -79,7 +74,7 @@ def send_password_reset_email(to_email: str, username: str, token: str) -> None:
     )
 
 
-def send_member_added_email(
+async def send_member_added_email(
     to_email: str,
     invitee_username: str,
     inviter_username: str,
@@ -106,7 +101,7 @@ Best Regards,
 The Filobelo Team
 """
 
-    send_email(
+    await send_email(
         to_email=to_email,
         subject=f"You've been added to {workspace_title} — Filobelo",
         plain_text=plain_text,
@@ -114,7 +109,7 @@ The Filobelo Team
     )
 
 
-def send_join_invite_email(
+async def send_join_invite_email(
     to_email: str,
     inviter_username: str,
     workspace_title: str,
@@ -137,7 +132,7 @@ Best Regards,
 The Filobelo Team
 """
 
-    send_email(
+    await send_email(
         to_email=to_email,
         subject=f"{inviter_username} invited you to join Filobelo",
         plain_text=plain_text,
@@ -145,7 +140,7 @@ The Filobelo Team
     )
 
 
-def send_verification_email(to_email: str, username: str, token: str) -> None:
+async def send_verification_email(to_email: str, username: str, token: str) -> None:
     verification_url = f"{settings.frontend_url}/verify-email?token={token}"
 
     template = templates.env.get_template("email/email_verification.html")
@@ -163,7 +158,7 @@ def send_verification_email(to_email: str, username: str, token: str) -> None:
     The Filobelo Team
     """
 
-    send_email(
+    await send_email(
         to_email=to_email,
         subject="Verify your email - Filobelo",
         plain_text=plain_text,
