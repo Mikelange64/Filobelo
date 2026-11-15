@@ -4,6 +4,7 @@ from io import BytesIO
 
 import boto3
 from PIL import Image, ImageOps
+from starlette.concurrency import run_in_threadpool
 
 from app.config import settings
 
@@ -39,6 +40,8 @@ def _get_s3_client():
     return _s3_client
 
 
+# Pillow work is CPU-bound, so this stays a plain sync function; async callers
+# run it with `await run_in_threadpool(process_profile_image, content)`.
 def process_profile_image(content: bytes) -> tuple[bytes, str]:
     with Image.open(BytesIO(content)) as original:
         if original.format not in {"JPEG", "PNG", "WEBP", "GIF"}:
@@ -68,6 +71,9 @@ def process_profile_image(content: bytes) -> tuple[bytes, str]:
         return output.read(), filename
 
 
+# boto3 is a blocking library: the two functions below are plain sync
+# functions, and the async wrappers further down run them in a worker thread
+# so the event loop is never held up by a network call to S3.
 def _upload_to_s3(file_bytes: bytes, key: str) -> None:
     s3 = _get_s3_client()
     try:
@@ -94,13 +100,13 @@ def _delete_from_s3(key: str) -> None:
         raise
 
 
-def upload_profile_image(file_bytes: bytes, filename: str) -> None:
+async def upload_profile_image(file_bytes: bytes, filename: str) -> None:
     key = f"profile_pics/{filename}"
-    _upload_to_s3(file_bytes, key)
+    await run_in_threadpool(_upload_to_s3, file_bytes, key)
 
 
-def delete_profile_image(filename: str | None) -> None:
+async def delete_profile_image(filename: str | None) -> None:
     if filename is None:
         return
     key = f"profile_pics/{filename}"
-    _delete_from_s3(key)
+    await run_in_threadpool(_delete_from_s3, key)

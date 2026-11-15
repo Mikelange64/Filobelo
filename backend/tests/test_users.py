@@ -1,5 +1,5 @@
 import pytest
-from fastapi.testclient import TestClient
+from httpx import AsyncClient
 
 from tests.auth_helpers import (
     add_workspace_member,
@@ -53,8 +53,9 @@ def assert_auth_error(response, expected_message=None):
 # ========================================================================================
 
 
-def test_create_user_success(client: TestClient):
-    response = client.post(
+@pytest.mark.anyio
+async def test_create_user_success(client: AsyncClient):
+    response = await client.post(
         prefix,
         json={
             "username": "testuser",
@@ -67,8 +68,9 @@ def test_create_user_success(client: TestClient):
     assert_user_private_shape(response, "testuser", "test@example.com")
 
 
-def test_create_user_validation_error(client: TestClient):
-    response = client.post(
+@pytest.mark.anyio
+async def test_create_user_validation_error(client: AsyncClient):
+    response = await client.post(
         prefix,
         json={"username": "testuser"},
     )
@@ -78,10 +80,11 @@ def test_create_user_validation_error(client: TestClient):
     assert "password" in response.text
 
 
-def test_create_user_duplicate_email(client: TestClient):
-    create_test_user(client)
+@pytest.mark.anyio
+async def test_create_user_duplicate_email(client: AsyncClient):
+    await create_test_user(client)
 
-    response = client.post(
+    response = await client.post(
         prefix,
         json={
             "username": "different_user",
@@ -94,10 +97,11 @@ def test_create_user_duplicate_email(client: TestClient):
     assert response.json()["message"] == "Email already registered"
 
 
-def test_create_user_duplicate_username(client: TestClient):
-    create_test_user(client)
+@pytest.mark.anyio
+async def test_create_user_duplicate_username(client: AsyncClient):
+    await create_test_user(client)
 
-    response = client.post(
+    response = await client.post(
         prefix,
         json={
             "username": "testuser",
@@ -115,6 +119,7 @@ def test_create_user_duplicate_username(client: TestClient):
 # ========================================================================================
 
 
+@pytest.mark.anyio
 @pytest.mark.parametrize(
     "create_kwargs,login_username",
     [
@@ -130,11 +135,11 @@ def test_create_user_duplicate_username(client: TestClient):
         ),
     ],
 )
-def test_login_success(client: TestClient, db_session, create_kwargs, login_username):
-    create_test_user(client, password="testpassword123", **create_kwargs)
-    verify_user_in_db(db_session, create_kwargs.get("email", "test@example.com"))
+async def test_login_success(client: AsyncClient, db_session, create_kwargs, login_username):
+    await create_test_user(client, password="testpassword123", **create_kwargs)
+    await verify_user_in_db(db_session, create_kwargs.get("email", "test@example.com"))
 
-    response = client.post(
+    response = await client.post(
         f"{prefix}/login",
         data={"username": login_username, "password": "testpassword123"},
     )
@@ -142,6 +147,7 @@ def test_login_success(client: TestClient, db_session, create_kwargs, login_user
     assert_login_success_shape(response)
 
 
+@pytest.mark.anyio
 @pytest.mark.parametrize(
     "precreate_kwargs,login_data",
     [
@@ -162,16 +168,17 @@ def test_login_success(client: TestClient, db_session, create_kwargs, login_user
         ),
     ],
 )
-def test_login_failure_401(client: TestClient, precreate_kwargs, login_data):
+async def test_login_failure_401(client: AsyncClient, precreate_kwargs, login_data):
     if precreate_kwargs is not None:
-        create_test_user(client, **precreate_kwargs)
+        await create_test_user(client, **precreate_kwargs)
 
-    response = client.post(f"{prefix}/login", data=login_data)
+    response = await client.post(f"{prefix}/login", data=login_data)
 
     assert response.status_code == 401
     assert response.json()["message"] == "Incorrect password or email/username"
 
 
+@pytest.mark.anyio
 @pytest.mark.parametrize(
     "login_data",
     [
@@ -179,8 +186,8 @@ def test_login_failure_401(client: TestClient, precreate_kwargs, login_data):
         pytest.param({"password": "testpassword123"}, id="missing_username"),
     ],
 )
-def test_login_validation_error(client: TestClient, login_data):
-    response = client.post(f"{prefix}/login", data=login_data)
+async def test_login_validation_error(client: AsyncClient, login_data):
+    response = await client.post(f"{prefix}/login", data=login_data)
 
     assert response.status_code == 422
 
@@ -190,19 +197,22 @@ def test_login_validation_error(client: TestClient, login_data):
 # ========================================================================================
 
 
-def test_get_me_success(client: TestClient, user_auth_headers):
-    response = client.get(f"{prefix}/me", headers=user_auth_headers)
+@pytest.mark.anyio
+async def test_get_me_success(client: AsyncClient, user_auth_headers):
+    response = await client.get(f"{prefix}/me", headers=user_auth_headers)
 
     assert response.status_code == 200
     assert_user_private_shape(response, "testuser", "test@example.com")
 
 
-def test_get_me_no_token(client: TestClient):
-    response = client.get(f"{prefix}/me")
+@pytest.mark.anyio
+async def test_get_me_no_token(client: AsyncClient):
+    response = await client.get(f"{prefix}/me")
 
     assert_auth_error(response, "Not authenticated")
 
 
+@pytest.mark.anyio
 @pytest.mark.parametrize(
     "token",
     [
@@ -210,8 +220,8 @@ def test_get_me_no_token(client: TestClient):
         pytest.param("not-even-a-jwt", id="malformed_token"),
     ],
 )
-def test_get_me_bad_token(client: TestClient, token):
-    response = client.get(f"{prefix}/me", headers=auth_header(token))
+async def test_get_me_bad_token(client: AsyncClient, token):
+    response = await client.get(f"{prefix}/me", headers=auth_header(token))
 
     assert_auth_error(response, "Invalid or expired token")
 
@@ -221,10 +231,11 @@ def test_get_me_bad_token(client: TestClient, token):
 # ========================================================================================
 
 
-def test_get_user_by_id_success(client: TestClient):
-    created = create_test_user(client)
+@pytest.mark.anyio
+async def test_get_user_by_id_success(client: AsyncClient):
+    created = await create_test_user(client)
 
-    response = client.get(f"{prefix}/{created['id']}")
+    response = await client.get(f"{prefix}/{created['id']}")
 
     assert response.status_code == 200
     data = response.json()
@@ -234,6 +245,7 @@ def test_get_user_by_id_success(client: TestClient):
     assert "last_login" not in data
 
 
+@pytest.mark.anyio
 @pytest.mark.parametrize(
     "user_id",
     [
@@ -241,8 +253,8 @@ def test_get_user_by_id_success(client: TestClient):
         pytest.param(-1, id="negative_id"),
     ],
 )
-def test_get_user_by_id_not_found(client: TestClient, user_id):
-    response = client.get(f"{prefix}/{user_id}")
+async def test_get_user_by_id_not_found(client: AsyncClient, user_id):
+    response = await client.get(f"{prefix}/{user_id}")
 
     assert response.status_code == 404
     assert response.json()["message"] == "User not found"
@@ -253,10 +265,11 @@ def test_get_user_by_id_not_found(client: TestClient, user_id):
 # ========================================================================================
 
 
-def test_get_user_workspaces_success(client: TestClient, user_token, user_auth_headers):
-    create_workspace(client, user_token, title="My First Workspace")
+@pytest.mark.anyio
+async def test_get_user_workspaces_success(client: AsyncClient, user_token, user_auth_headers):
+    await create_workspace(client, user_token, title="My First Workspace")
 
-    response = client.get(f"{prefix}/me/workspaces", headers=user_auth_headers)
+    response = await client.get(f"{prefix}/me/workspaces", headers=user_auth_headers)
 
     assert response.status_code == 200
     data = response.json()
@@ -265,13 +278,14 @@ def test_get_user_workspaces_success(client: TestClient, user_token, user_auth_h
     assert data[0]["title"] == "My First Workspace"
 
 
-def test_get_user_workspaces_multiple(
-    client: TestClient, user_token, user_auth_headers
+@pytest.mark.anyio
+async def test_get_user_workspaces_multiple(
+    client: AsyncClient, user_token, user_auth_headers
 ):
-    create_workspace(client, user_token, title="Workspace One")
-    create_workspace(client, user_token, title="Workspace Two")
+    await create_workspace(client, user_token, title="Workspace One")
+    await create_workspace(client, user_token, title="Workspace Two")
 
-    response = client.get(f"{prefix}/me/workspaces", headers=user_auth_headers)
+    response = await client.get(f"{prefix}/me/workspaces", headers=user_auth_headers)
 
     assert response.status_code == 200
     data = response.json()
@@ -281,15 +295,17 @@ def test_get_user_workspaces_multiple(
     assert "Workspace Two" in titles
 
 
-def test_get_user_workspaces_no_workspaces(client: TestClient, user_auth_headers):
-    response = client.get(f"{prefix}/me/workspaces", headers=user_auth_headers)
+@pytest.mark.anyio
+async def test_get_user_workspaces_no_workspaces(client: AsyncClient, user_auth_headers):
+    response = await client.get(f"{prefix}/me/workspaces", headers=user_auth_headers)
 
     assert response.status_code == 200
     assert response.json() == []
 
 
-def test_get_user_workspaces_no_auth(client: TestClient):
-    response = client.get(f"{prefix}/me/workspaces")
+@pytest.mark.anyio
+async def test_get_user_workspaces_no_auth(client: AsyncClient):
+    response = await client.get(f"{prefix}/me/workspaces")
 
     assert_auth_error(response, "Not authenticated")
 
@@ -299,6 +315,7 @@ def test_get_user_workspaces_no_auth(client: TestClient):
 # ========================================================================================
 
 
+@pytest.mark.anyio
 @pytest.mark.parametrize(
     "payload,expected",
     [
@@ -325,8 +342,8 @@ def test_get_user_workspaces_no_auth(client: TestClient):
         ),
     ],
 )
-def test_update_user_success(client: TestClient, user_auth_headers, payload, expected):
-    response = client.patch(f"{prefix}/me", json=payload, headers=user_auth_headers)
+async def test_update_user_success(client: AsyncClient, user_auth_headers, payload, expected):
+    response = await client.patch(f"{prefix}/me", json=payload, headers=user_auth_headers)
 
     assert response.status_code == 200
     data = response.json()
@@ -334,8 +351,9 @@ def test_update_user_success(client: TestClient, user_auth_headers, payload, exp
         assert data[key] == value
 
 
-def test_update_no_changes_is_noop(client: TestClient, user_auth_headers):
-    response = client.patch(
+@pytest.mark.anyio
+async def test_update_no_changes_is_noop(client: AsyncClient, user_auth_headers):
+    response = await client.patch(
         f"{prefix}/me",
         json={"username": "testuser"},
         headers=user_auth_headers,
@@ -347,8 +365,9 @@ def test_update_no_changes_is_noop(client: TestClient, user_auth_headers):
     assert data["email"] == "test@example.com"
 
 
-def test_update_empty_body_is_noop(client: TestClient, user_auth_headers):
-    response = client.patch(
+@pytest.mark.anyio
+async def test_update_empty_body_is_noop(client: AsyncClient, user_auth_headers):
+    response = await client.patch(
         f"{prefix}/me",
         json={},
         headers=user_auth_headers,
@@ -360,9 +379,10 @@ def test_update_empty_body_is_noop(client: TestClient, user_auth_headers):
     assert data["email"] == "test@example.com"
 
 
-def test_update_same_email_is_noop(client: TestClient, user_auth_headers):
+@pytest.mark.anyio
+async def test_update_same_email_is_noop(client: AsyncClient, user_auth_headers):
     """Updating to the same email (same case) should not raise a conflict."""
-    response = client.patch(
+    response = await client.patch(
         f"{prefix}/me",
         json={"email": "test@example.com"},
         headers=user_auth_headers,
@@ -371,13 +391,14 @@ def test_update_same_email_is_noop(client: TestClient, user_auth_headers):
     assert response.status_code == 200
 
 
-def test_update_email_case_change_is_same_user(client: TestClient, db_session):
+@pytest.mark.anyio
+async def test_update_email_case_change_is_same_user(client: AsyncClient, db_session):
     """Changing only the case of the email should be treated as no change (no conflict)."""
-    create_test_user(client, email="test@example.com")
-    verify_user_in_db(db_session, "test@example.com")
-    token = login_user(client)
+    await create_test_user(client, email="test@example.com")
+    await verify_user_in_db(db_session, "test@example.com")
+    token = await login_user(client)
 
-    response = client.patch(
+    response = await client.patch(
         f"{prefix}/me",
         json={"email": "TEST@EXAMPLE.COM"},
         headers=auth_header(token),
@@ -388,6 +409,7 @@ def test_update_email_case_change_is_same_user(client: TestClient, db_session):
     assert data["email"] == "test@example.com"
 
 
+@pytest.mark.anyio
 @pytest.mark.parametrize(
     "field,conflict_value,expected_message",
     [
@@ -402,15 +424,15 @@ def test_update_email_case_change_is_same_user(client: TestClient, db_session):
         ),
     ],
 )
-def test_update_user_conflict(
-    client: TestClient, db_session, field, conflict_value, expected_message
+async def test_update_user_conflict(
+    client: AsyncClient, db_session, field, conflict_value, expected_message
 ):
-    create_test_user(client, username="user1", email="user1@example.com")
-    create_test_user(client, username="user2", email="user2@example.com")
-    verify_user_in_db(db_session, "user2@example.com")
-    token = login_user(client, email="user2@example.com")
+    await create_test_user(client, username="user1", email="user1@example.com")
+    await create_test_user(client, username="user2", email="user2@example.com")
+    await verify_user_in_db(db_session, "user2@example.com")
+    token = await login_user(client, email="user2@example.com")
 
-    response = client.patch(
+    response = await client.patch(
         f"{prefix}/me",
         json={field: conflict_value},
         headers=auth_header(token),
@@ -420,6 +442,7 @@ def test_update_user_conflict(
     assert expected_message in response.json()["message"]
 
 
+@pytest.mark.anyio
 @pytest.mark.parametrize(
     "payload",
     [
@@ -427,14 +450,15 @@ def test_update_user_conflict(
         pytest.param({"email": "not-an-email"}, id="invalid_email_format"),
     ],
 )
-def test_update_user_validation_error(client: TestClient, user_auth_headers, payload):
-    response = client.patch(f"{prefix}/me", json=payload, headers=user_auth_headers)
+async def test_update_user_validation_error(client: AsyncClient, user_auth_headers, payload):
+    response = await client.patch(f"{prefix}/me", json=payload, headers=user_auth_headers)
 
     assert response.status_code == 422
 
 
-def test_update_user_no_auth(client: TestClient):
-    response = client.patch(f"{prefix}/me", json={"username": "hacker"})
+@pytest.mark.anyio
+async def test_update_user_no_auth(client: AsyncClient):
+    response = await client.patch(f"{prefix}/me", json={"username": "hacker"})
 
     assert_auth_error(response, "Not authenticated")
 
@@ -444,58 +468,63 @@ def test_update_user_no_auth(client: TestClient):
 # ========================================================================================
 
 
-def test_delete_user_success(client: TestClient, user_auth_headers):
-    response = client.delete(f"{prefix}/me", headers=user_auth_headers)
+@pytest.mark.anyio
+async def test_delete_user_success(client: AsyncClient, user_auth_headers):
+    response = await client.delete(f"{prefix}/me", headers=user_auth_headers)
 
     assert response.status_code == 204
 
 
-def test_delete_user_removes_user(client: TestClient, user, user_auth_headers):
-    client.delete(f"{prefix}/me", headers=user_auth_headers)
+@pytest.mark.anyio
+async def test_delete_user_removes_user(client: AsyncClient, user, user_auth_headers):
+    await client.delete(f"{prefix}/me", headers=user_auth_headers)
 
     # Verify the user is actually gone
-    response = client.get(f"{prefix}/{user['id']}")
+    response = await client.get(f"{prefix}/{user['id']}")
     assert response.status_code == 404
 
 
-def test_delete_user_removes_workspace_if_last_member(
-    client: TestClient, db_session, user_auth_headers, workspace
+@pytest.mark.anyio
+async def test_delete_user_removes_workspace_if_last_member(
+    client: AsyncClient, db_session, user_auth_headers, workspace
 ):
     """Deleting the sole member of a workspace deletes the workspace too -
     nobody's left to hand it off to."""
     from app.models import Workspace as WorkspaceModel
 
-    response = client.delete(f"{prefix}/me", headers=user_auth_headers)
+    response = await client.delete(f"{prefix}/me", headers=user_auth_headers)
     assert response.status_code == 204
-    assert db_session.get(WorkspaceModel, workspace["id"]) is None
+    assert await db_session.get(WorkspaceModel, workspace["id"]) is None
 
 
-def test_delete_user_leaves_workspace_intact_for_other_members(
-    client: TestClient, user_token, user_auth_headers, workspace, second_user, second_user_token
+@pytest.mark.anyio
+async def test_delete_user_leaves_workspace_intact_for_other_members(
+    client: AsyncClient, user_token, user_auth_headers, workspace, second_user, second_user_token
 ):
     """If other members remain, the workspace and its data survive - the user just leaves."""
-    add_workspace_member(client, user_token, workspace["id"], second_user["id"])
+    await add_workspace_member(client, user_token, workspace["id"], second_user["id"])
 
-    response = client.delete(f"{prefix}/me", headers=user_auth_headers)
+    response = await client.delete(f"{prefix}/me", headers=user_auth_headers)
     assert response.status_code == 204
 
-    response = client.get(
+    response = await client.get(
         f"/api/workspaces/{workspace['id']}", headers=auth_header(second_user_token)
     )
     assert response.status_code == 200
 
 
-def test_delete_user_promotes_oldest_remaining_member_when_last_admin_leaves(
-    client: TestClient, user_token, user_auth_headers, workspace, second_user, second_user_token
+@pytest.mark.anyio
+async def test_delete_user_promotes_oldest_remaining_member_when_last_admin_leaves(
+    client: AsyncClient, user_token, user_auth_headers, workspace, second_user, second_user_token
 ):
     """The last admin deleting their account should hand off to the longest-tenured
     remaining member rather than leave the workspace with no admin."""
-    add_workspace_member(client, user_token, workspace["id"], second_user["id"])
+    await add_workspace_member(client, user_token, workspace["id"], second_user["id"])
 
-    response = client.delete(f"{prefix}/me", headers=user_auth_headers)
+    response = await client.delete(f"{prefix}/me", headers=user_auth_headers)
     assert response.status_code == 204
 
-    response = client.get(
+    response = await client.get(
         f"/api/workspaces/{workspace['id']}/members", headers=auth_header(second_user_token)
     )
     assert response.status_code == 200
@@ -503,32 +532,35 @@ def test_delete_user_promotes_oldest_remaining_member_when_last_admin_leaves(
     assert member["role"] == "admin"
 
 
-def test_delete_user_does_not_reassign_when_other_admin_remains(
-    client: TestClient, user_token, user_auth_headers, workspace, second_user, second_user_token
+@pytest.mark.anyio
+async def test_delete_user_does_not_reassign_when_other_admin_remains(
+    client: AsyncClient, user_token, user_auth_headers, workspace, second_user, second_user_token
 ):
     """If another admin already exists, a departing admin shouldn't trigger any reassignment."""
-    add_workspace_member(client, user_token, workspace["id"], second_user["id"])
-    client.patch(
+    await add_workspace_member(client, user_token, workspace["id"], second_user["id"])
+    await client.patch(
         f"/api/workspaces/{workspace['id']}/members/{second_user['id']}/admin",
         headers=user_auth_headers,
     )
 
-    response = client.delete(f"{prefix}/me", headers=user_auth_headers)
+    response = await client.delete(f"{prefix}/me", headers=user_auth_headers)
     assert response.status_code == 204
 
-    response = client.get(
+    response = await client.get(
         f"/api/workspaces/{workspace['id']}/members", headers=auth_header(second_user_token)
     )
     member = next(m for m in response.json() if m["id"] == second_user["id"])
     assert member["role"] == "admin"  # unaffected, was already promoted
 
 
-def test_delete_user_no_auth(client: TestClient):
-    response = client.delete(f"{prefix}/me")
+@pytest.mark.anyio
+async def test_delete_user_no_auth(client: AsyncClient):
+    response = await client.delete(f"{prefix}/me")
 
     assert_auth_error(response, "Not authenticated")
 
 
+@pytest.mark.anyio
 @pytest.mark.parametrize(
     "token",
     [
@@ -536,7 +568,7 @@ def test_delete_user_no_auth(client: TestClient):
         pytest.param("not-even-a-jwt", id="malformed_token"),
     ],
 )
-def test_delete_user_bad_token(client: TestClient, token):
-    response = client.delete(f"{prefix}/me", headers=auth_header(token))
+async def test_delete_user_bad_token(client: AsyncClient, token):
+    response = await client.delete(f"{prefix}/me", headers=auth_header(token))
 
     assert_auth_error(response, "Invalid or expired token")

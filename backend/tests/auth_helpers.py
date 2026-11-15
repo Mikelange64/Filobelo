@@ -1,38 +1,38 @@
 from datetime import UTC, datetime
 
-from fastapi.testclient import TestClient
+from httpx import AsyncClient
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
-def create_test_user(
-    client: TestClient,
+async def create_test_user(
+    client: AsyncClient,
     username: str = "testuser",
     email: str = "test@example.com",
     password: str = "testpassword123",
 ) -> dict:
-    response = client.post(
+    response = await client.post(
         "/api/users", json={"username": username, "email": email, "password": password}
     )
     assert response.status_code == 201, f"Failed to create user: {response.text}"
     return response.json()
 
 
-def create_superuser(
-    client: TestClient,
+async def create_superuser(
+    client: AsyncClient,
     username: str = "superuser",
     email: str = "super@example.com",
     password: str = "superpassword123",
 ) -> dict:
-    response = client.post(
+    response = await client.post(
         "/api/users", json={"username": username, "email": email, "password": password}
     )
     assert response.status_code == 201, f"Failed to create superuser: {response.text}"
     return response.json()
 
 
-def create_workspace(
-    client: TestClient,
+async def create_workspace(
+    client: AsyncClient,
     token: str,
     title: str = "Test Workspace",
     description: str = "A workspace for testing.",
@@ -45,7 +45,7 @@ def create_workspace(
     if max_number is not None:
         body["max_number"] = max_number
 
-    response = client.post(
+    response = await client.post(
         "/api/workspaces",
         json=body,
         headers=auth_header(token),
@@ -54,13 +54,13 @@ def create_workspace(
     return response.json()
 
 
-def add_workspace_member(
-    client: TestClient,
+async def add_workspace_member(
+    client: AsyncClient,
     token: str,
     workspace_id: int,
     user_id: int,
 ) -> dict:
-    response = client.patch(
+    response = await client.patch(
         f"/api/workspaces/{workspace_id}/members/{user_id}",
         headers=auth_header(token),
     )
@@ -68,12 +68,12 @@ def add_workspace_member(
     return response.json()
 
 
-def login_user(
-    client: TestClient,
+async def login_user(
+    client: AsyncClient,
     email: str = "test@example.com",
     password: str = "testpassword123",
 ) -> str:
-    response = client.post(
+    response = await client.post(
         "/api/users/login", data={"username": email, "password": password}
     )
     assert response.status_code == 200, f"Failed to login: {response.text}"
@@ -84,23 +84,24 @@ def auth_header(token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
-def verify_user_in_db(db_session: Session, email: str) -> None:
+async def verify_user_in_db(db_session: AsyncSession, email: str) -> None:
     """Mark a test user as email-verified so they can log in (bypasses email flow in tests)."""
     from app.models import User as UserModel
-    user = db_session.execute(
+    result = await db_session.execute(
         select(UserModel).where(func.lower(UserModel.email) == email.lower())
-    ).scalar_one()
+    )
+    user = result.scalar_one()
     user.is_verified = True
-    db_session.flush()
+    await db_session.flush()
 
 
-def create_folder(
-    client: TestClient,
+async def create_folder(
+    client: AsyncClient,
     token: str,
     name: str = "Test Folder",
     color: str = "#3B82F6",
 ) -> dict:
-    response = client.post(
+    response = await client.post(
         "/api/folders",
         json={"name": name, "color": color},
         headers=auth_header(token),
@@ -109,8 +110,8 @@ def create_folder(
     return response.json()
 
 
-def create_task(
-    client: TestClient,
+async def create_task(
+    client: AsyncClient,
     token: str,
     workspace_id: int,
     title: str = "Test Task",
@@ -127,7 +128,7 @@ def create_task(
     if due_date is not None:
         body["due_date"] = due_date
 
-    response = client.post(
+    response = await client.post(
         f"/api/workspaces/{workspace_id}/tasks/",
         json=body,
         headers=auth_header(token),

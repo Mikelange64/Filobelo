@@ -1,18 +1,31 @@
 import os
+from collections.abc import AsyncGenerator
 from io import BytesIO
 from pathlib import Path
 from types import SimpleNamespace
 
 import boto3
 import pytest
-from fastapi.testclient import TestClient
+from httpx import ASGITransport, AsyncClient
 from moto import mock_aws
 from PIL import Image
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.ext.asyncio import (
+    AsyncConnection,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
+from sqlalchemy.pool import NullPool
 
-os.environ["DATABASE_URL"] = (
-    "postgresql+psycopg://mikelange64@localhost/test_workspaceapp"
+# The test database and Redis index are created, flushed and dropped by each
+# pytest session, so two sessions pointed at the same ones corrupt each other.
+# Set TEST_DATABASE_URL / TEST_REDIS_URL to give a second checkout its own:
+#
+#   TEST_DATABASE_URL=postgresql+psycopg://mikelange64@localhost/test_workspaceapp_async \
+#   TEST_REDIS_URL=redis://localhost:6379/14 uv run pytest
+os.environ["DATABASE_URL"] = os.environ.get(
+    "TEST_DATABASE_URL",
+    "postgresql+psycopg://mikelange64@localhost/test_workspaceapp",
 )
 os.environ["SECRET_KEY"] = "test-secret-key-for-testing-only"
 os.environ["S3_BUCKET_NAME"] = "test-bucket"
@@ -29,7 +42,9 @@ os.environ["MAIL_PASSWORD"] = ""
 os.environ["MAIL_FROM"] = "test@example.com"
 os.environ["MAIL_USE_TLS"] = "False"
 os.environ["FRONTEND_URL"] = "http://localhost:3000"
-os.environ["REDIS_URL"] = "redis://localhost:6379/15"
+os.environ["REDIS_URL"] = os.environ.get(
+    "TEST_REDIS_URL", "redis://localhost:6379/15"
+)
 
 from app.database import Base, get_db
 from app.main import app
@@ -42,52 +57,116 @@ from tests.auth_helpers import (
 )
 
 
+# Lets pytest run `async def` tests: each one is marked @pytest.mark.anyio and
+# runs inside an event loop. The plugin ships with anyio (a Starlette
+# dependency), so there is nothing extra to install.
+pytest_plugins = ["anyio"]
+
+
+# anyio supports several async backends; the app runs on asyncio. Session
+# scoped so the session-scoped async fixtures below can use it, and so every
+# test shares one event loop.
+@pytest.fixture(scope="session")
+def anyio_backend():
+    return "asyncio"
+
+
+# NullPool: no connection is kept between uses, so none can outlive the test
+# that opened it.
 @pytest.fixture(scope="session")
 def test_engine():
-    engine = create_engine(os.environ["DATABASE_URL"])
+    engine = create_async_engine(os.environ["DATABASE_URL"], poolclass=NullPool)
     return engine
 
 
 @pytest.fixture(scope="session")
-def setup_database(test_engine):
-    Base.metadata.create_all(bind=test_engine)
+async def setup_database(test_engine):
+    async with test_engine.begin() as conn:
+        # create_all is a sync operation, so it goes through run_sync()
+        await conn.run_sync(Base.metadata.create_all)
     yield
-    Base.metadata.drop_all(bind=test_engine)
-    test_engine.dispose()
+
+    async with test_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
+
+    await test_engine.dispose()
+
+
+# Transactional rollback pattern: the tables are created once for the whole
+# session, each test runs inside one database transaction, and that
+# transaction is rolled back when the test ends, undoing everything it did.
+@pytest.fixture
+async def db_connection(test_engine, setup_database) -> AsyncGenerator[AsyncConnection]:
+    conn = await test_engine.connect()  # one connection for the whole test
+    trans = await conn.begin()          # the transaction that gets rolled back
+
+    try:
+        yield conn
+    finally:
+        await trans.rollback()
+        await conn.close()
 
 
 @pytest.fixture
-def db_session(setup_database, test_engine):
-    connection = test_engine.connect()
-    transaction = connection.begin()
+def test_async_session(db_connection) -> async_sessionmaker[AsyncSession]:
+    # Sessions are bound to this test's connection, not to the engine, so
+    # everything they do lands inside the transaction above.
+    # join_transaction_mode="create_savepoint" is the "fake commit": when the
+    # app commits, SQLAlchemy releases a savepoint instead of really
+    # committing, so the outer transaction can still be rolled back.
+    return async_sessionmaker(
+        bind=db_connection,
+        class_=AsyncSession,
+        expire_on_commit=False,
+        join_transaction_mode="create_savepoint",
+    )
 
-    session_factory = sessionmaker(bind=connection)
-    session = session_factory()
 
-    yield session
-
-    session.close()
-    transaction.rollback()
-    connection.close()
+@pytest.fixture
+async def db_session(test_async_session) -> AsyncGenerator[AsyncSession]:
+    """The session a test uses to read or prepare rows directly."""
+    async with test_async_session() as session:
+        yield session
 
 
-@pytest.fixture(autouse=True)
-def _flush_test_redis():
+@pytest.fixture
+async def _flush_test_redis():
     """Isolated DB index (15) from dev/prod, flushed before every test so the
     rate limiters (register/login/password-reset) never bleed state across tests."""
-    redis_client.flushdb()
+    await redis_client.flushdb()
     yield
 
 
 @pytest.fixture
-def client(db_session):
-    def override_get_db():
-        yield db_session
+async def client(
+    db_session: AsyncSession, test_async_session, _flush_test_redis
+) -> AsyncGenerator[AsyncClient]:
+    # Replaces the app's get_db dependency, so every endpoint works on the
+    # test database, inside this test's transaction.
+    #
+    # Each request gets its own session, exactly as in production, rather
+    # than sharing the test's db_session. A shared session remembers what
+    # earlier requests loaded, which would hide a relationship a route forgot
+    # to load (the MissingGreenlet error production would hit). They all use
+    # the same connection, so they still see each other's rows.
+    async def override_get_db():
+        async with test_async_session() as session:
+            yield session
 
     app.dependency_overrides[get_db] = override_get_db
 
-    with TestClient(app) as c:
-        yield c
+    # ASGITransport calls the app in memory, with no network involved.
+    # follow_redirects matches what the previous TestClient did by default.
+    #
+    # AsyncClient with ASGITransport does not run the app's lifespan hook.
+    # That is fine here: it only tidies up logging and warms/closes
+    # connections the tests do not use.
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+        follow_redirects=True,
+    ) as ac:
+        yield ac
 
     app.dependency_overrides.clear()
 
@@ -98,42 +177,42 @@ def client(db_session):
 
 
 @pytest.fixture
-def user(client, db_session):
+async def user(client, db_session):
     """Create and return a default test user (pre-verified to bypass email flow)."""
     from app.models import User as UserModel
-    user_data = create_test_user(client)
-    u = db_session.get(UserModel, user_data["id"])
+    user_data = await create_test_user(client)
+    u = await db_session.get(UserModel, user_data["id"])
     u.is_verified = True
-    db_session.flush()
+    await db_session.flush()
     return user_data
 
 
 @pytest.fixture
-def premium_user(user, db_session):
+async def premium_user(user, db_session):
     """Upgrade the default test user to premium (needed for Filobelo bot access)."""
     from app.models import User as UserModel
-    u = db_session.get(UserModel, user["id"])
+    u = await db_session.get(UserModel, user["id"])
     u.is_premium = True
-    db_session.flush()
+    await db_session.flush()
     return user
 
 
 @pytest.fixture
-def non_premium_user(user, db_session):
+async def non_premium_user(user, db_session):
     """Downgrade the default test user to non-premium - new users default to
     premium (portfolio project, every signup should be able to try Filobelo),
     so tests exercising the premium gate itself need this explicitly."""
     from app.models import User as UserModel
-    u = db_session.get(UserModel, user["id"])
+    u = await db_session.get(UserModel, user["id"])
     u.is_premium = False
-    db_session.flush()
+    await db_session.flush()
     return user
 
 
 @pytest.fixture
-def user_token(client, user):
+async def user_token(client, user):
     """Return a valid auth token for the default user."""
-    return login_user(client)
+    return await login_user(client)
 
 
 @pytest.fixture
@@ -143,26 +222,26 @@ def user_auth_headers(user_token):
 
 
 @pytest.fixture
-def workspace(client, user_token):
+async def workspace(client, user_token):
     """Create and return a workspace owned by the default user."""
-    return create_workspace(client, user_token)
+    return await create_workspace(client, user_token)
 
 
 @pytest.fixture
-def second_user(client, db_session):
+async def second_user(client, db_session):
     """Create and return a second user (pre-verified to bypass email flow)."""
     from app.models import User as UserModel
-    user_data = create_test_user(client, username="user2", email="user2@example.com")
-    u = db_session.get(UserModel, user_data["id"])
+    user_data = await create_test_user(client, username="user2", email="user2@example.com")
+    u = await db_session.get(UserModel, user_data["id"])
     u.is_verified = True
-    db_session.flush()
+    await db_session.flush()
     return user_data
 
 
 @pytest.fixture
-def second_user_token(client, second_user):
+async def second_user_token(client, second_user):
     """Return a valid auth token for the second user."""
-    return login_user(client, email="user2@example.com")
+    return await login_user(client, email="user2@example.com")
 
 
 @pytest.fixture
@@ -196,7 +275,7 @@ class FakeCompletions:
         self.exception: Exception | None = None
         self.calls: list[dict] = []
 
-    def create(self, **kwargs):
+    async def create(self, **kwargs):
         self.calls.append(kwargs)
         if self.exception is not None:
             raise self.exception

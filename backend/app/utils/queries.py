@@ -2,15 +2,22 @@ from collections.abc import Sequence
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import selectinload
 
 from app.database import DbSession
 from app.models import Conversation, Folder, Resource, Task, User
 from app.models.workspaces import Workspace
 
+# An async session cannot load a relationship on first access the way a sync
+# one does (that hidden query raises MissingGreenlet). So every helper here
+# that returns an object whose relationships get read afterwards loads them
+# in the same query, with selectinload: one extra SELECT per relationship,
+# however many rows come back.
 
-def get_user_by_id(user_id: int, db: DbSession) -> User:
-    user = db.execute(select(User).where(User.id == user_id)).scalars().first()
+
+async def get_user_by_id(user_id: int, db: DbSession) -> User:
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalars().first()
 
     if not user:
         raise HTTPException(
@@ -20,17 +27,14 @@ def get_user_by_id(user_id: int, db: DbSession) -> User:
     return user
 
 
-def get_task_by_id(task_id: int, workspace_id: int, db: DbSession) -> Task:
+async def get_task_by_id(task_id: int, workspace_id: int, db: DbSession) -> Task:
     # scoped to workspace_id so a member of one workspace can't reach another
     # workspace's task by guessing its id - membership is only ever checked
     # against the workspace_id in the URL, so the lookup has to be tied to it
-    task = (
-        db.execute(
-            select(Task).where(Task.id == task_id, Task.workspace_id == workspace_id)
-        )
-        .scalars()
-        .first()
+    result = await db.execute(
+        select(Task).where(Task.id == task_id, Task.workspace_id == workspace_id)
     )
+    task = result.scalars().first()
 
     if not task:
         raise HTTPException(
@@ -40,20 +44,15 @@ def get_task_by_id(task_id: int, workspace_id: int, db: DbSession) -> Task:
     return task
 
 
-def get_resource_by_id(resource_id: int, task_id: int, db: DbSession) -> Resource:
+async def get_resource_by_id(resource_id: int, task_id: int, db: DbSession) -> Resource:
     # scoped to task_id for the same reason get_task_by_id is scoped to
     # workspace_id. The task itself is tied to the workspace by
     # require_task_in_workspace on the resources router, which completes the
     # chain resource -> task -> workspace -> membership.
-    resource = (
-        db.execute(
-            select(Resource).where(
-                Resource.id == resource_id, Resource.task_id == task_id
-            )
-        )
-        .scalars()
-        .first()
+    result = await db.execute(
+        select(Resource).where(Resource.id == resource_id, Resource.task_id == task_id)
     )
+    resource = result.scalars().first()
 
     if not resource:
         raise HTTPException(
@@ -63,21 +62,23 @@ def get_resource_by_id(resource_id: int, task_id: int, db: DbSession) -> Resourc
     return resource
 
 
-def get_conversation_by_id(
+async def get_conversation_by_id(
     conversation_id: int, workspace_id: int, db: DbSession
 ) -> Conversation:
     # scoped to workspace_id so a member of one workspace can't reach another
     # workspace's conversation by guessing its id
-    conversation = (
-        db.execute(
-            select(Conversation).where(
-                Conversation.id == conversation_id,
-                Conversation.workspace_id == workspace_id,
-            )
+    #
+    # Does not load Conversation.messages: use this when only the row itself
+    # is needed (permission checks, deleting, posting a message). A route that
+    # returns the conversation needs the _with_messages version below, because
+    # the response's last_message preview is read from the messages.
+    result = await db.execute(
+        select(Conversation).where(
+            Conversation.id == conversation_id,
+            Conversation.workspace_id == workspace_id,
         )
-        .scalars()
-        .first()
     )
+    conversation = result.scalars().first()
 
     if not conversation:
         raise HTTPException(
@@ -87,23 +88,20 @@ def get_conversation_by_id(
     return conversation
 
 
-def get_conversation_by_id_with_messages(
+async def get_conversation_by_id_with_messages(
     conversation_id: int, workspace_id: int, db: DbSession
 ) -> Conversation:
     # scoped to workspace_id so a member of one workspace can't reach another
     # workspace's conversation by guessing its id
-    conversation = (
-        db.execute(
-            select(Conversation)
-            .options(joinedload(Conversation.messages))
-            .where(
-                Conversation.id == conversation_id,
-                Conversation.workspace_id == workspace_id,
-            )
+    result = await db.execute(
+        select(Conversation)
+        .options(selectinload(Conversation.messages))
+        .where(
+            Conversation.id == conversation_id,
+            Conversation.workspace_id == workspace_id,
         )
-        .scalars()
-        .first()
     )
+    conversation = result.scalars().first()
 
     if not conversation:
         raise HTTPException(
@@ -113,32 +111,32 @@ def get_conversation_by_id_with_messages(
     return conversation
 
 
-def get_workspace_task_index(workspace_id: int, db: DbSession) -> Sequence[Task]:
-    # unique() is required here: joinedload against Task.resources (a
-    # collection) produces one raw row per resource, so a task with 3
-    # resources comes back as 3 duplicate Task rows before dedup.
-    return (
-        db.execute(
-            select(Task)
-            .options(joinedload(Task.resources))
-            .where(Task.workspace_id == workspace_id)
-        )
-        .unique()
-        .scalars()
-        .all()
+async def get_workspace_task_index(workspace_id: int, db: DbSession) -> Sequence[Task]:
+    result = await db.execute(
+        select(Task)
+        .options(selectinload(Task.resources))
+        .where(Task.workspace_id == workspace_id)
     )
+    return result.scalars().all()
 
 
-def get_workspace_by_id(workspace_id: int, db: DbSession) -> Workspace:
-    workspace = (
-        db.execute(
-            select(Workspace)
-            .options(joinedload(Workspace.members), joinedload(Workspace.tasks))
-            .where(Workspace.id == workspace_id)
-        )
-        .scalars()
-        .first()
+async def get_workspace_by_id(workspace_id: int, db: DbSession) -> Workspace:
+    # members and tasks are both read by WorkspaceResponse (the lists
+    # themselves, and the counts / progress / default_due_date properties on
+    # the model), so they are always loaded here.
+    #
+    # populate_existing: if this session already holds the workspace (a route
+    # that loads it, changes something, commits and then asks for it again),
+    # overwrite what is held with what the database now says. Without it the
+    # already-loaded members/tasks lists would be returned unchanged, missing
+    # a member that was just added.
+    result = await db.execute(
+        select(Workspace)
+        .options(selectinload(Workspace.members), selectinload(Workspace.tasks))
+        .where(Workspace.id == workspace_id)
+        .execution_options(populate_existing=True)
     )
+    workspace = result.scalars().first()
 
     if not workspace:
         raise HTTPException(
@@ -148,16 +146,13 @@ def get_workspace_by_id(workspace_id: int, db: DbSession) -> Workspace:
     return workspace
 
 
-def get_folder_by_id(folder_id: int, owner_id: int, db: DbSession) -> Folder:
+async def get_folder_by_id(folder_id: int, owner_id: int, db: DbSession) -> Folder:
     # scoped to owner_id so one user can never reach (or learn the existence
     # of) another user's folder by guessing its id - both cases are a 404
-    folder = (
-        db.execute(
-            select(Folder).where(Folder.id == folder_id, Folder.owner_id == owner_id)
-        )
-        .scalars()
-        .first()
+    result = await db.execute(
+        select(Folder).where(Folder.id == folder_id, Folder.owner_id == owner_id)
     )
+    folder = result.scalars().first()
 
     if not folder:
         raise HTTPException(

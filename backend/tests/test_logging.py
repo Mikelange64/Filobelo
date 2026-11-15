@@ -44,25 +44,28 @@ def _request_lines(caplog) -> list[logging.LogRecord]:
 # ========================================================================================
 
 
-def test_request_id_header_on_success(client):
-    response = client.get("/health")
+@pytest.mark.anyio
+async def test_request_id_header_on_success(client):
+    response = await client.get("/health")
     assert response.status_code == 200
     assert len(response.headers[REQUEST_ID_HEADER]) == 8
 
 
-def test_request_id_header_on_error_responses(client):
-    not_found = client.get("/api/this-route-does-not-exist")
+@pytest.mark.anyio
+async def test_request_id_header_on_error_responses(client):
+    not_found = await client.get("/api/this-route-does-not-exist")
     assert not_found.status_code == 404
     assert REQUEST_ID_HEADER in not_found.headers
 
-    unauthenticated = client.get("/api/users/me")
+    unauthenticated = await client.get("/api/users/me")
     assert unauthenticated.status_code == 401
     assert REQUEST_ID_HEADER in unauthenticated.headers
 
 
-def test_request_id_differs_per_request_and_ignores_client_value(client):
-    first = client.get("/health", headers={REQUEST_ID_HEADER: "chosen-by-client"})
-    second = client.get("/health")
+@pytest.mark.anyio
+async def test_request_id_differs_per_request_and_ignores_client_value(client):
+    first = await client.get("/health", headers={REQUEST_ID_HEADER: "chosen-by-client"})
+    second = await client.get("/health")
 
     assert first.headers[REQUEST_ID_HEADER] != "chosen-by-client"
     assert first.headers[REQUEST_ID_HEADER] != second.headers[REQUEST_ID_HEADER]
@@ -73,10 +76,11 @@ def test_request_id_differs_per_request_and_ignores_client_value(client):
 # ========================================================================================
 
 
-def test_request_line_has_method_path_status_and_matching_request_id(
+@pytest.mark.anyio
+async def test_request_line_has_method_path_status_and_matching_request_id(
     client, context_caplog
 ):
-    response = client.get("/api/users/me")  # no token -> 401
+    response = await client.get("/api/users/me")  # no token -> 401
 
     lines = _request_lines(context_caplog)
     assert len(lines) == 1
@@ -88,22 +92,24 @@ def test_request_line_has_method_path_status_and_matching_request_id(
     assert line.user_id == "-"
 
 
-def test_request_line_carries_authenticated_user_id(
+@pytest.mark.anyio
+async def test_request_line_carries_authenticated_user_id(
     client, user, user_token, context_caplog
 ):
     context_caplog.clear()
-    response = client.get("/api/users/me", headers=auth_header(user_token))
+    response = await client.get("/api/users/me", headers=auth_header(user_token))
     assert response.status_code == 200
 
     line = _request_lines(context_caplog)[-1]
     assert line.user_id == user["id"]
 
 
-def test_request_line_never_contains_query_string_or_token(
+@pytest.mark.anyio
+async def test_request_line_never_contains_query_string_or_token(
     client, user_token, context_caplog
 ):
     context_caplog.clear()
-    client.get(
+    await client.get(
         "/api/users/search?q=someone@example.com", headers=auth_header(user_token)
     )
 
@@ -111,8 +117,9 @@ def test_request_line_never_contains_query_string_or_token(
     assert user_token not in context_caplog.text
 
 
-def test_health_check_is_logged_at_debug_only(client, context_caplog):
-    client.get("/health")
+@pytest.mark.anyio
+async def test_health_check_is_logged_at_debug_only(client, context_caplog):
+    await client.get("/health")
 
     lines = _request_lines(context_caplog)
     assert len(lines) == 1
@@ -124,7 +131,8 @@ def test_health_check_is_logged_at_debug_only(client, context_caplog):
 # ========================================================================================
 
 
-def test_unhandled_exception_returns_message_shape_and_is_logged(
+@pytest.mark.anyio
+async def test_unhandled_exception_returns_message_shape_and_is_logged(
     client, context_caplog, monkeypatch
 ):
     def explode(*args, **kwargs):
@@ -133,7 +141,7 @@ def test_unhandled_exception_returns_message_shape_and_is_logged(
     # GET /api/users/{id} calls get_user_by_id; make that blow up.
     monkeypatch.setattr("app.routers.users.get_user_by_id", explode)
 
-    response = client.get("/api/users/1")
+    response = await client.get("/api/users/1")
 
     # The client gets the app's standard error shape, not a traceback.
     assert response.status_code == 500
@@ -161,11 +169,12 @@ def test_unhandled_exception_returns_message_shape_and_is_logged(
 # ========================================================================================
 
 
-def test_failed_login_logs_warning_without_password(client, user, caplog):
+@pytest.mark.anyio
+async def test_failed_login_logs_warning_without_password(client, user, caplog):
     caplog.clear()
     wrong_password = "definitely-not-my-password-42"
 
-    response = client.post(
+    response = await client.post(
         "/api/users/login",
         data={"username": "test@example.com", "password": wrong_password},
     )
@@ -184,11 +193,12 @@ def test_failed_login_logs_warning_without_password(client, user, caplog):
     assert PASSWORD not in caplog.text
 
 
-def test_successful_login_logs_info_without_secrets(client, user, caplog):
+@pytest.mark.anyio
+async def test_successful_login_logs_info_without_secrets(client, user, caplog):
     caplog.set_level(logging.INFO, logger="app")
     caplog.clear()
 
-    response = client.post(
+    response = await client.post(
         "/api/users/login",
         data={"username": "test@example.com", "password": PASSWORD},
     )
@@ -201,10 +211,11 @@ def test_successful_login_logs_info_without_secrets(client, user, caplog):
     assert tokens["refresh_token"] not in caplog.text
 
 
-def test_invalid_refresh_token_logs_warning_without_token(client, caplog):
+@pytest.mark.anyio
+async def test_invalid_refresh_token_logs_warning_without_token(client, caplog):
     bogus = "not-a-real-refresh-token-abc123"
 
-    response = client.post("/api/users/refresh", json={"refresh_token": bogus})
+    response = await client.post("/api/users/refresh", json={"refresh_token": bogus})
     assert response.status_code == 401
 
     assert any(
@@ -214,10 +225,11 @@ def test_invalid_refresh_token_logs_warning_without_token(client, caplog):
     assert bogus not in caplog.text
 
 
-def test_login_rate_limit_logs_warning(client, user, caplog):
+@pytest.mark.anyio
+async def test_login_rate_limit_logs_warning(client, user, caplog):
     # The login limiter allows 5 attempts a minute; the 6th is rejected.
     for _ in range(6):
-        response = client.post(
+        response = await client.post(
             "/api/users/login",
             data={"username": "test@example.com", "password": "wrong-password"},
         )
@@ -234,11 +246,12 @@ def test_login_rate_limit_logs_warning(client, user, caplog):
 # ========================================================================================
 
 
-def test_non_member_access_logs_warning(
+@pytest.mark.anyio
+async def test_non_member_access_logs_warning(
     client, workspace, second_user, second_user_token, caplog
 ):
     caplog.clear()
-    response = client.get(
+    response = await client.get(
         f"/api/workspaces/{workspace['id']}/members",
         headers=auth_header(second_user_token),
     )
@@ -254,13 +267,14 @@ def test_non_member_access_logs_warning(
     )
 
 
-def test_last_member_leaving_logs_workspace_deletion(
+@pytest.mark.anyio
+async def test_last_member_leaving_logs_workspace_deletion(
     client, workspace, user_token, caplog
 ):
     caplog.set_level(logging.INFO, logger="app")
     caplog.clear()
 
-    response = client.delete(
+    response = await client.delete(
         f"/api/workspaces/{workspace['id']}/members/me",
         headers=auth_header(user_token),
     )

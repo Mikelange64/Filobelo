@@ -2,7 +2,7 @@ import logging
 import time
 
 from fastapi import HTTPException, status
-from redis import Redis
+from redis.asyncio import Redis
 from redis.exceptions import RedisError
 from sqlalchemy import func, or_, select
 
@@ -21,15 +21,15 @@ redis_client = Redis.from_url(
 )
 
 
-def _check_rate_limit(identifier: str, kind: str, window: int, max_num: int) -> None:
+async def _check_rate_limit(identifier: str, kind: str, window: int, max_num: int) -> None:
     key = f"ratelimit:{kind}:{identifier}"
     now = time.time()
 
     try:
-        redis_client.zadd(key, {str(now): now})
-        redis_client.zremrangebyscore(key, 0, now - window)
-        count = redis_client.zcard(key)
-        redis_client.expire(
+        await redis_client.zadd(key, {str(now): now})
+        await redis_client.zremrangebyscore(key, 0, now - window)
+        count = await redis_client.zcard(key)
+        await redis_client.expire(
             key, window
         )  # so inactive keys eventually clean themselves up
     except RedisError:
@@ -49,36 +49,33 @@ def _check_rate_limit(identifier: str, kind: str, window: int, max_num: int) -> 
         )
 
 
-def _resolve_identity(identifier: str, db: DbSession) -> str:
+async def _resolve_identity(identifier: str, db: DbSession) -> str:
     identifier = identifier.lower()
-    user = (
-        db.execute(
-            select(User).where(
-                or_(
-                    func.lower(User.email) == identifier,
-                    func.lower(User.username) == identifier,
-                )
+    result = await db.execute(
+        select(User).where(
+            or_(
+                func.lower(User.email) == identifier,
+                func.lower(User.username) == identifier,
             )
         )
-        .scalars()
-        .first()
     )
+    user = result.scalars().first()
     return str(user.id) if user else identifier
 
 
-def login_limiter(data: LoginForm, db: DbSession) -> None:
-    identifier = _resolve_identity(data.username, db)
-    _check_rate_limit(identifier, kind="login", window=60, max_num=5)
+async def login_limiter(data: LoginForm, db: DbSession) -> None:
+    identifier = await _resolve_identity(data.username, db)
+    await _check_rate_limit(identifier, kind="login", window=60, max_num=5)
 
 
-def register_limiter(data: UserCreate, db: DbSession) -> None:
-    _check_rate_limit(data.email.lower(), kind="register", window=60, max_num=3)
+async def register_limiter(data: UserCreate, db: DbSession) -> None:
+    await _check_rate_limit(data.email.lower(), kind="register", window=60, max_num=3)
 
 
-def password_reset_limiter(data: ForgotPasswordRequest, db: DbSession) -> None:
-    _check_rate_limit(data.email.lower(), kind="password_reset", window=300, max_num=3)
+async def password_reset_limiter(data: ForgotPasswordRequest, db: DbSession) -> None:
+    await _check_rate_limit(data.email.lower(), kind="password_reset", window=300, max_num=3)
 
 
-def resend_verification_limiter(data: ResendVerificationRequest, db: DbSession) -> None:
-    identifier = _resolve_identity(data.identifier, db)
-    _check_rate_limit(identifier, kind="resend_verification", window=300, max_num=3)
+async def resend_verification_limiter(data: ResendVerificationRequest, db: DbSession) -> None:
+    identifier = await _resolve_identity(data.identifier, db)
+    await _check_rate_limit(identifier, kind="resend_verification", window=300, max_num=3)

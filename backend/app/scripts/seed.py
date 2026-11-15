@@ -1,6 +1,7 @@
+import asyncio
 from datetime import UTC, datetime, timedelta
 
-from app.database import SessionLocal
+from app.database import AsyncSessionLocal, engine
 from app.models import Folder, Task, TaskStatus, User, Workspace, WorkspaceMember
 from app.auth import hash_password
 
@@ -9,8 +10,8 @@ def dt(days_offset=0):
     return datetime.now(UTC) + timedelta(days=days_offset)
 
 
-def populate_db():
-    db = SessionLocal()
+async def populate_db():
+    db = AsyncSessionLocal()
 
     try:
         # ── Users ─────────────────────────────────────────────────────────────
@@ -34,14 +35,14 @@ def populate_db():
         )
 
         db.add_all([mike, alice, bob])
-        db.flush()
+        await db.flush()
 
         # ── Folders ───────────────────────────────────────────────────────────
         work_folder = Folder(owner_id=mike.id, name="Work", color="#3b82f6")
         personal_folder = Folder(owner_id=mike.id, name="Personal", color="#8b5cf6")
 
         db.add_all([work_folder, personal_folder])
-        db.flush()
+        await db.flush()
 
         # ── Workspaces ────────────────────────────────────────────────────────
 
@@ -112,7 +113,7 @@ def populate_db():
             ws_marketing, ws_dashboard, ws_mobile, ws_portfolio,
             ws_onboarding, ws_rebrand, ws_archived,
         ])
-        db.flush()
+        await db.flush()
 
         # ── Members ───────────────────────────────────────────────────────────
         # Pin/archive/folder are per-member preferences on a shared workspace,
@@ -135,7 +136,7 @@ def populate_db():
             WorkspaceMember(user_id=mike.id,  workspace_id=ws_archived.id,   role="admin",
                              is_archived=True),
         ])
-        db.flush()
+        await db.flush()
 
         # ── Tasks ─────────────────────────────────────────────────────────────
 
@@ -204,16 +205,21 @@ def populate_db():
                  completed_at=dt(-32)),
         ])
 
-        db.commit()
+        await db.commit()
         print("Database seeded successfully.")
 
     except Exception as e:
-        db.rollback()
+        await db.rollback()
         print(f"Seeding failed: {e}")
         raise
     finally:
-        db.close()
+        await db.close()
+
+
+async def main():
+    await populate_db()
+    await engine.dispose()
 
 
 if __name__ == "__main__":
-    populate_db()
+    asyncio.run(main())

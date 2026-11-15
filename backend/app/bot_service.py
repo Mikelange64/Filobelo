@@ -6,7 +6,7 @@ from typing import Literal
 
 import httpx
 from fastapi import HTTPException, status
-from openai import OpenAI
+from openai import AsyncOpenAI
 
 from app.config import settings
 from app.database import DbSession
@@ -78,15 +78,15 @@ _TURN_ROLE: dict[SenderType, Literal["user", "assistant"]] = {
 
 class FilobeloBot:
     def __init__(self):
-        self.client = OpenAI(api_key=API_KEY, base_url="https://api.deepseek.com")
+        self.client = AsyncOpenAI(api_key=API_KEY, base_url="https://api.deepseek.com")
 
-    def reply(
+    async def reply(
         self,
         conversation_id: int,
         workspace_id: int,
         db: DbSession,
     ) -> MessageResponse:
-        conversation = get_conversation_by_id_with_messages(
+        conversation = await get_conversation_by_id_with_messages(
             conversation_id, workspace_id, db
         )
 
@@ -96,7 +96,7 @@ class FilobeloBot:
             )
 
         history = self._build_history(conversation.messages)
-        system_prompt = self._build_system_prompt(workspace_id, db)
+        system_prompt = await self._build_system_prompt(workspace_id, db)
         messages = [
             {"role": "system", "content": system_prompt},
             *history,
@@ -104,7 +104,7 @@ class FilobeloBot:
 
         started = time.perf_counter()
         try:
-            message, sources = self._run_completion(messages)
+            message, sources = await self._run_completion(messages)
         except Exception as e:
             logger.exception(
                 "Bot reply failed: model call raised conversation_id=%s workspace_id=%s after %.0fms",
@@ -139,8 +139,8 @@ class FilobeloBot:
         conversation.last_message_at = now
 
         db.add(new_message)
-        db.commit()
-        db.refresh(new_message)
+        await db.commit()
+        await db.refresh(new_message)
 
         logger.info(
             "Bot replied conversation_id=%s workspace_id=%s in %.0fms sources=%s",
@@ -150,7 +150,7 @@ class FilobeloBot:
         response = MessageResponse.model_validate(new_message)
         return response
 
-    def _run_completion(self, messages: list[dict]) -> tuple[object, list[dict]]:
+    async def _run_completion(self, messages: list[dict]) -> tuple[object, list[dict]]:
         """Calls the model, and if it requests the web_search tool, runs the
         search and feeds the result back - up to MAX_SEARCH_ROUNDS times -
         before returning the final assistant message, plus every source
@@ -160,7 +160,7 @@ class FilobeloBot:
         seen_urls: set[str] = set()
 
         for _ in range(MAX_SEARCH_ROUNDS):
-            response = self.client.chat.completions.create(
+            response = await self.client.chat.completions.create(
                 model=MODEL,
                 messages=messages,
                 tools=tools,
@@ -192,7 +192,7 @@ class FilobeloBot:
             )
             for call in tool_calls:
                 args = json.loads(call.function.arguments)
-                result, results = self._search_web(args.get("query", ""))
+                result, results = await self._search_web(args.get("query", ""))
                 for r in results:
                     if r["url"] not in seen_urls:
                         seen_urls.add(r["url"])
@@ -207,7 +207,7 @@ class FilobeloBot:
 
         # Ran out of search rounds - ask once more without tools so the model
         # is forced to answer with whatever it has instead of looping again.
-        response = self.client.chat.completions.create(
+        response = await self.client.chat.completions.create(
             model=MODEL,
             messages=messages,
             stream=False,
@@ -217,21 +217,21 @@ class FilobeloBot:
         return response.choices[0].message, sources
 
     @staticmethod
-    def _search_web(query: str, max_results: int = 5) -> tuple[str, list[dict]]:
+    async def _search_web(query: str, max_results: int = 5) -> tuple[str, list[dict]]:
         if not settings.tavily_api_key:
             return "Web search is not available right now.", []
 
         started = time.perf_counter()
         try:
-            response = httpx.post(
-                "https://api.tavily.com/search",
-                json={
-                    "api_key": settings.tavily_api_key.get_secret_value(),
-                    "query": query,
-                    "max_results": max_results,
-                },
-                timeout=10.0,
-            )
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.post(
+                    "https://api.tavily.com/search",
+                    json={
+                        "api_key": settings.tavily_api_key.get_secret_value(),
+                        "query": query,
+                        "max_results": max_results,
+                    },
+                )
             response.raise_for_status()
             results = response.json().get("results", [])
         except Exception as e:
@@ -265,8 +265,8 @@ class FilobeloBot:
         ]
 
     @staticmethod
-    def _build_system_prompt(workspace_id: int, db: DbSession) -> str:
-        tasks = get_workspace_task_index(workspace_id, db)
+    async def _build_system_prompt(workspace_id: int, db: DbSession) -> str:
+        tasks = await get_workspace_task_index(workspace_id, db)
 
         if not tasks:
             return BASE_SYSTEM_PROMPT + "\n\nThis workspace currently has no tasks."

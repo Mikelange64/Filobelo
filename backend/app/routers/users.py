@@ -3,20 +3,31 @@ from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 from botocore.exceptions import ClientError
-from fastapi import APIRouter, Depends, Form, HTTPException, Query, UploadFile, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    Form,
+    HTTPException,
+    Query,
+    UploadFile,
+    status,
+)
 from PIL import UnidentifiedImageError
 from sqlalchemy import delete as sql_delete
 from sqlalchemy import func, or_, select
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+from starlette.concurrency import run_in_threadpool
 
 from app.auth import (
-    CurrentUser,
-    LoginForm,
     create_access_token,
+    CurrentUser,
     generate_reset_tokens,
     get_current_user,
     hash_password,
     hash_reset_token,
+    LoginForm,
     verify_password,
 )
 from app.config import settings
@@ -54,6 +65,7 @@ from app.utils import (
     delete_profile_image,
     get_user_by_id,
     process_profile_image,
+    send_logging_failure,
     send_password_reset_email,
     send_verification_email,
     upload_profile_image,
@@ -68,13 +80,13 @@ logger = logging.getLogger(__name__)
 # =======================================================================================
 
 
-def _read_profile_image(file: UploadFile) -> tuple[bytes, str]:
+async def _read_profile_image(file: UploadFile) -> tuple[bytes, str]:
     """Reads an uploaded picture, enforces the size limit and re-encodes it
     as a 300x300 JPEG. Returns (bytes, new_filename). Raises 400 on a file
     that is too large or is not an image."""
     # Read one byte past the limit: enough to know it is too big without
     # pulling an arbitrarily large upload into memory.
-    content = file.file.read(settings.max_upload_size_bytes + 1)
+    content = await file.read(settings.max_upload_size_bytes + 1)
 
     if len(content) > settings.max_upload_size_bytes:
         raise HTTPException(
@@ -83,7 +95,8 @@ def _read_profile_image(file: UploadFile) -> tuple[bytes, str]:
         )
 
     try:
-        return process_profile_image(content)
+        # Pillow is CPU-bound: run it in a worker thread, off the event loop.
+        return await run_in_threadpool(process_profile_image, content)
     except (UnidentifiedImageError, ValueError) as err:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -92,8 +105,10 @@ def _read_profile_image(file: UploadFile) -> tuple[bytes, str]:
 
 
 @router.post("", response_model=UserPrivate, status_code=status.HTTP_201_CREATED)
-def create_user(user: UserCreate, db: DbSession):
-    return _register_user(user, db)
+async def create_user(
+    user: UserCreate, db: DbSession, background_tasks: BackgroundTasks
+):
+    return await _register_user(user, db, background_tasks)
 
 
 # Same registration, sent as a multipart form so it can carry a profile
@@ -103,32 +118,38 @@ def create_user(user: UserCreate, db: DbSession):
 @router.post(
     "/with-picture", response_model=UserPrivate, status_code=status.HTTP_201_CREATED
 )
-def create_user_with_picture(
+async def create_user_with_picture(
     user: Annotated[UserCreate, Form()],
     db: DbSession,
+    background_tasks: BackgroundTasks,
     file: UploadFile | None = None,
 ):
-    return _register_user(user, db, picture=file)
+    return await _register_user(user, db, background_tasks, picture=file)
 
 
-def _register_user(user: UserCreate, db: Session, picture: UploadFile | None = None):
-    register_limiter(user, db)
+async def _register_user(
+    user: UserCreate,
+    db: AsyncSession,
+    background_tasks: BackgroundTasks,
+    picture: UploadFile | None = None,
+):
+    await register_limiter(user, db)
 
     # Validated and re-encoded before anything is written, so a bad picture
     # rejects the signup instead of leaving an account behind.
-    processed_picture = _read_profile_image(picture) if picture is not None else None
-
-    email_exists = (
-        db.execute(select(User).where(func.lower(User.email) == user.email.lower()))
-        .scalars()
-        .first()
+    processed_picture = (
+        await _read_profile_image(picture) if picture is not None else None
     )
 
-    username_exists = (
-        db.execute(select(User).where(func.lower(User.username) == user.username))
-        .scalars()
-        .first()
+    result = await db.execute(
+        select(User).where(func.lower(User.email) == user.email.lower())
     )
+    email_exists = result.scalars().first()
+
+    result = await db.execute(
+        select(User).where(func.lower(User.username) == user.username)
+    )
+    username_exists = result.scalars().first()
 
     if email_exists:
         raise HTTPException(status_code=400, detail="Email already registered")
@@ -136,14 +157,16 @@ def _register_user(user: UserCreate, db: Session, picture: UploadFile | None = N
     if username_exists:
         raise HTTPException(status_code=400, detail="Username already registered")
 
-    hashed_password = hash_password(user.password)
+    # Argon2 costs tens of milliseconds of CPU: run it in a worker thread so
+    # the event loop keeps serving other requests meanwhile.
+    hashed_password = await run_in_threadpool(hash_password, user.password)
 
     new_user = User(
         username=user.username, email=user.email, password_hash=hashed_password
     )
 
     db.add(new_user)
-    db.flush()
+    await db.flush()
 
     token = generate_reset_tokens()
     token_hash = hash_reset_token(token)
@@ -154,8 +177,8 @@ def _register_user(user: UserCreate, db: Session, picture: UploadFile | None = N
             user_id=new_user.id, token_hash=token_hash, expires_at=expires_at
         )
     )
-    db.commit()
-    db.refresh(new_user)
+    await db.commit()
+    await db.refresh(new_user)
 
     logger.info("User registered user_id=%s email=%s", new_user.id, new_user.email)
 
@@ -165,46 +188,51 @@ def _register_user(user: UserCreate, db: Session, picture: UploadFile | None = N
     if processed_picture is not None:
         picture_bytes, picture_filename = processed_picture
         try:
-            upload_profile_image(picture_bytes, picture_filename)
+            await upload_profile_image(picture_bytes, picture_filename)
         except Exception:
             logger.exception(
                 "Profile picture upload failed on signup for user_id=%s", new_user.id
             )
         else:
             new_user.image_file = picture_filename
-            db.commit()
-            db.refresh(new_user)
+            await db.commit()
+            await db.refresh(new_user)
 
-    try:
-        send_verification_email(
-            to_email=new_user.email, username=new_user.username, token=token
-        )
-    except Exception:
-        logger.exception(
-            "Failed to send verification email on signup for user_id=%s", new_user.id
-        )
+    # Sent after the response goes out, so signup does not wait on the mail
+    # server. The client was never told about a failed send anyway (the
+    # account exists either way, and the sign-in page can resend the link); a
+    # failure is logged by send_logging_failure, as before.
+    background_tasks.add_task(
+        send_logging_failure,
+        send_verification_email,
+        logger,
+        "Failed to send verification email on signup for user_id=%s",
+        new_user.id,
+        to_email=new_user.email,
+        username=new_user.username,
+        token=token,
+    )
 
     return new_user
 
 
 @router.post("/login", response_model=Token, dependencies=[Depends(login_limiter)])
-def login(db: DbSession, form_data: LoginForm,):
+async def login(db: DbSession, form_data: LoginForm,):
     # here we use the form data username field to accept either email or username, so the user has a choice
     email_or_username = form_data.username.lower()
-    user = (
-        db.execute(
-            select(User).where(
-                or_(
-                    func.lower(User.email) == email_or_username,
-                    func.lower(User.username) == email_or_username,
-                )
+    result = await db.execute(
+        select(User).where(
+            or_(
+                func.lower(User.email) == email_or_username,
+                func.lower(User.username) == email_or_username,
             )
         )
-        .scalars()
-        .first()
     )
+    user = result.scalars().first()
 
-    if not user or not verify_password(form_data.password, user.password_hash):
+    if not user or not await run_in_threadpool(
+        verify_password, form_data.password, user.password_hash
+    ):
         # Only the identifier that was typed is logged, never the password.
         # %r escapes control characters so the value cannot fake a log line.
         logger.warning(
@@ -236,7 +264,7 @@ def login(db: DbSession, form_data: LoginForm,):
     )
 
     # rotate refresh token: delete old ones, issue a fresh one
-    db.execute(sql_delete(RefreshToken).where(RefreshToken.user_id == user.id))
+    await db.execute(sql_delete(RefreshToken).where(RefreshToken.user_id == user.id))
     raw_refresh = generate_reset_tokens()
 
     db.add(
@@ -250,7 +278,7 @@ def login(db: DbSession, form_data: LoginForm,):
 
     user.last_login = datetime.now(UTC)
     user_id = user.id  # read before commit: reading it after would cost a query
-    db.commit()
+    await db.commit()
 
     logger.info("Login succeeded user_id=%s", user_id)
 
@@ -260,13 +288,12 @@ def login(db: DbSession, form_data: LoginForm,):
 
 
 @router.post("/refresh", response_model=Token)
-def refresh_access_token(body: RefreshRequest, db: DbSession):
+async def refresh_access_token(body: RefreshRequest, db: DbSession):
     token_hash = hash_reset_token(body.refresh_token)
-    stored = (
-        db.execute(select(RefreshToken).where(RefreshToken.token_hash == token_hash))
-        .scalars()
-        .first()
+    result = await db.execute(
+        select(RefreshToken).where(RefreshToken.token_hash == token_hash)
     )
+    stored = result.scalars().first()
 
     if not stored or stored.expires_at < datetime.now(UTC):
         # Refresh tokens are single-use: each refresh deletes the old one.
@@ -281,14 +308,15 @@ def refresh_access_token(body: RefreshRequest, db: DbSession):
         else:
             logger.warning("Refresh rejected reason=unknown_token (invalid or reused)")
         if stored:
-            db.delete(stored)
-            db.commit()
+            await db.delete(stored)
+            await db.commit()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired refresh token",
         )
 
-    user = db.execute(select(User).where(User.id == stored.user_id)).scalars().first()
+    result = await db.execute(select(User).where(User.id == stored.user_id))
+    user = result.scalars().first()
 
     if not user:
         logger.warning(
@@ -305,7 +333,7 @@ def refresh_access_token(body: RefreshRequest, db: DbSession):
     )
 
     # rotate: delete old refresh token, issue a new one
-    db.delete(stored)
+    await db.delete(stored)
     raw_refresh = generate_reset_tokens()
 
     db.add(
@@ -316,7 +344,7 @@ def refresh_access_token(body: RefreshRequest, db: DbSession):
             + timedelta(days=settings.refresh_token_expire_days),
         )
     )
-    db.commit()
+    await db.commit()
 
     return Token(
         access_token=access_token, refresh_token=raw_refresh, token_type="bearer"
@@ -324,37 +352,35 @@ def refresh_access_token(body: RefreshRequest, db: DbSession):
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
-def logout(body: RefreshRequest, db: DbSession):
+async def logout(body: RefreshRequest, db: DbSession):
     token_hash = hash_reset_token(body.refresh_token)
-    stored = (
-        db.execute(select(RefreshToken).where(RefreshToken.token_hash == token_hash))
-        .scalars()
-        .first()
+    result = await db.execute(
+        select(RefreshToken).where(RefreshToken.token_hash == token_hash)
     )
+    stored = result.scalars().first()
     if stored:
         user_id = stored.user_id
-        db.delete(stored)
-        db.commit()
+        await db.delete(stored)
+        await db.commit()
         logger.info("Logout user_id=%s", user_id)
 
 
 @router.get("/me", response_model=UserPrivate)
-def get_me(user: CurrentUser):
+async def get_me(user: CurrentUser):
     return user
 
 
 @router.patch("/me", response_model=UserPrivate)
-def update_user(current_user: CurrentUser, user_data: UserUpdate, db: DbSession):
+async def update_user(current_user: CurrentUser, user_data: UserUpdate, db: DbSession):
     # checks if the user updated their username (not blank or some as before) and if the new username is already taken
     if (
         user_data.username is not None
         and user_data.username.lower() != current_user.username.lower()
     ):
-        existing_username = (
-            db.execute(select(User).where(User.username == user_data.username))
-            .scalars()
-            .first()
+        result = await db.execute(
+            select(User).where(User.username == user_data.username)
         )
+        existing_username = result.scalars().first()
 
         if existing_username:
             raise HTTPException(
@@ -367,11 +393,8 @@ def update_user(current_user: CurrentUser, user_data: UserUpdate, db: DbSession)
         user_data.email is not None
         and user_data.email.lower() != current_user.email.lower()
     ):
-        existing_email = (
-            db.execute(select(User).where(User.email == user_data.email))
-            .scalars()
-            .first()
-        )
+        result = await db.execute(select(User).where(User.email == user_data.email))
+        existing_email = result.scalars().first()
 
         if existing_email:
             raise HTTPException(
@@ -385,36 +408,33 @@ def update_user(current_user: CurrentUser, user_data: UserUpdate, db: DbSession)
     for field, value in update.items():
         setattr(current_user, field, value)
 
-    db.commit()
-    db.refresh(current_user)
+    await db.commit()
+    await db.refresh(current_user)
     return current_user
 
 
 @router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
-def delete_user(current_user: CurrentUser, db: DbSession):
+async def delete_user(current_user: CurrentUser, db: DbSession):
     old_filename = current_user.image_file
     user_id = current_user.id  # kept for the log line: unreadable after delete
 
-    memberships = (
-        db.execute(
-            select(WorkspaceMember).where(WorkspaceMember.user_id == current_user.id)
-        )
-        .scalars()
-        .all()
+    result = await db.execute(
+        select(WorkspaceMember).where(WorkspaceMember.user_id == current_user.id)
     )
+    memberships = result.scalars().all()
 
     for membership in memberships:
-        handle_membership_departure(membership, db)
+        await handle_membership_departure(membership, db)
 
-    db.delete(current_user)
-    db.commit()
+    await db.delete(current_user)
+    await db.commit()
 
     logger.info(
         "Account deleted user_id=%s memberships_removed=%s", user_id, len(memberships)
     )
 
     if old_filename:
-        delete_profile_image(old_filename)
+        await delete_profile_image(old_filename)
 
 
 # ========================================================================================
@@ -423,16 +443,13 @@ def delete_user(current_user: CurrentUser, db: DbSession):
 
 
 @router.post("/verify-email", status_code=status.HTTP_200_OK)
-def verify_email(request_data: EmailVerification, db: DbSession):
+async def verify_email(request_data: EmailVerification, db: DbSession):
     token_hash = hash_reset_token(request_data.token)
 
-    verification_token = (
-        db.execute(
-            select(VerificationToken).where(VerificationToken.token_hash == token_hash)
-        )
-        .scalars()
-        .first()
+    result = await db.execute(
+        select(VerificationToken).where(VerificationToken.token_hash == token_hash)
     )
+    verification_token = result.scalars().first()
 
     if not verification_token:
         logger.info("Email verification rejected reason=unknown_token")
@@ -446,18 +463,17 @@ def verify_email(request_data: EmailVerification, db: DbSession):
             "Email verification rejected reason=expired_token user_id=%s",
             verification_token.user_id,
         )
-        db.delete(verification_token)
-        db.commit()
+        await db.delete(verification_token)
+        await db.commit()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid or expired verification link",
         )
 
-    user = (
-        db.execute(select(User).where(User.id == verification_token.user_id))
-        .scalars()
-        .first()
+    result = await db.execute(
+        select(User).where(User.id == verification_token.user_id)
     )
+    user = result.scalars().first()
 
     if not user:
         raise HTTPException(
@@ -467,8 +483,8 @@ def verify_email(request_data: EmailVerification, db: DbSession):
 
     user.is_verified = True
     user_id = user.id  # read before commit: reading it after would cost a query
-    db.delete(verification_token)
-    db.commit()
+    await db.delete(verification_token)
+    await db.commit()
 
     logger.info("Email verified user_id=%s", user_id)
 
@@ -476,25 +492,26 @@ def verify_email(request_data: EmailVerification, db: DbSession):
 
 
 @router.post("/resend-verification", status_code=status.HTTP_202_ACCEPTED)
-def resend_verification_email(db: DbSession, request_data: ResendVerificationRequest):
-    resend_verification_limiter(request_data, db)
+async def resend_verification_email(
+    db: DbSession,
+    request_data: ResendVerificationRequest,
+    background_tasks: BackgroundTasks,
+):
+    await resend_verification_limiter(request_data, db)
 
     email_or_username = request_data.identifier.lower()
-    user = (
-        db.execute(
-            select(User).where(
-                or_(
-                    func.lower(User.email) == email_or_username,
-                    func.lower(User.username) == email_or_username,
-                )
+    result = await db.execute(
+        select(User).where(
+            or_(
+                func.lower(User.email) == email_or_username,
+                func.lower(User.username) == email_or_username,
             )
         )
-        .scalars()
-        .first()
     )
+    user = result.scalars().first()
 
     if user and not user.is_verified:
-        db.execute(
+        await db.execute(
             sql_delete(VerificationToken).where(VerificationToken.user_id == user.id)
         )
 
@@ -507,18 +524,20 @@ def resend_verification_email(db: DbSession, request_data: ResendVerificationReq
                 user_id=user.id, token_hash=token_hash, expires_at=expires_at
             )
         )
-        db.commit()
+        await db.commit()
 
         logger.info("Verification email re-requested user_id=%s", user.id)
 
-        try:
-            send_verification_email(
-                to_email=user.email, username=user.username, token=token
-            )
-        except Exception:
-            logger.exception(
-                "Failed to resend verification email for user_id=%s", user.id
-            )
+        background_tasks.add_task(
+            send_logging_failure,
+            send_verification_email,
+            logger,
+            "Failed to resend verification email for user_id=%s",
+            user.id,
+            to_email=user.email,
+            username=user.username,
+            token=token,
+        )
 
     return {
         "message": "If an account exists and isn't verified yet, a new verification link has been sent"
@@ -531,19 +550,20 @@ def resend_verification_email(db: DbSession, request_data: ResendVerificationReq
 
 
 @router.post("/forgot-password", status_code=status.HTTP_202_ACCEPTED)
-def forgot_password(db: DbSession, request_data: ForgotPasswordRequest):
-    password_reset_limiter(request_data, db)
+async def forgot_password(
+    db: DbSession,
+    request_data: ForgotPasswordRequest,
+    background_tasks: BackgroundTasks,
+):
+    await password_reset_limiter(request_data, db)
 
-    user = (
-        db.execute(
-            select(User).where(func.lower(User.email) == request_data.email.lower())
-        )
-        .scalars()
-        .first()
+    result = await db.execute(
+        select(User).where(func.lower(User.email) == request_data.email.lower())
     )
+    user = result.scalars().first()
 
     if user:
-        db.execute(
+        await db.execute(
             sql_delete(PasswordResetToken).where(PasswordResetToken.user_id == user.id)
         )
 
@@ -558,18 +578,20 @@ def forgot_password(db: DbSession, request_data: ForgotPasswordRequest):
                 user_id=user.id, token_hash=token_hash, expires_at=expires_at
             )
         )
-        db.commit()
+        await db.commit()
 
         logger.info("Password reset requested user_id=%s", user.id)
 
-        try:
-            send_password_reset_email(
-                to_email=user.email, username=user.username, token=token
-            )
-        except Exception:
-            logger.exception(
-                "Failed to send password reset email for user_id=%s", user.id
-            )
+        background_tasks.add_task(
+            send_logging_failure,
+            send_password_reset_email,
+            logger,
+            "Failed to send password reset email for user_id=%s",
+            user.id,
+            to_email=user.email,
+            username=user.username,
+            token=token,
+        )
     else:
         # The response is identical either way (so callers cannot tell which
         # emails have accounts); only the log shows the difference.
@@ -583,18 +605,13 @@ def forgot_password(db: DbSession, request_data: ForgotPasswordRequest):
 
 
 @router.post("/reset-password")
-def reset_password(request_data: ResetPasswordRequest, db: DbSession):
+async def reset_password(request_data: ResetPasswordRequest, db: DbSession):
     token_hash = hash_reset_token(request_data.token)
 
-    reset_token = (
-        db.execute(
-            select(PasswordResetToken).where(
-                PasswordResetToken.token_hash == token_hash
-            )
-        )
-        .scalars()
-        .first()
+    result = await db.execute(
+        select(PasswordResetToken).where(PasswordResetToken.token_hash == token_hash)
     )
+    reset_token = result.scalars().first()
 
     # if the token doesn't exist
     if not reset_token:
@@ -610,16 +627,15 @@ def reset_password(request_data: ResetPasswordRequest, db: DbSession):
             "Password reset rejected reason=expired_token user_id=%s",
             reset_token.user_id,
         )
-        db.delete(reset_token)
-        db.commit()
+        await db.delete(reset_token)
+        await db.commit()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid or expired reset token",
         )
 
-    user = (
-        db.execute(select(User).where(User.id == reset_token.user_id)).scalars().first()
-    )
+    result = await db.execute(select(User).where(User.id == reset_token.user_id))
+    user = result.scalars().first()
 
     if not user:
         raise HTTPException(
@@ -627,13 +643,15 @@ def reset_password(request_data: ResetPasswordRequest, db: DbSession):
             detail="Invalid or expired reset token",
         )
 
-    user.password_hash = hash_password(request_data.new_password)
+    user.password_hash = await run_in_threadpool(
+        hash_password, request_data.new_password
+    )
     user_id = user.id  # read before commit: reading it after would cost a query
 
-    db.execute(
+    await db.execute(
         sql_delete(PasswordResetToken).where(PasswordResetToken.user_id == user.id),
     )
-    db.commit()
+    await db.commit()
 
     logger.info("Password reset completed user_id=%s", user_id)
 
@@ -641,10 +659,12 @@ def reset_password(request_data: ResetPasswordRequest, db: DbSession):
 
 
 @router.patch("/me/password")
-def change_password(
+async def change_password(
     current_user: CurrentUser, password_data: ChangePasswordRequest, db: DbSession
 ):
-    if not verify_password(password_data.current_password, current_user.password_hash):
+    if not await run_in_threadpool(
+        verify_password, password_data.current_password, current_user.password_hash
+    ):
         logger.warning(
             "Password change rejected reason=wrong_current_password user_id=%s",
             current_user.id,
@@ -654,17 +674,19 @@ def change_password(
             detail="Current password is incorrect",
         )
 
-    new_password_hash = hash_password(password_data.new_password)
+    new_password_hash = await run_in_threadpool(
+        hash_password, password_data.new_password
+    )
     current_user.password_hash = new_password_hash
     user_id = current_user.id  # read before commit: reading it after would cost a query
 
-    db.execute(
+    await db.execute(
         sql_delete(PasswordResetToken).where(
             PasswordResetToken.user_id == current_user.id
         )
     )
 
-    db.commit()
+    await db.commit()
     logger.info("Password changed user_id=%s", user_id)
     return {"message": "Password changed successfully"}
 
@@ -675,30 +697,31 @@ def change_password(
 
 
 @router.get("/me/workspaces", response_model=list[WorkspaceResponse])
-def get_user_workspaces(current_user: CurrentUser, db: DbSession):
-    workspaces = (
-        db.execute(
-            select(Workspace)
-            .join(WorkspaceMember, WorkspaceMember.workspace_id == Workspace.id)
-            .where(WorkspaceMember.user_id == current_user.id)
-        )
-        .scalars()
-        .all()
+async def get_user_workspaces(current_user: CurrentUser, db: DbSession):
+    # WorkspaceResponse reads members and tasks (the lists, and the counts /
+    # progress properties built on them), so both are loaded here.
+    result = await db.execute(
+        select(Workspace)
+        .options(selectinload(Workspace.members), selectinload(Workspace.tasks))
+        .join(WorkspaceMember, WorkspaceMember.workspace_id == Workspace.id)
+        .where(WorkspaceMember.user_id == current_user.id)
     )
+    workspaces = result.scalars().all()
 
     return workspaces
 
 
 @router.get("/search", response_model=UserPublic, dependencies=[Depends(get_current_user)])
-def search_user(q: Annotated[str, Query(min_length=1)], db: DbSession):
-    user = db.execute(
+async def search_user(q: Annotated[str, Query(min_length=1)], db: DbSession):
+    result = await db.execute(
         select(User).where(
             or_(
                 func.lower(User.username) == q.strip().lower(),
                 func.lower(User.email) == q.strip().lower(),
             )
         )
-    ).scalar_one_or_none()
+    )
+    user = result.scalar_one_or_none()
 
     if not user:
         raise HTTPException(
@@ -710,17 +733,19 @@ def search_user(q: Annotated[str, Query(min_length=1)], db: DbSession):
 
 
 @router.get("/{user_id}", response_model=UserPublic)
-def get_user(user_id: int, db: DbSession):
-    user = get_user_by_id(user_id, db)
+async def get_user(user_id: int, db: DbSession):
+    user = await get_user_by_id(user_id, db)
     return user
 
 
 @router.patch("/me/picture", response_model=UserPrivate)
-def upload_profile_picture(file: UploadFile, current_user: CurrentUser, db: DbSession):
-    processed_bytes, new_filename = _read_profile_image(file)
+async def upload_profile_picture(
+    file: UploadFile, current_user: CurrentUser, db: DbSession
+):
+    processed_bytes, new_filename = await _read_profile_image(file)
 
     try:
-        upload_profile_image(processed_bytes, new_filename)
+        await upload_profile_image(processed_bytes, new_filename)
     except ClientError as err:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -730,17 +755,17 @@ def upload_profile_picture(file: UploadFile, current_user: CurrentUser, db: DbSe
     old_filename = current_user.image_file  # store the old filename
     current_user.image_file = new_filename
 
-    db.commit()
-    db.refresh(current_user)
+    await db.commit()
+    await db.refresh(current_user)
 
     if old_filename:
-        delete_profile_image(old_filename)
+        await delete_profile_image(old_filename)
 
     return current_user
 
 
 @router.delete("/me/picture", response_model=UserPrivate)
-def delete_profile_picture(current_user: CurrentUser, db: DbSession,):
+async def delete_profile_picture(current_user: CurrentUser, db: DbSession,):
     old_filename = current_user.image_file
 
     if old_filename is None:
@@ -750,8 +775,8 @@ def delete_profile_picture(current_user: CurrentUser, db: DbSession,):
         )
 
     current_user.image_file = None
-    db.commit()
-    db.refresh(current_user)
+    await db.commit()
+    await db.refresh(current_user)
 
-    delete_profile_image(old_filename)
+    await delete_profile_image(old_filename)
     return current_user
