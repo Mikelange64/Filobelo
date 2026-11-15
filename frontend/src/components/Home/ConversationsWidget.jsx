@@ -4,8 +4,16 @@ const MAX_ROWS = 4
 
 function SparkleIcon() {
   return (
-    <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true">
-      <path d="M12 2L13.9 9.1L21 11L13.9 12.9L12 20L10.1 12.9L3 11L10.1 9.1Z" />
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true">
+      <path d="M12 2.5l1.9 6.1 6.1 1.9-6.1 1.9L12 18.5l-1.9-6.1L4 10.5l6.1-1.9z" />
+    </svg>
+  )
+}
+
+function ChatIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M5 5h14a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-8l-4 3.5V16H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z" />
     </svg>
   )
 }
@@ -30,32 +38,30 @@ function ConversationsWidget({ conversations, onSelectConversation }) {
   const visible = conversations.slice(0, MAX_ROWS)
 
   return (
-    <section className="conversations-widget" aria-label="Recent conversations">
-      <h2 className="conversations-widget__heading">Conversations</h2>
-      <div className="conversations-widget__list">
-        {visible.map((c) => (
-          <button
-            key={c.id}
-            type="button"
-            className="conversations-widget__row"
-            onClick={() => onSelectConversation(c)}
-          >
-            <span className={`conversations-widget__avatar${c.type === 'BOT' ? ' conversations-widget__avatar--bot' : ''}`}>
-              {c.type === 'BOT' ? <SparkleIcon /> : c.title?.[0]?.toUpperCase()}
-            </span>
-            <span className="conversations-widget__body">
-              <span className="conversations-widget__top">
-                <span className="conversations-widget__title">
-                  {c.title}
-                  <span className="conversations-widget__workspace">{c.workspace_title}</span>
-                </span>
-                <span className="conversations-widget__time">{formatTimestamp(c.last_message_at ?? c.created_at)}</span>
-              </span>
-              <span className="conversations-widget__preview">{c.last_message ?? 'No messages yet'}</span>
-            </span>
-          </button>
-        ))}
+    <section className="ui-card conversations-widget" aria-labelledby="home-conversations-title">
+      <div className="home-section__header conversations-widget__header">
+        <h2 id="home-conversations-title" className="home-section__title">Conversations</h2>
       </div>
+      {visible.map((c) => (
+        <button
+          key={c.id}
+          type="button"
+          className="conversations-widget__row"
+          onClick={() => onSelectConversation(c)}
+        >
+          <span className="conversations-widget__icon">
+            {c.type === 'BOT' ? <SparkleIcon /> : <ChatIcon />}
+          </span>
+          <span className="conversations-widget__body">
+            <span className="conversations-widget__top">
+              <span className="conversations-widget__title">{c.title}</span>
+              <span className="conversations-widget__workspace">{c.workspace_title}</span>
+              <span className="conversations-widget__time">{formatTimestamp(c.last_message_at ?? c.created_at)}</span>
+            </span>
+            <span className="conversations-widget__preview">{c.last_message ?? 'No messages yet'}</span>
+          </span>
+        </button>
+      ))}
     </section>
   )
 }

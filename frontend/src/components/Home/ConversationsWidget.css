@@ -1,59 +1,39 @@
 .conversations-widget {
-  margin-top: 20px;
-  padding: 16px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-card);
-  background-color: var(--color-bg-card);
-  box-shadow: var(--shadow-card);
-}
-
-.conversations-widget__heading {
-  margin: 0 0 8px;
-  font-size: 0.95rem;
-  font-weight: 700;
-  color: var(--color-text-primary);
-}
-
-.conversations-widget__list {
   display: flex;
   flex-direction: column;
+  overflow: hidden;
+}
+
+.conversations-widget__header {
+  padding: 20px 20px 12px;
 }
 
 .conversations-widget__row {
   display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  width: 100%;
-  padding: 8px 6px;
+  gap: 14px;
+  padding: 14px 20px;
   border: none;
-  border-radius: var(--radius-control);
+  border-top: 1px solid var(--color-row-line);
   background: transparent;
+  color: var(--color-text-primary);
   text-align: left;
   cursor: pointer;
-  transition: background-color 0.1s;
 }
 
 .conversations-widget__row:hover {
-  background-color: var(--color-bg-card-hover);
+  background: var(--color-bg-card-hover);
 }
 
-.conversations-widget__avatar {
-  display: inline-flex;
+.conversations-widget__icon {
+  display: flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
-  min-width: 30px;
-  border-radius: 50%;
-  background: var(--color-brand-secondary);
-  color: var(--color-text-on-brand);
-  font-size: 0.78rem;
-  font-weight: 600;
-}
-
-.conversations-widget__avatar--bot {
-  background: var(--color-info-bg);
-  color: var(--color-brand-primary);
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: var(--color-brand-soft);
+  color: var(--color-brand-text);
 }
 
 .conversations-widget__body {
@@ -61,14 +41,14 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 3px;
 }
 
 .conversations-widget__top {
   display: flex;
   align-items: baseline;
-  justify-content: space-between;
-  gap: 10px;
+  gap: 8px;
+  min-width: 0;
 }
 
 .conversations-widget__title {
@@ -76,21 +56,25 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 0.875rem;
+  font-size: 14px;
   font-weight: 600;
-  color: var(--color-text-primary);
 }
 
 .conversations-widget__workspace {
-  margin-left: 7px;
-  font-size: 0.76rem;
-  font-weight: 500;
+  flex-shrink: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
   color: var(--color-text-muted);
 }
 
 .conversations-widget__time {
   flex-shrink: 0;
-  font-size: 0.74rem;
+  margin-left: auto;
+  font-size: 13px;
+  white-space: nowrap;
   color: var(--color-text-muted);
 }
 
@@ -98,6 +82,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 0.8rem;
+  font-size: 13px;
   color: var(--color-text-secondary);
 }

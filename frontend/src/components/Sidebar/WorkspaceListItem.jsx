@@ -1,44 +1,16 @@
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import useDismissableMenu from '../../hooks/useDismissableMenu'
-import StatusDot from '../shared/StatusDot'
 import ConfirmModal from '../shared/ConfirmModal'
-import { getWorkspaceUrgency } from '../../utils/workspaceStatus'
+import { getWorkspaceFlag } from '../../utils/workspaceStatus'
+import { flattenFolderTree } from '../../utils/folders'
 import './WorkspaceListItem.css'
-
-// Flat list -> depth-first order with a depth per folder, for the indented
-// "Move to folder" picker. A folder whose parent isn't in the list is shown
-// at the top level, and the visited set guards against a cyclic parent chain,
-// so no folder can ever be silently dropped or loop forever.
-function flattenFolderTree(folders) {
-  const ids = new Set(folders.map((f) => f.id))
-  const childrenOf = new Map()
-  for (const f of folders) {
-    const key = f.parent_id != null && ids.has(f.parent_id) ? f.parent_id : null
-    if (!childrenOf.has(key)) childrenOf.set(key, [])
-    childrenOf.get(key).push(f)
-  }
-  const out = []
-  const visited = new Set()
-  function walk(parentKey, depth) {
-    for (const f of childrenOf.get(parentKey) ?? []) {
-      if (visited.has(f.id)) continue
-      visited.add(f.id)
-      out.push({ folder: f, depth })
-      walk(f.id, depth + 1)
-    }
-  }
-  walk(null, 0)
-  for (const f of folders) {
-    if (!visited.has(f.id)) out.push({ folder: f, depth: 0 })
-  }
-  return out
-}
 
 function WorkspaceListItem({
   workspace,
   folders = [],
   folderColor = null,
+  active = false,
   onSelect,
   onTogglePin,
   onArchive,
@@ -48,7 +20,7 @@ function WorkspaceListItem({
   const [menuOpen, setMenuOpen, menuRef] = useDismissableMenu()
   const [folderPicker, setFolderPicker] = useState(false)
   const [confirmLeave, setConfirmLeave] = useState(false)
-  const urgency = getWorkspaceUrgency(workspace)
+  const flag = getWorkspaceFlag(workspace)
   const isSoleMember = workspace.numOfMembers === 1
 
   useEffect(() => {
@@ -66,16 +38,26 @@ function WorkspaceListItem({
   }
 
   return (
-    <div className="workspace-item">
+    <div className={`workspace-item${active ? ' workspace-item--active' : ''}${menuOpen ? ' workspace-item--menu-open' : ''}`}>
       <button
         type="button"
         className="workspace-item__select"
+        aria-current={active ? 'page' : undefined}
         onClick={() => onSelect?.(workspace.id)}
       >
-        <StatusDot urgency={urgency} />
+        {/* The square is the folder's colour. A workspace outside any folder
+            has none, but keeps the slot so every title lines up with the
+            navigation labels above. */}
+        <span
+          className="workspace-item__square"
+          style={folderColor ? { backgroundColor: folderColor } : undefined}
+          aria-hidden="true"
+        />
         <span className="workspace-item__title">{workspace.title}</span>
-        {folderColor && (
-          <span className="workspace-item__folder-dot" style={{ backgroundColor: folderColor }} />
+        {flag && (
+          <span className={`workspace-item__flag workspace-item__flag--${flag.tone}`} title={flag.title}>
+            {flag.label}
+          </span>
         )}
       </button>
 
@@ -92,22 +74,22 @@ function WorkspaceListItem({
         </button>
 
         {menuOpen && !folderPicker && (
-          <ul className="workspace-item__menu-list" role="menu">
+          <ul className="ui-menu workspace-item__menu-list" role="menu">
             <li role="none">
-              <button type="button" role="menuitem" className="workspace-item__menu-item"
+              <button type="button" role="menuitem" className="ui-menu__item"
                 onClick={() => handleMenuAction(onTogglePin)}>
                 {workspace.isPinned ? 'Unpin' : 'Pin'}
               </button>
             </li>
             <li role="none">
-              <button type="button" role="menuitem" className="workspace-item__menu-item"
+              <button type="button" role="menuitem" className="ui-menu__item"
                 onClick={() => handleMenuAction(onArchive)}>
                 Archive
               </button>
             </li>
             {folders.length > 0 && (
               <li role="none">
-                <button type="button" role="menuitem" className="workspace-item__menu-item workspace-item__menu-item--submenu"
+                <button type="button" role="menuitem" className="ui-menu__item"
                   onClick={() => setFolderPicker(true)}>
                   Move to folder
                   <ChevronIcon />
@@ -116,15 +98,15 @@ function WorkspaceListItem({
             )}
             {workspace.folderId && (
               <li role="none">
-                <button type="button" role="menuitem" className="workspace-item__menu-item"
+                <button type="button" role="menuitem" className="ui-menu__item"
                   onClick={() => handleMoveToFolder(null)}>
                   Remove from folder
                 </button>
               </li>
             )}
-            <li role="none" className="workspace-item__menu-divider" aria-hidden="true" />
+            <li role="none" className="ui-menu__sep" aria-hidden="true" />
             <li role="none">
-              <button type="button" role="menuitem" className="workspace-item__menu-item workspace-item__menu-item--danger"
+              <button type="button" role="menuitem" className="ui-menu__item ui-menu__item--danger"
                 onClick={() => { setMenuOpen(false); setConfirmLeave(true) }}>
                 {isSoleMember ? 'Delete' : 'Leave'}
               </button>
@@ -133,18 +115,18 @@ function WorkspaceListItem({
         )}
 
         {menuOpen && folderPicker && (
-          <ul className="workspace-item__menu-list workspace-item__menu-list--folders" role="menu">
+          <ul className="ui-menu workspace-item__menu-list workspace-item__menu-list--folders" role="menu">
             <li role="none">
-              <button type="button" className="workspace-item__menu-item workspace-item__menu-item--back"
+              <button type="button" className="ui-menu__item workspace-item__menu-back"
                 onClick={() => setFolderPicker(false)}>
                 <ChevronBackIcon /> Back
               </button>
             </li>
-            <li role="none" className="workspace-item__menu-divider" aria-hidden="true" />
+            <li role="none" className="ui-menu__sep" aria-hidden="true" />
             {flattenFolderTree(folders).map(({ folder, depth }) => (
               <li key={folder.id} role="none">
                 <button type="button" role="menuitem"
-                  className={`workspace-item__menu-item workspace-item__menu-item--folder${workspace.folderId === folder.id ? ' workspace-item__menu-item--active' : ''}`}
+                  className={`ui-menu__item workspace-item__menu-folder${workspace.folderId === folder.id ? ' ui-menu__item--active' : ''}`}
                   style={depth > 0 ? { paddingLeft: 10 + depth * 14 } : undefined}
                   onClick={() => handleMoveToFolder(folder.id)}>
                   <span className="workspace-item__folder-swatch" style={{ backgroundColor: folder.color }} />
@@ -184,10 +166,10 @@ function WorkspaceListItem({
 
 function DotsIcon() {
   return (
-    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
-      <circle cx="5" cy="12" r="1.6" fill="currentColor" />
-      <circle cx="12" cy="12" r="1.6" fill="currentColor" />
-      <circle cx="19" cy="12" r="1.6" fill="currentColor" />
+    <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+      <circle cx="5" cy="12" r="1.8" fill="currentColor" />
+      <circle cx="12" cy="12" r="1.8" fill="currentColor" />
+      <circle cx="19" cy="12" r="1.8" fill="currentColor" />
     </svg>
   )
 }

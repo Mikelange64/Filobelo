@@ -1,12 +1,11 @@
 import WorkspaceCard from './WorkspaceCard'
-import NewWorkspaceCard from './NewWorkspaceCard'
 import EmptyState from './EmptyState'
 import { getActiveWorkspaces, sortByUrgency } from '../../utils/workspaceStatus'
 import './WorkspaceGrid.css'
 
 const GRID_SIZE = 6
 
-function WorkspaceGrid({ workspaces, membersByWorkspaceId, onSelectWorkspace, onNewWorkspace, onComplete, mascotSlot }) {
+function WorkspaceGrid({ workspaces, folders = [], membersByWorkspaceId, onSelectWorkspace, onNewWorkspace, onComplete, mascotSlot }) {
   const active = sortByUrgency(getActiveWorkspaces(workspaces))
 
   if (active.length === 0) {
@@ -15,27 +14,29 @@ function WorkspaceGrid({ workspaces, membersByWorkspaceId, onSelectWorkspace, on
 
   const visible = active.slice(0, GRID_SIZE)
   const remaining = active.length - visible.length
-  const showGhostCard = visible.length < GRID_SIZE
 
   return (
-    <div className="workspace-grid-section">
+    <section className="workspace-grid-section" aria-labelledby="home-workspaces-title">
+      <div className="home-section__header">
+        <h2 id="home-workspaces-title" className="home-section__title">Workspaces</h2>
+      </div>
       <div className="workspace-grid">
         {visible.map((ws) => (
           <WorkspaceCard
             key={ws.id}
             workspace={ws}
+            folderColor={folders.find((f) => f.id === ws.folderId)?.color}
             members={ws.members ?? membersByWorkspaceId?.[ws.id]}
             onSelect={onSelectWorkspace}
             onComplete={onComplete}
           />
         ))}
-        {showGhostCard && <NewWorkspaceCard onClick={onNewWorkspace} />}
       </div>
 
       {remaining > 0 && (
-        <p className="workspace-grid__more">+{remaining} more active</p>
+        <p className="workspace-grid__more">+{remaining} more in the sidebar</p>
       )}
-    </div>
+    </section>
   )
 }
 

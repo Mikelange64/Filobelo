@@ -7,7 +7,7 @@ import HomeCanvas from '../../components/Home/HomeCanvas'
 
 function HomeView() {
   const { user } = useAuth()
-  const { activeWorkspaces, upcomingTasks, onSelectWorkspace, onNewWorkspace, onWorkspaceCompleted } = useOutletContext()
+  const { activeWorkspaces, folders, upcomingTasks, onSelectWorkspace, onNewWorkspace, onWorkspaceCompleted } = useOutletContext()
   const recentQuery = useQuery({
     queryKey: keys.recentConversations,
     queryFn: () => listRecentConversations(),
@@ -24,6 +24,7 @@ function HomeView() {
     <HomeCanvas
       userName={user?.username}
       workspaces={activeWorkspaces}
+      folders={folders}
       comingUpTasks={upcomingTasks}
       conversations={conversations}
       onSelectWorkspace={onSelectWorkspace}

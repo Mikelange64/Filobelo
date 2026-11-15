@@ -1,17 +1,10 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
-// Redesign in progress: Topbar removed, replaced by SidebarV2 (search, theme,
-// calendar, and notifications all moved into the sidebar). Old implementation
-// kept commented out below for a side-by-side comparison.
-// import Topbar from './components/Topbar/Topbar'
-// import Sidebar from './components/Sidebar/Sidebar'
 import SidebarV2 from './components/Sidebar/SidebarV2'
 import NewWorkspaceModal from './components/Home/NewWorkspaceModal'
 import ProfileModal from './components/Profile/ProfileModal'
 import CalendarModal from './components/Calendar/CalendarModal'
-import CompletedWorkspacesModal from './components/Home/CompletedWorkspacesModal'
-import ArchivedWorkspacesModal from './components/Home/ArchivedWorkspacesModal'
 import Toast from './components/shared/Toast'
 import { useAuth } from './context/AuthContext'
 import {
@@ -69,8 +62,6 @@ function normalizeWorkspace(ws) {
 }
 
 function AppShell() {
-  // logout is unused while the old Topbar stays commented out below (it now lives in
-  // ProfileModal's AccountPanel) - kept here so uncommenting Topbar to compare still works.
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
@@ -108,14 +99,11 @@ function AppShell() {
     writeCache(keys.completedCount, (old) =>
       typeof updater === 'function' ? updater(old ?? 0) : updater
     )
-  // const [searchValue, setSearchValue] = useState('') // Topbar-only; SidebarV2 filters locally
   const [showNewModal, setShowNewModal] = useState(false)
   const [showProfileModal, setShowProfileModal] = useState(false)
   const [showCalendar, setShowCalendar] = useState(false)
   const [calendarPrefillDate, setCalendarPrefillDate] = useState(null)
   const [toast, setToast] = useState(null)
-  const [showCompletedModal, setShowCompletedModal] = useState(false)
-  const [showArchivedModal, setShowArchivedModal] = useState(false)
   // Stable identity matters: Toast restarts its auto-dismiss timer whenever
   // onDismiss changes, so an inline arrow here would reset the countdown on
   // every re-render of this component and toasts would linger.
@@ -159,12 +147,6 @@ function AppShell() {
   const activeWorkspaces = workspaces.filter(
     (ws) => !ws.isArchived && !ws.isCompleted
   )
-
-  // const searchSuggestions = searchValue.trim() // Topbar-only; SidebarV2 filters locally
-  //   ? activeWorkspaces.filter((ws) =>
-  //       ws.title.toLowerCase().includes(searchValue.toLowerCase())
-  //     )
-  //   : []
 
   // Archived = hidden by this user for themselves. Completed workspaces have
   // their own list, so they're kept out of this one.
@@ -304,12 +286,14 @@ function AppShell() {
     await completeWorkspace(wsId)
     setWorkspaces((prev) => prev.filter((ws) => ws.id !== wsId))
     setCompletedTotal((c) => c + 1)
+    queryClient.invalidateQueries({ queryKey: keys.completedList })
   }
 
   async function handleWorkspaceReopened(wsId) {
     await reopenWorkspace(wsId)
     setWorkspaces((prev) => prev.map((ws) => ws.id === wsId ? { ...ws, isCompleted: false } : ws))
     setCompletedTotal((c) => Math.max(0, c - 1))
+    queryClient.invalidateQueries({ queryKey: keys.completedList })
   }
 
   function handleWorkspaceUpdated(wsId, patch) {
@@ -354,6 +338,7 @@ function AppShell() {
 
   const outletCtx = {
     workspaces,
+    folders,
     activeWorkspaces,
     upcomingTasks,
     onSelectWorkspace: handleSelectWorkspace,
@@ -370,78 +355,38 @@ function AppShell() {
     onToast: setToast,
   }
 
+  const workspaceMatch = location.pathname.match(/^\/workspaces\/(\d+)/)
+  const activeWorkspaceId = workspaceMatch ? Number(workspaceMatch[1]) : null
+  const activeNav = showCalendar ? 'calendar' : location.pathname === '/' ? 'home' : null
+
   return (
     <div className="app-shell">
-      {/* Old sidebar + topbar — kept for side-by-side comparison with SidebarV2 below.
-      <Sidebar
-        workspaces={activeWorkspaces}
-        completedCount={completedTotal}
-        folders={folders}
-        currentUser={currentUser}
-        onNewWorkspace={() => setShowNewModal(true)}
-        onOpenInbox={showComingSoon}
-        onOpenCompleted={() => setShowCompletedModal(true)}
-        onSelectWorkspace={handleSelectWorkspace}
-        onTogglePin={handleTogglePin}
-        onArchive={handleArchive}
-        onLeave={handleLeave}
-        onDelete={handleDelete}
-        onCreateFolder={handleCreateFolder}
-        onUpdateFolder={handleUpdateFolder}
-        onDeleteFolder={handleDeleteFolder}
-        onMoveToFolder={handleMoveToFolder}
-        onProfileClick={() => setShowProfileModal(true)}
-      />
-      */}
-
       <SidebarV2
         workspaces={activeWorkspaces}
+        archivedWorkspaces={archivedWorkspaces}
         completedCount={completedTotal}
         folders={folders}
         currentUser={currentUser}
+        activeWorkspaceId={activeWorkspaceId}
+        activeNav={activeNav}
         onNewWorkspace={() => setShowNewModal(true)}
-        onOpenInbox={showComingSoon}
-        onOpenCompleted={() => setShowCompletedModal(true)}
         onSelectWorkspace={handleSelectWorkspace}
         onTogglePin={handleTogglePin}
         onArchive={handleArchive}
+        onRestore={handleUnarchive}
         onLeave={handleLeave}
         onCreateFolder={handleCreateFolder}
         onUpdateFolder={handleUpdateFolder}
         onDeleteFolder={handleDeleteFolder}
         onMoveToFolder={handleMoveToFolder}
         onToast={setToast}
-        onProfileClick={() => setShowProfileModal(true)}
-        onCalendarToggle={() => setShowCalendar((v) => !v)}
-        onNotificationsClick={showComingSoon}
-        onLogoClick={() => navigate('/')}
-        archivedCount={archivedWorkspaces.length}
-        onOpenArchived={() => setShowArchivedModal(true)}
+        onOpenSettings={() => setShowProfileModal(true)}
+        onSignOut={logout}
+        onOpenCalendar={() => setShowCalendar((v) => !v)}
+        onGoHome={() => navigate('/')}
       />
 
       <div className="app-shell__main">
-        {/* Old topbar — logo/search/calendar/notifications/profile now live in SidebarV2.
-        <Topbar
-          logoSlot={
-            <button type="button" className="topbar__logo-btn" onClick={() => navigate('/')} aria-label="Go to home">
-              <span className="topbar__logo-text">Filobelo</span>
-            </button>
-          }
-          searchValue={searchValue}
-          onSearchChange={setSearchValue}
-          onSearchSubmit={() => {}}
-          searchSuggestions={searchSuggestions}
-          onSelectSuggestion={handleSelectWorkspace}
-          user={currentUser}
-          notificationCount={0}
-          onCalendarToggle={() => setShowCalendar((v) => !v)}
-          onNotificationsClick={showComingSoon}
-          onProfileClick={(action) => {
-            if (action === 'sign-out') logout()
-            else if (action === 'account') setShowProfileModal(true)
-          }}
-        />
-        */}
         <div className="app-shell__content">
           <Outlet context={outletCtx} />
         </div>
@@ -469,22 +414,6 @@ function AppShell() {
 
       {showProfileModal && (
         <ProfileModal onClose={() => setShowProfileModal(false)} onToast={setToast} />
-      )}
-
-      {showCompletedModal && (
-        <CompletedWorkspacesModal
-          onClose={() => setShowCompletedModal(false)}
-          onSelectWorkspace={(id) => { setShowCompletedModal(false); handleSelectWorkspace(id) }}
-        />
-      )}
-
-      {showArchivedModal && (
-        <ArchivedWorkspacesModal
-          workspaces={archivedWorkspaces}
-          onClose={() => setShowArchivedModal(false)}
-          onSelectWorkspace={(id) => { setShowArchivedModal(false); handleSelectWorkspace(id) }}
-          onRestore={handleUnarchive}
-        />
       )}
 
       {toast && <Toast message={toast} onDismiss={dismissToast} />}

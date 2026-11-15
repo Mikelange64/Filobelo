@@ -1,3 +1,38 @@
 .home-canvas {
-  padding: 24px 28px;
+  padding: 40px 48px 48px;
+}
+
+.home-canvas__inner {
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+  max-width: 1120px;
+  margin: 0 auto;
+}
+
+.home-canvas__columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  gap: 24px;
+  align-items: start;
+}
+
+/* Shared by the Home sections. */
+.home-section__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.home-section__title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+@media (max-width: 900px) {
+  .home-canvas {
+    padding: 28px 24px 32px;
+  }
 }

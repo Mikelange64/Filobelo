@@ -1,19 +1,17 @@
 .workspace-grid-section {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 16px;
 }
 
 .workspace-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   gap: 16px;
-  align-content: start;
 }
 
 .workspace-grid__more {
   margin: 0;
-  font-size: 0.82rem;
+  font-size: 13px;
   color: var(--color-text-muted);
-  text-align: center;
 }
