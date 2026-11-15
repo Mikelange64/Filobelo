@@ -4,6 +4,7 @@ import useDismissableMenu from '../../hooks/useDismissableMenu'
 import { DotsIcon, SearchIcon, SendIcon, SparkleIcon } from './icons'
 import MessageBubble from './MessageBubble'
 import filobeloReading from '../../assets/mascott/filobelo_reading.svg'
+import './ConversationThread.css'
 
 const DELETED_MEMBER = { name: 'Deleted user', avatarUrl: null }
 const FILOBELO_BOT = { name: 'Filobelo', avatarUrl: null }

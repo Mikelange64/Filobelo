@@ -1,0 +1,81 @@
+/* ─── Floating actions ──────────────────────────────────────────────────────── */
+
+.floating-actions {
+    position: fixed;
+    bottom: 24px;
+    right: 28px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 10px;
+    z-index: 100;
+    pointer-events: none;
+}
+
+.floating-actions__btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    width: 44px;
+    height: 44px;
+    border: none;
+    border-radius: 999px;
+    font-size: 0.84rem;
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    box-shadow: var(--shadow-card);
+    pointer-events: auto;
+    transition:
+        gap 0.22s ease,
+        width 0.22s ease,
+        padding 0.22s ease,
+        transform 0.1s ease,
+        box-shadow 0.1s ease;
+}
+
+.floating-actions__btn:hover {
+    gap: 8px;
+    width: auto;
+    padding: 0 16px;
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-overlay);
+}
+
+.floating-actions__label {
+    overflow: hidden;
+    max-width: 0;
+    opacity: 0;
+    white-space: nowrap;
+    transition:
+        max-width 0.22s ease,
+        opacity 0.15s ease;
+    pointer-events: none;
+}
+
+.floating-actions__btn:hover .floating-actions__label {
+    max-width: 160px;
+    opacity: 1;
+}
+
+.floating-actions__btn--filobelo {
+    background: var(--color-brand-primary);
+    color: var(--color-text-on-brand);
+}
+
+.floating-actions__btn--filobelo:hover {
+    background: var(--color-brand-primary-hover);
+}
+
+.floating-actions__btn--chat {
+    background: var(--color-bg-card);
+    color: var(--color-text-secondary);
+    border: 1px solid var(--color-border);
+}
+
+.floating-actions__btn--chat:hover {
+    background: var(--color-bg-card-hover);
+    color: var(--color-text-primary);
+}

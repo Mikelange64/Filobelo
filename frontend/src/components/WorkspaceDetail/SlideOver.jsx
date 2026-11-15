@@ -8,6 +8,7 @@ import useTaskResources from './useTaskResources'
 import FilesPanel from './FilesPanel'
 import LinksPanel from './LinksPanel'
 import NotesPanel from './NotesPanel'
+import './SlideOver.css'
 
 export default function SlideOver({ task, fullTask, slideOverLoading, workspace, memberById, members, isAdmin, currentUserId, workspaceId, width, onResize, onClose, onToggle, onDelete, onSave, onReassign, onComingSoon, onToast }) {
   const [editTitle, setEditTitle] = useState(task.title)

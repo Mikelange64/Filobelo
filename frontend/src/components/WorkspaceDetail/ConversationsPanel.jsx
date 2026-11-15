@@ -4,6 +4,7 @@ import useDismissableMenu from "../../hooks/useDismissableMenu";
 import { ChatIcon, ChevronIcon, DotsIcon, PlusIcon } from "./icons";
 import ConversationThread from "./ConversationThread";
 import filobeloReading from "../../assets/mascott/filobelo_reading.svg";
+import './ConversationsPanel.css'
 
 const RAIL_COLLAPSED_WIDTH = 56;
 

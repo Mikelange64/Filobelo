@@ -1,4 +1,5 @@
 import { SparkleIcon, ChatIcon } from './icons'
+import './FloatingActions.css'
 
 export default function FloatingActions({ onAskFilobelo, onOpenConversations, isPremium }) {
   return (

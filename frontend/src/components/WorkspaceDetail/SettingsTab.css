@@ -1,0 +1,206 @@
+/* ─── Settings tab ───────────────────────────────────────────────────────────── */
+
+.settings-tab {
+    max-width: 560px;
+    display: flex;
+    flex-direction: column;
+    gap: 32px;
+}
+
+.settings-section {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.settings-section--danger {
+    border: 1px solid color-mix(in srgb, var(--color-error) 45%, transparent);
+    border-radius: var(--radius-card);
+    padding: 20px;
+    gap: 0;
+}
+
+.settings-section__title {
+    margin: 0 0 4px;
+    font-size: 0.82rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+}
+
+.settings-section--danger .settings-section__title {
+    color: var(--color-error-text);
+    margin-bottom: 16px;
+}
+
+.settings-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.settings-field__label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+}
+
+.settings-field__input {
+    padding: 8px 11px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-control);
+    background: var(--color-bg-canvas);
+    color: var(--color-text-primary);
+    font-size: 0.9rem;
+    font-family: inherit;
+    outline: none;
+    transition:
+        border-color 0.15s,
+        box-shadow 0.15s;
+}
+
+.settings-field__input:focus {
+    border-color: var(--color-brand-primary);
+    box-shadow: var(--focus-ring);
+}
+
+.settings-field__textarea {
+    padding: 8px 11px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-control);
+    background: var(--color-bg-canvas);
+    color: var(--color-text-primary);
+    font-size: 0.9rem;
+    font-family: inherit;
+    resize: vertical;
+    outline: none;
+    transition:
+        border-color 0.15s,
+        box-shadow 0.15s;
+}
+
+.settings-field__textarea:focus {
+    border-color: var(--color-brand-primary);
+    box-shadow: var(--focus-ring);
+}
+
+.settings-field__value {
+    margin: 0;
+    font-size: 0.9rem;
+    color: var(--color-text-primary);
+}
+
+.settings-save-btn {
+    align-self: flex-start;
+    padding: 8px 20px;
+    border: none;
+    border-radius: var(--radius-control);
+    background: var(--color-brand-primary);
+    color: var(--color-text-on-brand);
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: opacity 0.15s;
+}
+
+.settings-save-btn:disabled {
+    opacity: 0.6;
+    cursor: default;
+}
+
+.settings-danger-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 14px 0;
+    border-bottom: 1px solid
+        color-mix(in srgb, var(--color-error) 25%, transparent);
+}
+
+.settings-danger-row:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+.settings-danger-row:first-of-type {
+    padding-top: 0;
+}
+
+.settings-danger-label {
+    margin: 0 0 3px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+}
+
+.settings-danger-desc {
+    margin: 0;
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+}
+
+.settings-danger-btn {
+    flex-shrink: 0;
+    margin-left: auto;
+    width: 90px;
+    padding: 6px 0;
+    border: 1px solid var(--color-error-text);
+    border-radius: var(--radius-control);
+    background: transparent;
+    color: var(--color-error-text);
+    font-size: 0.84rem;
+    font-weight: 500;
+    cursor: pointer;
+    text-align: center;
+    transition: background 0.15s;
+}
+
+.settings-danger-btn:hover {
+    background: var(--color-error-bg);
+}
+
+.settings-danger-btn--critical {
+    background: color-mix(in srgb, var(--color-error) 78%, black);
+    color: #fff;
+}
+
+.settings-danger-btn--critical:hover {
+    background: color-mix(in srgb, var(--color-error) 65%, black);
+    opacity: 1;
+}
+
+
+.settings-danger-confirm {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.settings-complete-btn {
+    padding: 8px 16px;
+    background: var(--color-brand-primary);
+    color: var(--color-text-on-brand);
+    border: none;
+    border-radius: var(--radius-control);
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+    transition: background-color 0.15s;
+}
+
+.settings-complete-btn:hover {
+    background: var(--color-brand-primary-hover);
+}
+
+.settings-complete-btn--reopen {
+    background: var(--color-neutral-bg);
+    color: var(--color-text-primary);
+    border: 1px solid var(--color-border-strong);
+}
+
+.settings-complete-btn--reopen:hover {
+    background: var(--color-bg-canvas-hover);
+}

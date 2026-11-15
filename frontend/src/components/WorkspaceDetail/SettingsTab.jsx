@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { patchWorkspace } from '../../api/client'
 import { formatDueDate, toDateInputValue, dateInputToISO } from '../../utils/date'
 import useDelayedFlag from '../../hooks/useDelayedFlag'
+import './SettingsTab.css'
 
 export default function SettingsTab({ workspace, isAdmin, workspaceId, onWorkspaceUpdate, onLeave, onArchive, onComplete, onReopen, onToast }) {
   const [title, setTitle] = useState(workspace.title)
