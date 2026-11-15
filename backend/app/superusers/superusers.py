@@ -4,11 +4,11 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 
-from app.sync_legacy.database import DbSession
-from app.sync_legacy.dependencies import require_superuser
+from app.database import DbSession
+from app.dependencies import require_superuser
 from app.models import User
 from app.schemas import PaginatedSuperUserResponse, SuperUserResponse
-from app.sync_legacy.queries import get_user_by_id
+from app.utils import get_user_by_id
 
 router = APIRouter(tags=["superusers"])
 
@@ -21,21 +21,19 @@ logger = logging.getLogger(__name__)
     response_model=PaginatedSuperUserResponse,
     dependencies=[Depends(require_superuser)],
 )
-def get_all_users(
+async def get_all_users(
     db: DbSession,
     skip: Annotated[int, Query(ge=0)] = 0,
     limit: Annotated[int, Query(ge=1, le=100)] = 100,
 ):
-    result_count = db.execute(select(func.count()).select_from(User)).scalar()
+    result = await db.execute(select(func.count()).select_from(User))
+    result_count = result.scalar()
     total = result_count or 0
 
-    users = (
-        db.execute(
-            select(User).order_by(User.joined_at.desc()).offset(skip).limit(limit)
-        )
-        .scalars()
-        .all()
+    result = await db.execute(
+        select(User).order_by(User.joined_at.desc()).offset(skip).limit(limit)
     )
+    users = result.scalars().all()
 
     has_more = skip + len(users) < total
 
@@ -54,8 +52,8 @@ def get_all_users(
     response_model=SuperUserResponse,
     dependencies=[Depends(require_superuser)],
 )
-def get_user(user_id: int, db: DbSession):
-    user = get_user_by_id(user_id, db)
+async def get_user(user_id: int, db: DbSession):
+    user = await get_user_by_id(user_id, db)
     return user
 
 
@@ -64,12 +62,12 @@ def get_user(user_id: int, db: DbSession):
     response_model=SuperUserResponse,
     dependencies=[Depends(require_superuser)],
 )
-def make_superuser(user_id: int, db: DbSession):
-    user = get_user_by_id(user_id, db)
+async def make_superuser(user_id: int, db: DbSession):
+    user = await get_user_by_id(user_id, db)
     user.is_superuser = True
-    db.commit()
+    await db.commit()
     logger.info("Superuser granted target_user_id=%s", user_id)
-    db.refresh(user)
+    await db.refresh(user)
     return user
 
 
@@ -78,7 +76,7 @@ def make_superuser(user_id: int, db: DbSession):
     response_model=SuperUserResponse,
     dependencies=[Depends(require_superuser)],
 )
-def remove_superuser(
+async def remove_superuser(
     user_id: int,
     db: DbSession,
     current_user: Annotated[User, Depends(require_superuser)],
@@ -87,9 +85,9 @@ def remove_superuser(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail="Cannot demote self"
         )
-    user = get_user_by_id(user_id, db)
+    user = await get_user_by_id(user_id, db)
     user.is_superuser = False
-    db.commit()
+    await db.commit()
     logger.info("Superuser revoked target_user_id=%s", user_id)
-    db.refresh(user)
+    await db.refresh(user)
     return user
