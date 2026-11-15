@@ -124,10 +124,17 @@ async def get_workspace_by_id(workspace_id: int, db: DbSession) -> Workspace:
     # members and tasks are both read by WorkspaceResponse (the lists
     # themselves, and the counts / progress / default_due_date properties on
     # the model), so they are always loaded here.
+    #
+    # populate_existing: if this session already holds the workspace (a route
+    # that loads it, changes something, commits and then asks for it again),
+    # overwrite what is held with what the database now says. Without it the
+    # already-loaded members/tasks lists would be returned unchanged, missing
+    # a member that was just added.
     result = await db.execute(
         select(Workspace)
         .options(selectinload(Workspace.members), selectinload(Workspace.tasks))
         .where(Workspace.id == workspace_id)
+        .execution_options(populate_existing=True)
     )
     workspace = result.scalars().first()
 

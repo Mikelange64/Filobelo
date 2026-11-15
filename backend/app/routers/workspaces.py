@@ -4,12 +4,12 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import selectinload
 
-from app.sync_legacy.auth import CurrentUser
+from app.auth import CurrentUser
 from app.config import settings
-from app.sync_legacy.database import DbSession
-from app.sync_legacy.dependencies import (
+from app.database import DbSession
+from app.dependencies import (
     get_target_membership,
     handle_membership_departure,
     require_admin,
@@ -26,7 +26,7 @@ from app.schemas import (
     WorkspaceResponse,
     WorkspaceUpdate,
 )
-from app.sync_legacy.queries import get_workspace_by_id
+from app.utils import get_workspace_by_id
 from app.utils.email_utils import send_join_invite_email, send_member_added_email
 
 router = APIRouter(tags=["workspaces"])
@@ -55,13 +55,26 @@ def _workspace_response(
     )
 
 
+async def _refresh_workspace(workspace: Workspace, db: DbSession) -> None:
+    """Reloads a workspace after a commit, ready for _workspace_response.
+
+    db.refresh(obj) on its own only re-reads the columns: a relationship
+    that was never loaded (always the case for a workspace created a moment
+    ago) stays unloaded, and an async session cannot load it later on first
+    access. WorkspaceResponse reads members and tasks, so they are refreshed
+    by name as well.
+    """
+    await db.refresh(workspace)
+    await db.refresh(workspace, attribute_names=["members", "tasks"])
+
+
 # ========================================================================================
 # WORKSPACE CRUD
 # ========================================================================================
 
 
 @router.get("", response_model=PaginatedWorkspaceResponse)
-def get_my_workspaces(
+async def get_my_workspaces(
     current_user: CurrentUser,
     db: DbSession,
     skip: int = 0,
@@ -73,33 +86,28 @@ def get_my_workspaces(
         .where(WorkspaceMember.user_id == current_user.id)
     )
 
-    total = db.execute(select(func.count()).select_from(base.subquery())).scalar() or 0
+    result = await db.execute(select(func.count()).select_from(base.subquery()))
+    total = result.scalar() or 0
 
     # offset/limit without a deterministic order lets Postgres hand back rows
     # in any order it likes, so pages could overlap or skip workspaces. id
     # breaks ties between identical timestamps.
-    workspaces = (
-        db.execute(
-            base.options(joinedload(Workspace.members), joinedload(Workspace.tasks))
-            .order_by(Workspace.date_created.desc(), Workspace.id.desc())
-            .offset(skip)
-            .limit(limit)
-        )
-        .scalars()
-        .unique()
-        .all()
+    result = await db.execute(
+        base.options(selectinload(Workspace.members), selectinload(Workspace.tasks))
+        .order_by(Workspace.date_created.desc(), Workspace.id.desc())
+        .offset(skip)
+        .limit(limit)
     )
+    workspaces = result.scalars().all()
 
     workspace_ids = [ws.id for ws in workspaces]
-    member_map = {
-        m.workspace_id: m
-        for m in db.execute(
-            select(WorkspaceMember).where(
-                WorkspaceMember.workspace_id.in_(workspace_ids),
-                WorkspaceMember.user_id == current_user.id,
-            )
-        ).scalars()
-    }
+    result = await db.execute(
+        select(WorkspaceMember).where(
+            WorkspaceMember.workspace_id.in_(workspace_ids),
+            WorkspaceMember.user_id == current_user.id,
+        )
+    )
+    member_map = {m.workspace_id: m for m in result.scalars()}
 
     return PaginatedWorkspaceResponse(
         workspaces=[
@@ -113,7 +121,7 @@ def get_my_workspaces(
 
 
 @router.post("", response_model=WorkspaceResponse, status_code=status.HTTP_201_CREATED)
-def create_workspace(
+async def create_workspace(
     current_user: CurrentUser, workspace: WorkspaceCreate, db: DbSession
 ):
     new_workspace = Workspace(
@@ -124,14 +132,14 @@ def create_workspace(
         due_date=workspace.due_date,
     )
     db.add(new_workspace)
-    db.flush()
+    await db.flush()
 
     new_member = WorkspaceMember(
         user_id=current_user.id, workspace_id=new_workspace.id, role="admin"
     )
     db.add(new_member)
-    db.commit()
-    db.refresh(new_workspace)
+    await db.commit()
+    await _refresh_workspace(new_workspace, db)
 
     logger.info(
         "Workspace created workspace_id=%s creator_user_id=%s",
@@ -142,7 +150,7 @@ def create_workspace(
 
 
 @router.get("/completed", response_model=PaginatedWorkspaceResponse)
-def get_completed_workspaces(
+async def get_completed_workspaces(
     current_user: CurrentUser,
     db: DbSession,
     skip: int = 0,
@@ -158,29 +166,24 @@ def get_completed_workspaces(
         .order_by(Workspace.completed_at.desc())
     )
 
-    total = db.execute(select(func.count()).select_from(base.subquery())).scalar() or 0
+    result = await db.execute(select(func.count()).select_from(base.subquery()))
+    total = result.scalar() or 0
 
-    workspaces = (
-        db.execute(
-            base.options(joinedload(Workspace.members), joinedload(Workspace.tasks))
-            .offset(skip)
-            .limit(limit)
-        )
-        .scalars()
-        .unique()
-        .all()
+    result = await db.execute(
+        base.options(selectinload(Workspace.members), selectinload(Workspace.tasks))
+        .offset(skip)
+        .limit(limit)
     )
+    workspaces = result.scalars().all()
 
     workspace_ids = [ws.id for ws in workspaces]
-    member_map = {
-        m.workspace_id: m
-        for m in db.execute(
-            select(WorkspaceMember).where(
-                WorkspaceMember.workspace_id.in_(workspace_ids),
-                WorkspaceMember.user_id == current_user.id,
-            )
-        ).scalars()
-    }
+    result = await db.execute(
+        select(WorkspaceMember).where(
+            WorkspaceMember.workspace_id.in_(workspace_ids),
+            WorkspaceMember.user_id == current_user.id,
+        )
+    )
+    member_map = {m.workspace_id: m for m in result.scalars()}
 
     return PaginatedWorkspaceResponse(
         workspaces=[
@@ -194,20 +197,17 @@ def get_completed_workspaces(
 
 
 @router.patch("/{workspace_id}/complete", response_model=WorkspaceResponse)
-def complete_workspace(
+async def complete_workspace(
     workspace_id: int,
     db: DbSession,
     member: Annotated[WorkspaceMember, Depends(require_admin)],
 ):
-    workspace = (
-        db.execute(
-            select(Workspace)
-            .options(joinedload(Workspace.members), joinedload(Workspace.tasks))
-            .where(Workspace.id == workspace_id)
-        )
-        .scalars()
-        .first()
+    result = await db.execute(
+        select(Workspace)
+        .options(selectinload(Workspace.members), selectinload(Workspace.tasks))
+        .where(Workspace.id == workspace_id)
     )
+    workspace = result.scalars().first()
 
     if not workspace:
         raise HTTPException(
@@ -216,28 +216,25 @@ def complete_workspace(
 
     workspace.is_completed = True
     workspace.completed_at = datetime.now(UTC)
-    db.commit()
+    await db.commit()
     logger.info("Workspace marked complete workspace_id=%s", workspace_id)
-    db.refresh(workspace)
+    await _refresh_workspace(workspace, db)
 
     return _workspace_response(workspace, member)
 
 
 @router.patch("/{workspace_id}/reopen", response_model=WorkspaceResponse)
-def reopen_workspace(
+async def reopen_workspace(
     workspace_id: int,
     db: DbSession,
     member: Annotated[WorkspaceMember, Depends(require_admin)],
 ):
-    workspace = (
-        db.execute(
-            select(Workspace)
-            .options(joinedload(Workspace.members), joinedload(Workspace.tasks))
-            .where(Workspace.id == workspace_id)
-        )
-        .scalars()
-        .first()
+    result = await db.execute(
+        select(Workspace)
+        .options(selectinload(Workspace.members), selectinload(Workspace.tasks))
+        .where(Workspace.id == workspace_id)
     )
+    workspace = result.scalars().first()
 
     if not workspace:
         raise HTTPException(
@@ -246,40 +243,34 @@ def reopen_workspace(
 
     workspace.is_completed = False
     workspace.completed_at = None
-    db.commit()
+    await db.commit()
     logger.info("Workspace reopened workspace_id=%s", workspace_id)
-    db.refresh(workspace)
+    await _refresh_workspace(workspace, db)
 
     return _workspace_response(workspace, member)
 
 
 @router.get("/{workspace_id}", response_model=WorkspaceResponse)
-def get_workspace(workspace_id: int, db: DbSession, current_user: CurrentUser):
-    workspace = (
-        db.execute(
-            select(Workspace)
-            .options(joinedload(Workspace.members), joinedload(Workspace.tasks))
-            .where(Workspace.id == workspace_id)
-        )
-        .scalars()
-        .first()
+async def get_workspace(workspace_id: int, db: DbSession, current_user: CurrentUser):
+    result = await db.execute(
+        select(Workspace)
+        .options(selectinload(Workspace.members), selectinload(Workspace.tasks))
+        .where(Workspace.id == workspace_id)
     )
+    workspace = result.scalars().first()
 
     if not workspace:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Workspace not found"
         )
 
-    member = (
-        db.execute(
-            select(WorkspaceMember).where(
-                WorkspaceMember.workspace_id == workspace_id,
-                WorkspaceMember.user_id == current_user.id,
-            )
+    result = await db.execute(
+        select(WorkspaceMember).where(
+            WorkspaceMember.workspace_id == workspace_id,
+            WorkspaceMember.user_id == current_user.id,
         )
-        .scalars()
-        .first()
     )
+    member = result.scalars().first()
 
     # Checked here rather than via Depends(require_membership) so a missing
     # workspace still 404s instead of 403ing before the lookup runs.
@@ -297,44 +288,44 @@ def get_workspace(workspace_id: int, db: DbSession, current_user: CurrentUser):
 
 
 @router.patch("/{workspace_id}", response_model=WorkspaceResponse)
-def update_workspace_partial(
+async def update_workspace_partial(
     workspace_id: int,
     workspace_data: WorkspaceUpdate,
     db: DbSession,
     member: Annotated[WorkspaceMember, Depends(require_admin)],
 ):
-    workspace = get_workspace_by_id(workspace_id, db)
+    workspace = await get_workspace_by_id(workspace_id, db)
 
     update = workspace_data.model_dump(exclude_unset=True)
     for field, value in update.items():
         setattr(workspace, field, value)
 
-    db.commit()
-    db.refresh(workspace)
+    await db.commit()
+    await _refresh_workspace(workspace, db)
     return _workspace_response(workspace, member)
 
 
 @router.put("/{workspace_id}/", response_model=WorkspaceResponse)
-def update_workspace_full(
+async def update_workspace_full(
     workspace_id: int,
     workspace_data: WorkspaceCreate,
     db: DbSession,
     member: Annotated[WorkspaceMember, Depends(require_admin)],
 ):
-    workspace = get_workspace_by_id(workspace_id, db)
+    workspace = await get_workspace_by_id(workspace_id, db)
 
     workspace.title = workspace_data.title
     workspace.description = workspace_data.description
     workspace.max_number = workspace_data.max_number
     workspace.due_date = workspace_data.due_date
 
-    db.commit()
-    db.refresh(workspace)
+    await db.commit()
+    await _refresh_workspace(workspace, db)
     return _workspace_response(workspace, member)
 
 
 @router.patch("/{workspace_id}/me", response_model=WorkspaceResponse)
-def update_my_workspace_preferences(
+async def update_my_workspace_preferences(
     workspace_id: int,
     data: WorkspaceMemberPrefsUpdate,
     db: DbSession,
@@ -343,11 +334,11 @@ def update_my_workspace_preferences(
 ):
     """Pin/archive/file this workspace for the caller only - any member can
     do this for themselves, it never touches anyone else's view."""
-    workspace = get_workspace_by_id(workspace_id, db)
+    workspace = await get_workspace_by_id(workspace_id, db)
 
     update = data.model_dump(exclude_unset=True)
     if update.get("folder_id") is not None:
-        folder = db.get(Folder, update["folder_id"])
+        folder = await db.get(Folder, update["folder_id"])
         if not folder or folder.owner_id != current_user.id:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="Folder not found"
@@ -356,8 +347,8 @@ def update_my_workspace_preferences(
     for field, value in update.items():
         setattr(member, field, value)
 
-    db.commit()
-    db.refresh(member)
+    await db.commit()
+    await db.refresh(member)
     return _workspace_response(workspace, member)
 
 
@@ -371,12 +362,13 @@ def update_my_workspace_preferences(
     response_model=list[WorkspaceMemberPublic],
     dependencies=[Depends(require_membership)],
 )
-def get_members(workspace_id: int, db: DbSession):
-    rows = db.execute(
+async def get_members(workspace_id: int, db: DbSession):
+    result = await db.execute(
         select(WorkspaceMember, User)
         .join(User, WorkspaceMember.user_id == User.id)
         .where(WorkspaceMember.workspace_id == workspace_id)
-    ).all()
+    )
+    rows = result.all()
     return [
         WorkspaceMemberPublic(
             id=user.id,
@@ -389,30 +381,31 @@ def get_members(workspace_id: int, db: DbSession):
 
 
 @router.patch("/{workspace_id}/members/{user_id}", response_model=WorkspaceResponse)
-def add_user(
+async def add_user(
     workspace_id: int,
     user_id: int,
     current_user: CurrentUser,
     db: DbSession,
     member: Annotated[WorkspaceMember, Depends(require_admin)],
 ):
-    if get_target_membership(workspace_id, user_id, db):
+    if await get_target_membership(workspace_id, user_id, db):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail="User already in the workspace"
         )
 
-    target_user = db.execute(
+    result = await db.execute(
         select(User).where(User.id == user_id)
-    ).scalar_one_or_none()
+    )
+    target_user = result.scalar_one_or_none()
     if not target_user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
         )
 
-    workspace = get_workspace_by_id(workspace_id, db)
+    workspace = await get_workspace_by_id(workspace_id, db)
 
     db.add(WorkspaceMember(user_id=user_id, workspace_id=workspace_id))
-    db.commit()
+    await db.commit()
 
     logger.info(
         "Workspace member added workspace_id=%s user_id=%s", workspace_id, user_id
@@ -434,22 +427,23 @@ def add_user(
             workspace_id, user_id,
         )
 
-    return _workspace_response(get_workspace_by_id(workspace_id, db), member)
+    return _workspace_response(await get_workspace_by_id(workspace_id, db), member)
 
 
 @router.post(
     "/{workspace_id}/invite/external",
     dependencies=[Depends(require_admin)],
 )
-def invite_external(
+async def invite_external(
     workspace_id: int,
     body: InviteExternalRequest,
     current_user: CurrentUser,
     db: DbSession,
 ):
-    existing_user = db.execute(
+    result = await db.execute(
         select(User).where(func.lower(User.email) == body.email.lower())
-    ).scalar_one_or_none()
+    )
+    existing_user = result.scalar_one_or_none()
 
     if existing_user:
         raise HTTPException(
@@ -457,7 +451,7 @@ def invite_external(
             detail="This email belongs to an existing Filobelo user. Search for them by username or email to add them.",
         )
 
-    workspace = get_workspace_by_id(workspace_id, db)
+    workspace = await get_workspace_by_id(workspace_id, db)
 
     try:
         send_join_invite_email(
@@ -483,25 +477,25 @@ def invite_external(
 @router.patch(
     "/{workspace_id}/members/{user_id}/admin", response_model=WorkspaceResponse
 )
-def make_admin(
+async def make_admin(
     workspace_id: int,
     user_id: int,
     db: DbSession,
     caller_member: Annotated[WorkspaceMember, Depends(require_admin)],
 ):
-    target_member = get_target_membership(workspace_id, user_id, db)
+    target_member = await get_target_membership(workspace_id, user_id, db)
     if not target_member:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="User is not a member of this workspace",
         )
 
-    workspace = get_workspace_by_id(workspace_id, db)
+    workspace = await get_workspace_by_id(workspace_id, db)
     if target_member.role == "admin":
         return _workspace_response(workspace, caller_member)
 
     target_member.role = "admin"
-    db.commit()
+    await db.commit()
     logger.info(
         "Workspace member promoted to admin workspace_id=%s user_id=%s",
         workspace_id, user_id,
@@ -510,35 +504,35 @@ def make_admin(
 
 
 @router.delete("/{workspace_id}/members/me", status_code=status.HTTP_204_NO_CONTENT)
-def leave_workspace(
+async def leave_workspace(
     workspace_id: int,
     db: DbSession,
     membership: Annotated[WorkspaceMember, Depends(require_membership)],
 ):
     user_id = membership.user_id  # read before commit: the row is gone after
-    handle_membership_departure(membership, db)
-    db.commit()
+    await handle_membership_departure(membership, db)
+    await db.commit()
     logger.info("Workspace member left workspace_id=%s user_id=%s", workspace_id, user_id)
 
 
 @router.delete("/{workspace_id}/members/{user_id}", response_model=WorkspaceResponse)
-def remove_user(
+async def remove_user(
     workspace_id: int,
     user_id: int,
     db: DbSession,
     caller_member: Annotated[WorkspaceMember, Depends(require_admin)],
 ):
-    target_member = get_target_membership(workspace_id, user_id, db)
+    target_member = await get_target_membership(workspace_id, user_id, db)
     if not target_member:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="User is not a member of this workspace",
         )
 
-    handle_membership_departure(target_member, db)
-    db.commit()
+    await handle_membership_departure(target_member, db)
+    await db.commit()
     logger.info(
         "Workspace member removed workspace_id=%s user_id=%s", workspace_id, user_id
     )
 
-    return _workspace_response(get_workspace_by_id(workspace_id, db), caller_member)
+    return _workspace_response(await get_workspace_by_id(workspace_id, db), caller_member)
