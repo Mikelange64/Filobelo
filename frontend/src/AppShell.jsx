@@ -296,6 +296,17 @@ function AppShell() {
     queryClient.invalidateQueries({ queryKey: keys.completedList })
   }
 
+  // Reopened from the sidebar's Done list. The workspace may not be in the
+  // active list at all yet, so refetch it rather than patching it in place.
+  async function handleReopenFromSidebar(wsId) {
+    try {
+      await handleWorkspaceReopened(wsId)
+      queryClient.invalidateQueries({ queryKey: keys.workspaces })
+    } catch (err) {
+      setToast(err?.detail ?? err?.message ?? 'Could not reopen workspace')
+    }
+  }
+
   function handleWorkspaceUpdated(wsId, patch) {
     setWorkspaces((prev) =>
       prev.map((ws) => (ws.id === wsId ? { ...ws, ...patch } : ws))
@@ -374,6 +385,7 @@ function AppShell() {
         onTogglePin={handleTogglePin}
         onArchive={handleArchive}
         onRestore={handleUnarchive}
+        onReopen={handleReopenFromSidebar}
         onLeave={handleLeave}
         onCreateFolder={handleCreateFolder}
         onUpdateFolder={handleUpdateFolder}

@@ -9,7 +9,8 @@
 }
 
 .workspace-item:hover,
-.workspace-item--menu-open {
+.workspace-item--menu-open,
+.workspace-item:has(> .workspace-item__menu [aria-expanded='true']) {
   background: var(--color-bg-sidebar-hover);
 }
 
@@ -66,6 +67,15 @@
 .workspace-item__flag--warning { color: var(--color-warning); }
 .workspace-item__flag--success { color: var(--color-success); }
 
+/* Done / archived rows read as finished: secondary text. */
+.workspace-item--muted .workspace-item__select {
+  color: var(--color-text-secondary);
+}
+
+.workspace-item--muted .workspace-item__square {
+  opacity: 0.55;
+}
+
 /* The ⋯ button takes the flag's place while the row is hovered or its menu
    is open, so the row never grows. */
 .workspace-item__menu {
@@ -97,25 +107,26 @@
 
 .workspace-item:hover .workspace-item__menu-trigger,
 .workspace-item:focus-within .workspace-item__menu-trigger,
-.workspace-item--menu-open .workspace-item__menu-trigger {
+.workspace-item--menu-open .workspace-item__menu-trigger,
+.workspace-item:has(> .workspace-item__menu [aria-expanded='true']) .workspace-item__menu-trigger {
   display: inline-flex;
 }
 
 .workspace-item:hover .workspace-item__flag,
 .workspace-item:focus-within .workspace-item__flag,
-.workspace-item--menu-open .workspace-item__flag {
+.workspace-item--menu-open .workspace-item__flag,
+.workspace-item:has(> .workspace-item__menu [aria-expanded='true']) .workspace-item__flag {
   visibility: hidden;
 }
 
 .workspace-item:hover .workspace-item__select,
 .workspace-item:focus-within .workspace-item__select,
-.workspace-item--menu-open .workspace-item__select {
+.workspace-item--menu-open .workspace-item__select,
+.workspace-item:has(> .workspace-item__menu [aria-expanded='true']) .workspace-item__select {
   padding-right: 36px;
 }
 
 .workspace-item__menu-list {
-  top: calc(100% + 6px);
-  right: -6px; /* flush with the row's right edge */
   width: 200px;
 }
 

@@ -4,10 +4,17 @@
   gap: 16px;
 }
 
+/* At most three cards per row, always stretched to fill the width: the
+   column minimum is either 300px or a third of the row, whichever is larger.
+   Narrower panels drop to two, then one. */
 .workspace-grid {
+  --grid-gap: 20px;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(
+    auto-fill,
+    minmax(max(300px, calc((100% - 2 * var(--grid-gap)) / 3)), 1fr)
+  );
+  gap: var(--grid-gap);
 }
 
 .workspace-grid__more {

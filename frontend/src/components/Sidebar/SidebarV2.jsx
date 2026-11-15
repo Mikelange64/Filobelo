@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { useInfiniteQuery } from '@tanstack/react-query'
 import WorkspaceListItem from './WorkspaceListItem'
 import ConfirmModal from '../shared/ConfirmModal'
+import Popover from '../shared/Popover'
 import useDismissableMenu from '../../hooks/useDismissableMenu'
 import { getCompletedWorkspaces } from '../../api/client'
 import { keys } from '../../api/queryClient'
@@ -17,6 +18,8 @@ import './SidebarV2.css'
 
 const FOLDER_COLORS = SWATCH_COLORS
 const COMPLETED_PAGE = 20
+// Horizontal trackpad travel (px) that counts as a swipe between tabs.
+const SWIPE_DISTANCE = 50
 
 function byMostRecent(a, b) {
   return new Date(b.dateCreated).getTime() - new Date(a.dateCreated).getTime()
@@ -188,6 +191,8 @@ function FolderItem({ folder, foldersByParent, workspaces, folders, activeWorksp
   const [creatingChild, setCreatingChild] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const menuRef = useRef(null)
+  const triggerRef = useRef(null)
+  const floatingRef = useRef(null)
 
   const childFolders = foldersByParent.get(folder.id) ?? []
   const ownWorkspaces = workspaces.filter((ws) => ws.folderId === folder.id).sort(byMostRecent)
@@ -196,7 +201,7 @@ function FolderItem({ folder, foldersByParent, workspaces, folders, activeWorksp
   useEffect(() => {
     if (!menuOpen) return
     function handleClickOutside(e) {
-      if (menuRef.current && !menuRef.current.contains(e.target)) closeMenu()
+      if (!menuRef.current?.contains(e.target) && !floatingRef.current?.contains(e.target)) closeMenu()
     }
     function handleEscape(e) {
       if (e.key === 'Escape') closeMenu()
@@ -280,6 +285,7 @@ function FolderItem({ folder, foldersByParent, workspaces, folders, activeWorksp
 
         <div className="sidebar-v2__folder-menu-wrap" ref={menuRef}>
           <button
+            ref={triggerRef}
             type="button"
             className="sidebar-v2__folder-menu-btn"
             onClick={() => (menuOpen ? closeMenu() : setMenuOpen(true))}
@@ -290,7 +296,7 @@ function FolderItem({ folder, foldersByParent, workspaces, folders, activeWorksp
             <DotsIcon />
           </button>
           {menuOpen && menuView === 'main' && (
-            <ul className="ui-menu sidebar-v2__folder-menu" role="menu">
+            <Popover as="ul" anchorRef={triggerRef} floatingRef={floatingRef} className="ui-menu sidebar-v2__folder-menu" role="menu">
               <li role="none">
                 <button type="button" role="menuitem" className="ui-menu__item" onClick={startSubfolder}>
                   New subfolder
@@ -314,15 +320,15 @@ function FolderItem({ folder, foldersByParent, workspaces, folders, activeWorksp
                   Delete folder
                 </button>
               </li>
-            </ul>
+            </Popover>
           )}
           {menuOpen && menuView === 'color' && (
-            <div className="ui-menu sidebar-v2__folder-menu sidebar-v2__folder-menu--color" role="group" aria-label="Folder colour">
+            <Popover anchorRef={triggerRef} floatingRef={floatingRef} className="ui-menu sidebar-v2__folder-menu sidebar-v2__folder-menu--color" role="group" aria-label="Folder colour">
               <ColorPicker inline selected={folder.color} onChange={changeColor} />
-            </div>
+            </Popover>
           )}
           {menuOpen && menuView === 'move' && (
-            <ul className="ui-menu sidebar-v2__folder-menu sidebar-v2__folder-menu--move" role="menu" aria-label="Move folder to">
+            <Popover as="ul" anchorRef={triggerRef} floatingRef={floatingRef} className="ui-menu sidebar-v2__folder-menu sidebar-v2__folder-menu--move" role="menu" aria-label="Move folder to">
               <li role="none">
                 <button
                   type="button"
@@ -348,7 +354,7 @@ function FolderItem({ folder, foldersByParent, workspaces, folders, activeWorksp
                   </button>
                 </li>
               ))}
-            </ul>
+            </Popover>
           )}
         </div>
       </div>
@@ -503,9 +509,64 @@ function WorkspaceSearchOverlay({ workspaces, folders, onSelect, onClose }) {
   )
 }
 
+// A finished (completed or archived) workspace. Same row shape as an active
+// one - folder square, title, marker that turns into ⋯ on hover - but in
+// secondary text, with its own short menu.
+function FinishedRow({ workspace, folderColor, active, marker, menuItems, onSelect }) {
+  const [open, setOpen, wrapRef, floatingRef] = useDismissableMenu()
+  const triggerRef = useRef(null)
+  return (
+    <div className={`workspace-item workspace-item--muted${active ? ' workspace-item--active' : ''}`}>
+      <button
+        type="button"
+        className="workspace-item__select"
+        aria-current={active ? 'page' : undefined}
+        onClick={() => onSelect?.(workspace.id)}
+      >
+        {folderColor && (
+          <span className="workspace-item__square" style={{ backgroundColor: folderColor }} aria-hidden="true" />
+        )}
+        <span className="workspace-item__title">{workspace.title}</span>
+        {marker}
+      </button>
+      <div className="workspace-item__menu" ref={wrapRef}>
+        <button
+          ref={triggerRef}
+          type="button"
+          className="workspace-item__menu-trigger"
+          aria-label={`More actions for ${workspace.title}`}
+          aria-haspopup="menu"
+          aria-expanded={open}
+          onClick={() => setOpen((v) => !v)}
+        >
+          <DotsIcon />
+        </button>
+        {open && (
+          <Popover as="ul" anchorRef={triggerRef} floatingRef={floatingRef} className="ui-menu workspace-item__menu-list" role="menu">
+            {menuItems.map((item) => (
+              <li key={item.label} role="none">
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="ui-menu__item"
+                  disabled={item.disabled}
+                  onClick={() => { setOpen(false); item.onSelect() }}
+                >
+                  <span>{item.label}</span>
+                  {item.hint && <span className="ui-menu__hint">{item.hint}</span>}
+                </button>
+              </li>
+            ))}
+          </Popover>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // Completed workspaces are not part of the main workspace list (the server
 // pages them separately), so the Done view fetches its own pages on demand.
-function CompletedList({ onSelectWorkspace, activeWorkspaceId }) {
+function CompletedList({ folders, activeWorkspaceId, onSelectWorkspace, onReopen }) {
   const query = useInfiniteQuery({
     queryKey: keys.completedList,
     queryFn: ({ pageParam }) => getCompletedWorkspaces(pageParam, COMPLETED_PAGE),
@@ -534,30 +595,43 @@ function CompletedList({ onSelectWorkspace, activeWorkspaceId }) {
 
   return (
     <>
-      {items.map((ws) => (
-        <button
-          key={ws.id}
-          type="button"
-          className={`sidebar-v2__done-row${ws.id === activeWorkspaceId ? ' sidebar-v2__done-row--active' : ''}`}
-          onClick={() => onSelectWorkspace?.(ws.id)}
-        >
-          <span className="sidebar-v2__done-title">{ws.title}</span>
-          <span className="sidebar-v2__done-check" role="img" aria-label="Completed">
-            <Icon d={ICON.check} size={14} strokeWidth={2.4} />
-          </span>
-        </button>
-      ))}
-      {query.hasNextPage && (
-        <button
-          type="button"
-          className="sidebar-v2__more"
-          onClick={() => query.fetchNextPage()}
-          disabled={query.isFetchingNextPage}
-        >
-          {query.isFetchingNextPage ? 'Loading…' : 'Show more'}
-        </button>
-      )}
-      <p className="sidebar-v2__hint">Reopen a workspace from its ⋯ menu to move it back to Active.</p>
+      <div className="sidebar-v2__group">
+        <h2 className="ui-caps sidebar-v2__section-label">Completed</h2>
+        {items.map((ws) => {
+          const isAdmin = ws.current_user_role === 'admin'
+          return (
+            <FinishedRow
+              key={ws.id}
+              workspace={ws}
+              folderColor={folders.find((f) => f.id === ws.folder_id)?.color}
+              active={ws.id === activeWorkspaceId}
+              onSelect={onSelectWorkspace}
+              marker={(
+                <span className="workspace-item__flag workspace-item__flag--success" role="img" aria-label="Completed">
+                  <Icon d={ICON.check} size={14} strokeWidth={2.4} />
+                </span>
+              )}
+              menuItems={[
+                { label: 'Open', onSelect: () => onSelectWorkspace?.(ws.id) },
+                isAdmin
+                  ? { label: 'Reopen', onSelect: () => onReopen?.(ws.id) }
+                  : { label: 'Reopen', hint: 'Admins only', disabled: true, onSelect: () => {} },
+              ]}
+            />
+          )
+        })}
+        {query.hasNextPage && (
+          <button
+            type="button"
+            className="sidebar-v2__more"
+            onClick={() => query.fetchNextPage()}
+            disabled={query.isFetchingNextPage}
+          >
+            {query.isFetchingNextPage ? 'Loading…' : 'Show more'}
+          </button>
+        )}
+      </div>
+      <p className="sidebar-v2__footnote">Reopen a workspace from its ⋯ menu to move it back to Active.</p>
     </>
   )
 }
@@ -574,27 +648,28 @@ function ArchivedList({ workspaces, folders, activeWorkspaceId, onSelectWorkspac
       </div>
     )
   }
-  return [...workspaces].sort(byMostRecent).map((ws) => {
-    const folderColor = folders.find((f) => f.id === ws.folderId)?.color
-    return (
-      <div
-        key={ws.id}
-        className={`sidebar-v2__archived-row${ws.id === activeWorkspaceId ? ' sidebar-v2__archived-row--active' : ''}`}
-      >
-        <button type="button" className="sidebar-v2__archived-open" onClick={() => onSelectWorkspace?.(ws.id)}>
-          <span
-            className="workspace-item__square"
-            style={folderColor ? { backgroundColor: folderColor, opacity: 0.55 } : undefined}
-            aria-hidden="true"
+  return (
+    <>
+      <div className="sidebar-v2__group">
+        <h2 className="ui-caps sidebar-v2__section-label">Archived</h2>
+        {[...workspaces].sort(byMostRecent).map((ws) => (
+          <FinishedRow
+            key={ws.id}
+            workspace={ws}
+            folderColor={folders.find((f) => f.id === ws.folderId)?.color}
+            active={ws.id === activeWorkspaceId}
+            onSelect={onSelectWorkspace}
+            marker={null}
+            menuItems={[
+              { label: 'Open', onSelect: () => onSelectWorkspace?.(ws.id) },
+              { label: 'Restore', onSelect: () => onRestore?.(ws.id) },
+            ]}
           />
-          <span className="sidebar-v2__done-title">{ws.title}</span>
-        </button>
-        <button type="button" className="sidebar-v2__restore" onClick={() => onRestore?.(ws.id)}>
-          Restore
-        </button>
+        ))}
       </div>
-    )
-  })
+      <p className="sidebar-v2__footnote">Archiving only hides a workspace for you. Restore it from its ⋯ menu.</p>
+    </>
+  )
 }
 
 function AccountMenu({ currentUser, onOpenSettings, onSignOut }) {
@@ -664,6 +739,7 @@ function SidebarV2({
   onTogglePin,
   onArchive,
   onRestore,
+  onReopen,
   onLeave,
   onCreateFolder,
   onUpdateFolder,
@@ -680,6 +756,39 @@ function SidebarV2({
   // Which list the middle of the sidebar shows. Not persisted: Active is the
   // default every time the app opens.
   const [mode, setMode] = useState('active')
+  const navRef = useRef(null)
+
+  // Two-finger horizontal swipe over the sidebar steps between Active, Done
+  // and Archived. One gesture moves one tab: after a switch, further events
+  // (including trackpad momentum) are ignored until the wheel goes quiet.
+  useEffect(() => {
+    const el = navRef.current
+    if (!el) return
+    let travel = 0
+    let locked = false
+    let idleTimer
+    function onWheel(e) {
+      if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return
+      // Horizontal: ours. Also stops the browser using it for back/forward.
+      e.preventDefault()
+      clearTimeout(idleTimer)
+      idleTimer = setTimeout(() => { travel = 0; locked = false }, 200)
+      if (locked) return
+      travel += e.deltaMode === 1 ? e.deltaX * 16 : e.deltaX
+      if (Math.abs(travel) < SWIPE_DISTANCE) return
+      locked = true
+      const step = travel > 0 ? 1 : -1
+      setMode((current) => {
+        const i = MODES.findIndex((m) => m.id === current)
+        return MODES[Math.min(MODES.length - 1, Math.max(0, i + step))].id
+      })
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => {
+      el.removeEventListener('wheel', onWheel)
+      clearTimeout(idleTimer)
+    }
+  }, [])
 
   const pinned = workspaces.filter((ws) => ws.isPinned).sort(byMostRecent)
   const rest = workspaces.filter((ws) => !ws.isPinned).sort(byMostRecent)
@@ -712,7 +821,7 @@ function SidebarV2({
 
   return (
     <>
-      <nav className="sidebar-v2" aria-label="Main">
+      <nav className="sidebar-v2" aria-label="Main" ref={navRef}>
         <div className="sidebar-v2__header">
           <button type="button" className="sidebar-v2__logo-btn" onClick={onGoHome} aria-label="Go to home">
             <span className="sidebar-v2__logo-text">Filobelo</span>
@@ -767,7 +876,7 @@ function SidebarV2({
 
         <div className="sidebar-v2__list">
           {mode === 'active' && (
-            <>
+            <div className="sidebar-v2__mode" key="active">
               {pinned.length > 0 && (
                 <div className="sidebar-v2__group">
                   <h2 className="ui-caps sidebar-v2__section-label">Pinned</h2>
@@ -789,7 +898,12 @@ function SidebarV2({
                   <button
                     type="button"
                     className="ui-icon-btn ui-icon-btn--sm sidebar-v2__section-add"
-                    onClick={() => setCreatingFolder(true)}
+                    // mousedown would otherwise reach the create row's
+                    // outside-click handler first: it closes, then this click
+                    // reopens it. Stopping it here lets + toggle cleanly.
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onClick={() => setCreatingFolder((v) => !v)}
+                    aria-expanded={creatingFolder}
                     aria-label="New folder"
                   >
                     <Icon d={ICON.plus} size={14} strokeWidth={2.2} />
@@ -838,19 +952,22 @@ function SidebarV2({
                   />
                 ))}
               </div>
-            </>
+            </div>
           )}
 
           {mode === 'completed' && (
-            <div className="sidebar-v2__group">
-              <h2 className="ui-caps sidebar-v2__section-label">Completed</h2>
-              <CompletedList onSelectWorkspace={onSelectWorkspace} activeWorkspaceId={activeWorkspaceId} />
+            <div className="sidebar-v2__mode" key="completed">
+              <CompletedList
+                folders={folders}
+                activeWorkspaceId={activeWorkspaceId}
+                onSelectWorkspace={onSelectWorkspace}
+                onReopen={onReopen}
+              />
             </div>
           )}
 
           {mode === 'archived' && (
-            <div className="sidebar-v2__group">
-              {archivedWorkspaces.length > 0 && <h2 className="ui-caps sidebar-v2__section-label">Archived</h2>}
+            <div className="sidebar-v2__mode" key="archived">
               <ArchivedList
                 workspaces={archivedWorkspaces}
                 folders={folders}

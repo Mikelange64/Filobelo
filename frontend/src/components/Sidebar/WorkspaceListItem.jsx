@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import useDismissableMenu from '../../hooks/useDismissableMenu'
 import ConfirmModal from '../shared/ConfirmModal'
+import Popover from '../shared/Popover'
 import { getWorkspaceFlag } from '../../utils/workspaceStatus'
 import { flattenFolderTree } from '../../utils/folders'
 import './WorkspaceListItem.css'
@@ -17,7 +18,8 @@ function WorkspaceListItem({
   onLeave,
   onMoveToFolder,
 }) {
-  const [menuOpen, setMenuOpen, menuRef] = useDismissableMenu()
+  const [menuOpen, setMenuOpen, menuRef, floatingRef] = useDismissableMenu()
+  const triggerRef = useRef(null)
   const [folderPicker, setFolderPicker] = useState(false)
   const [confirmLeave, setConfirmLeave] = useState(false)
   const flag = getWorkspaceFlag(workspace)
@@ -46,13 +48,10 @@ function WorkspaceListItem({
         onClick={() => onSelect?.(workspace.id)}
       >
         {/* The square is the folder's colour. A workspace outside any folder
-            has none, but keeps the slot so every title lines up with the
-            navigation labels above. */}
-        <span
-          className="workspace-item__square"
-          style={folderColor ? { backgroundColor: folderColor } : undefined}
-          aria-hidden="true"
-        />
+            has none, and its title starts flush - no empty slot. */}
+        {folderColor && (
+          <span className="workspace-item__square" style={{ backgroundColor: folderColor }} aria-hidden="true" />
+        )}
         <span className="workspace-item__title">{workspace.title}</span>
         {flag && (
           <span className={`workspace-item__flag workspace-item__flag--${flag.tone}`} title={flag.title}>
@@ -63,6 +62,7 @@ function WorkspaceListItem({
 
       <div className="workspace-item__menu" ref={menuRef}>
         <button
+          ref={triggerRef}
           type="button"
           className="workspace-item__menu-trigger"
           aria-label={`More actions for ${workspace.title}`}
@@ -74,7 +74,7 @@ function WorkspaceListItem({
         </button>
 
         {menuOpen && !folderPicker && (
-          <ul className="ui-menu workspace-item__menu-list" role="menu">
+          <Popover as="ul" anchorRef={triggerRef} floatingRef={floatingRef} className="ui-menu workspace-item__menu-list" role="menu">
             <li role="none">
               <button type="button" role="menuitem" className="ui-menu__item"
                 onClick={() => handleMenuAction(onTogglePin)}>
@@ -111,11 +111,11 @@ function WorkspaceListItem({
                 {isSoleMember ? 'Delete' : 'Leave'}
               </button>
             </li>
-          </ul>
+          </Popover>
         )}
 
         {menuOpen && folderPicker && (
-          <ul className="ui-menu workspace-item__menu-list workspace-item__menu-list--folders" role="menu">
+          <Popover as="ul" anchorRef={triggerRef} floatingRef={floatingRef} className="ui-menu workspace-item__menu-list workspace-item__menu-list--folders" role="menu">
             <li role="none">
               <button type="button" className="ui-menu__item workspace-item__menu-back"
                 onClick={() => setFolderPicker(false)}>
@@ -135,7 +135,7 @@ function WorkspaceListItem({
                 </button>
               </li>
             ))}
-          </ul>
+          </Popover>
         )}
       </div>
 
