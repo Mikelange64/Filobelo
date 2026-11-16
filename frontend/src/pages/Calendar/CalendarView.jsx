@@ -187,7 +187,7 @@ function CalendarView() {
                       key={item.key}
                       className={`cal-chip cal-chip--${item.urgency}`}
                       onClick={(e) => { e.stopPropagation(); onSelectWorkspace(item.workspaceId) }}
-                      title={item.title}
+                      title={item.kind === 'task' ? `Task: ${item.title} (in ${item.workspaceTitle})` : `Workspace deadline: ${item.title}`}
                     >
                       <ItemMark item={item} />
                       <span className="cal-chip__name">{item.title}</span>
@@ -249,7 +249,9 @@ function CalendarView() {
                   <ItemMark item={item} />
                   <span className="cal-entry__text">
                     <span className="cal-entry__title">{item.title}</span>
-                    <span className="cal-entry__sub">Due {formatAbsoluteDate(item.dueDate)}</span>
+                    <span className="cal-entry__sub">
+                      {item.kind === 'task' ? `${item.workspaceTitle} · ` : 'Workspace · '}due {formatAbsoluteDate(item.dueDate)}
+                    </span>
                   </span>
                   <span className="cal-overdue__late">{formatDayCount(getDaysRemaining(item.dueDate))}</span>
                 </button>
@@ -261,7 +263,7 @@ function CalendarView() {
           )}
 
           <div className="cal-legend">
-            <span className="cal-legend__row"><span className="cal-mark" style={{ background: 'var(--color-text-muted)' }} />Task (dot = folder colour)</span>
+            <span className="cal-legend__row"><span className="cal-mark" style={{ background: 'var(--color-text-muted)' }} />Task (dot = folder colour, ring = no folder)</span>
             <span className="cal-legend__row"><FlagIcon size={12} />Workspace deadline</span>
           </div>
         </aside>
@@ -274,7 +276,7 @@ function CalendarView() {
 // when the workspace has no folder). Urgency is the chip's own tint, never this.
 function ItemMark({ item, large = false }) {
   if (item.kind === 'workspace') return <FlagIcon size={large ? 16 : 12} />
-  if (!item.color) return null
+  if (!item.color) return <span className="cal-mark cal-mark--ring" />
   return <span className="cal-mark" style={{ background: item.color }} />
 }
 

@@ -179,6 +179,11 @@
   flex-shrink: 0;
 }
 
+.cal-mark--ring {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--color-text-muted);
+}
+
 .cal-flag { flex-shrink: 0; }
 
 /* ── Side panel ── */
