@@ -241,26 +241,7 @@ function CalendarView() {
             </button>
           </section>
 
-          {overdue.length > 0 && (
-            <ItemList
-              title="Overdue"
-              tone="error"
-              items={overdue}
-              onSelect={onSelectWorkspace}
-              label={(item) => formatDayCount(getDaysRemaining(item.dueDate))}
-            />
-          )}
-
-          <ItemList
-            title="Coming up"
-            items={comingUp}
-            emptyText="Nothing coming up."
-            onSelect={onSelectWorkspace}
-            label={(item) => {
-              const days = getDaysRemaining(item.dueDate)
-              return days <= 0 ? 'Today' : days === 1 ? 'Tomorrow' : `in ${days} days`
-            }}
-          />
+          <ListCard overdue={overdue} comingUp={comingUp} onSelect={onSelectWorkspace} />
 
           <div className="cal-legend">
             <span className="cal-legend__row"><span className="cal-mark" style={{ background: 'var(--color-text-muted)' }} />Task (dot = folder colour, ring = no folder)</span>
@@ -280,16 +261,44 @@ function ItemMark({ item, large = false }) {
   return <span className="cal-mark" style={{ background: item.color }} />
 }
 
-// Overdue / Coming up. Shows the first LIST_CAP rows; "+n more" expands the
+// One card, two tabs: Overdue and Coming up. Opens on Overdue when there is
+// any, else Coming up. Shows the first LIST_CAP rows; "+n more" expands the
 // rest in place (and "Show less" folds them back).
-function ItemList({ title, tone = 'neutral', items, label, onSelect, emptyText }) {
+function ListCard({ overdue, comingUp, onSelect }) {
+  const [picked, setPicked] = useState(null)
   const [expanded, setExpanded] = useState(false)
+  const tab = picked ?? (overdue.length > 0 ? 'overdue' : 'upcoming')
+  const isOverdue = tab === 'overdue'
+  const items = isOverdue ? overdue : comingUp
   const shown = expanded ? items : items.slice(0, LIST_CAP)
   const hidden = items.length - LIST_CAP
+
+  function pick(next) {
+    setPicked(next)
+    setExpanded(false)
+  }
+
+  function label(item) {
+    const days = getDaysRemaining(item.dueDate)
+    if (isOverdue) return formatDayCount(days)
+    return days <= 0 ? 'Today' : days === 1 ? 'Tomorrow' : `in ${days} days`
+  }
+
   return (
-    <section className={`ui-card cal-side-card cal-list cal-list--${tone}`}>
-      <div className="cal-list__head ui-caps">{title} · {items.length}</div>
-      {items.length === 0 && <div className="cal-list__empty">{emptyText}</div>}
+    <section className={`ui-card cal-side-card cal-list${isOverdue ? ' cal-list--error' : ''}`}>
+      <div className="cal-list__tabs">
+        <div className="ui-seg ui-seg--sm" role="tablist" aria-label="Overdue or coming up">
+          <button type="button" role="tab" aria-selected={isOverdue} className="ui-seg__opt" onClick={() => pick('overdue')}>
+            Overdue <span className="ui-seg__count">{overdue.length}</span>
+          </button>
+          <button type="button" role="tab" aria-selected={!isOverdue} className="ui-seg__opt" onClick={() => pick('upcoming')}>
+            Coming up <span className="ui-seg__count">{comingUp.length}</span>
+          </button>
+        </div>
+      </div>
+      {items.length === 0 && (
+        <div className="cal-list__empty">{isOverdue ? 'Nothing overdue.' : 'Nothing coming up.'}</div>
+      )}
       {shown.map((item) => (
         <button type="button" key={item.key} className="cal-list__row" onClick={() => onSelect(item.workspaceId)}>
           <ItemMark item={item} />

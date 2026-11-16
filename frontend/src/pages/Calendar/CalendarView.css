@@ -232,11 +232,7 @@
 
 .cal-list { padding: 0; gap: 0; overflow: hidden; }
 
-.cal-list__head {
-  padding: 16px 18px 8px;
-}
-
-.cal-list--error .cal-list__head { color: var(--color-error-text); }
+.cal-list__tabs { padding: 12px; }
 
 .cal-list__row {
   display: flex;
@@ -267,7 +263,7 @@
 .cal-list--error .cal-list__label { color: var(--color-error-text); }
 
 .cal-list__empty {
-  padding: 12px 18px;
+  padding: 14px 18px;
   border-top: 1px solid var(--color-row-line);
   font-size: 13px;
   color: var(--color-text-secondary);
