@@ -103,9 +103,7 @@ function WorkspaceDetail() {
   const [slideOverWidth, setSlideOverWidth]     = useState(760)
   const [showNewTaskModal, setShowNewTaskModal] = useState(false)
   const [conversationsPanelOpen, setConversationsPanelOpen]   = useState(false)
-  const [conversationsPanelWidth, setConversationsPanelWidth] = useState(880)
-  const [conversationsRailWidth, setConversationsRailWidth]   = useState(280)
-  const [conversationsRailCollapsed, setConversationsRailCollapsed] = useState(false)
+  const [conversationsExpanded, setConversationsExpanded]   = useState(false)
   const [selectedConversationId, setSelectedConversationId]   = useState(null)
   const [conversationsMode, setConversationsMode]             = useState('WORKSPACE')
   const [justCreatedConversationId, setJustCreatedConversationId] = useState(null)
@@ -1067,6 +1065,7 @@ function WorkspaceDetail() {
             {conversationsPanelOpen && (
                 <ConversationsPanel
                     workspaceId={workspaceId}
+                    workspaceTitle={workspace.title}
                     conversations={conversations}
                     mode={conversationsMode}
                     conversationsLoading={conversationsLoading}
@@ -1080,17 +1079,12 @@ function WorkspaceDetail() {
                     memberById={memberById}
                     currentUserId={currentUserId}
                     isAdmin={isAdmin}
-                    width={conversationsPanelWidth}
-                    onResize={setConversationsPanelWidth}
-                    railWidth={conversationsRailWidth}
-                    onRailResize={setConversationsRailWidth}
-                    railCollapsed={conversationsRailCollapsed}
-                    onToggleRailCollapse={() =>
-                        setConversationsRailCollapsed((v) => !v)
+                    expanded={conversationsExpanded}
+                    onToggleExpanded={() =>
+                        setConversationsExpanded((v) => !v)
                     }
                     onClose={() => setConversationsPanelOpen(false)}
                     onToast={onToast}
-                    onComingSoon={onComingSoon}
                     onConversationUpdated={handleConversationUpdated}
                     onConversationDeleted={handleConversationDeleted}
                 />
@@ -1123,6 +1117,7 @@ function WorkspaceDetail() {
                 onAskFilobelo={handleAskFilobelo}
                 onOpenConversations={handleOpenConversations}
                 isPremium={user?.is_premium}
+                hidden={conversationsPanelOpen}
             />
 
             {/* ── Workspace completion modal ── */}
