@@ -9,7 +9,7 @@ import './WorkspaceCard.css'
 // shows no pill at all.
 function getCardPill(workspace) {
   if (getWorkspaceStatus(workspace) === WORKSPACE_STATUS.COMPLETE) {
-    return { label: 'Complete', tone: 'success' }
+    return { label: 'All tasks done', tone: 'success' }
   }
   const days = getDaysRemaining(workspace.dueDate)
   if (days === null) return null

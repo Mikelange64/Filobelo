@@ -55,7 +55,9 @@ export function sortByUrgency(workspaces) {
  *  within three days, amber), "✓" (every task done, green). */
 export function getWorkspaceFlag(workspace) {
   if (getWorkspaceStatus(workspace) === WORKSPACE_STATUS.COMPLETE) {
-    return { label: '✓', tone: 'success', title: 'All tasks done' }
+    // Not "complete": that word (and the ✓) means an admin closed the
+    // workspace and it moved to Done. This one just has nothing left open.
+    return { label: '100%', tone: 'success', title: 'All tasks done' }
   }
   const days = getDaysRemaining(workspace.dueDate)
   if (days === null) return null
