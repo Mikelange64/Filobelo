@@ -294,3 +294,17 @@
 
 /* Cells are height-capped, so their contents must not squash. */
 .cal-day > * { flex-shrink: 0; }
+
+/* Slim scrollbar for the side column: about 3px wide in Chromium/Safari,
+   the browser's "thin" in Firefox (it can't go narrower). */
+.calendar-page__side {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border-strong) transparent;
+}
+
+.calendar-page__side::-webkit-scrollbar { width: 3px; }
+.calendar-page__side::-webkit-scrollbar-track { background: transparent; }
+.calendar-page__side::-webkit-scrollbar-thumb {
+  background: var(--color-border-strong);
+  border-radius: 3px;
+}
