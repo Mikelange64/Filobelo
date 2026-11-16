@@ -1,6 +1,6 @@
 /*
- * Four blocks: :root (light defaults) → @media prefers-color-scheme: dark
- * → :root[data-theme='light'] → :root[data-theme='dark'].
+ * Five blocks: :root (light defaults) → @media prefers-color-scheme: dark
+ * → :root[data-theme='light'] → :root[data-theme='dark'] → :root[data-theme='midnight'].
  * The attribute-selector blocks duplicate the media-query values but win
  * on specificity, so the manual toggle always overrides the OS preference.
  * Layout tokens (topbar-height, sidebar-width, radii) live only in :root —
@@ -93,72 +93,78 @@
 }
 
 /* ===== DARK MODE (OS preference) ===== */
-/* Pure neutral gray — no hue in backgrounds. Teal is the only accent. */
+/* Warm charcoal: the light theme's cream, at night. Keep equal to the
+   [data-theme='dark'] block below. Teal is the only accent. */
 @media (prefers-color-scheme: dark) {
   :root {
     color-scheme: dark;
 
-    --color-brand-primary: hsl(184 74% 66%);
-    --color-brand-primary-hover: hsl(184 74% 74%);
-    --color-brand-secondary: hsl(184 60% 55%);
-    --color-brand-secondary-hover: hsl(184 60% 63%);
+    /* Brand - teal is the sole decorative accent */
+    --color-brand-primary: #46BEC4;
+    --color-brand-primary-hover: #5CCAD0;
+    --color-brand-secondary: #46BEC4;                  /* avatars */
+    --color-brand-secondary-hover: #5CCAD0;
+    --color-brand-text: #5CCAD0;                       /* teal as text / links */
+    --color-brand-soft: #1C3335;                       /* tinted teal fill */
 
-    /* Sidebar and canvas share the same neutral gray — separated by border only */
-    --color-bg-sidebar: hsl(0 0% 17%);
-    --color-bg-canvas: hsl(0 0% 17%);
-    --color-bg-card: hsl(0 0% 22%);
-    --color-bg-overlay: hsl(0 0% 27%);
+    /* Surfaces - warm charcoal, three levels: frame (sidebar), main panel, card */
+    --color-bg-sidebar: #171410;
+    --color-bg-main: #1E1B17;
+    --color-bg-canvas: #1E1B17;
+    --color-bg-card: #26221D;
+    --color-bg-overlay: #26221D;
+    --color-bg-selected: #2C2721;
+    --color-bg-track: #38322B;
 
-    --color-bg-sidebar-hover: hsl(0 0% 22%);
-    --color-bg-canvas-hover: hsl(0 0% 22%);
-    --color-bg-card-hover: hsl(0 0% 27%);
+    /* Hover */
+    --color-bg-sidebar-hover: #231F1A;
+    --color-bg-canvas-hover: #24201B;
+    --color-bg-card-hover: #2D2823;
 
-    --color-text-primary: hsl(0 0% 92%);
-    --color-text-secondary: hsl(0 0% 72%);
-    --color-text-muted: hsl(0 0% 58%);
-    --color-text-on-brand: hsl(184 80% 10%);
+    /* Text - all three pass WCAG AA on a card */
+    --color-text-primary: #F3EDE4;
+    --color-text-secondary: #BDB3A4;
+    --color-text-muted: #978D7F;
+    --color-text-on-brand: #0B1C1D;
 
-    --color-border: hsl(0 0% 50%);
-    --color-border-strong: hsl(0 0% 62%);
-    --color-card-top-border: hsl(0 0% 52%);
+    /* Borders */
+    --color-border: #38322B;
+    --color-border-strong: #4D453B;
+    --color-card-top-border: #38322B;
+    --color-row-line: #2F2A24;
+    --color-frame-edge: #2A2620;
+    --color-danger-edge: #5A2E25;
 
-    --color-error: hsl(8 75% 62%);
-    --color-error-bg: hsl(8 45% 16%);
-    --color-error-text: hsl(8 80% 78%);
+    /* Semantic - status colours are for alerts only */
+    --color-error: #F2937E;
+    --color-error-bg: #3D211B;
+    --color-error-text: #F2937E;
 
-    --color-warning: hsl(38 80% 58%);
-    --color-warning-bg: hsl(38 50% 15%);
-    --color-warning-text: hsl(42 85% 76%);
+    --color-warning: #E9BC62;
+    --color-warning-bg: #382B15;
+    --color-warning-text: #E9BC62;
 
-    --color-success: hsl(140 50% 52%);
-    --color-success-bg: hsl(140 35% 14%);
-    --color-success-text: hsl(140 55% 76%);
+    --color-success: #74C795;
+    --color-success-bg: #1D3224;
+    --color-success-text: #74C795;
 
-    --color-info: hsl(184 74% 66%);
-    --color-info-bg: hsl(184 40% 14%);
-    --color-info-text: hsl(184 70% 76%);
+    --color-info: #46BEC4;
+    --color-info-bg: #1C3335;
+    --color-info-text: #5CCAD0;
 
-    --color-neutral: hsl(0 0% 50%);
-    --color-neutral-bg: hsl(0 0% 22%);
-    --color-neutral-text: hsl(0 0% 70%);
+    --color-neutral: #978D7F;
+    --color-neutral-bg: #2F2A24;
+    --color-neutral-text: #BDB3A4;
 
-    --shadow-card: 0 2px 8px hsl(0 0% 0% / 0.50), 0 1px 3px hsl(0 0% 0% / 0.35);
-    --shadow-overlay: 0 8px 24px hsl(0 0% 0% / 0.65);
-
-    --focus-ring: 0 0 0 3px hsl(184 74% 66% / 0.40);
-    /* Roles added by the light redesign, mapped onto this theme's existing values. */
-    --color-brand-text: var(--color-brand-primary);
-    --color-brand-soft: var(--color-info-bg);
-    --color-bg-main: var(--color-bg-card);
-    --color-bg-selected: var(--color-bg-sidebar-hover);
-    --color-bg-track: var(--color-neutral-bg);
-    --color-row-line: var(--color-border);
-    --color-frame-edge: transparent;
-    --color-danger-edge: var(--color-error);
+    /* Elevation - edges come from borders; shadows only add depth */
     --color-scrim: rgba(0, 0, 0, 0.40);
     --color-scrim-modal: rgba(0, 0, 0, 0.55);
-    --shadow-panel: var(--shadow-overlay);
-    --shadow-modal: var(--shadow-overlay);
+    --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.24);
+    --shadow-overlay: 0 12px 32px rgba(0, 0, 0, 0.40);
+    --shadow-panel: 0 24px 60px rgba(0, 0, 0, 0.45);
+    --shadow-modal: 0 32px 80px rgba(0, 0, 0, 0.50);
+
+    --focus-ring: 0 0 0 3px rgba(70, 190, 196, 0.40);
   }
 }
 
@@ -234,134 +240,146 @@
   --focus-ring: 0 0 0 3px rgba(14, 124, 131, 0.32);
 }
 
-/* ===== Manual toggle — dark (neutral gray) ===== */
+/* ===== Manual toggle — dark (warm charcoal) ===== */
 :root[data-theme='dark'] {
   color-scheme: dark;
 
-  --color-brand-primary: hsl(184 74% 66%);
-  --color-brand-primary-hover: hsl(184 74% 74%);
-  --color-brand-secondary: hsl(184 60% 55%);
-  --color-brand-secondary-hover: hsl(184 60% 63%);
+  /* Brand - teal is the sole decorative accent */
+  --color-brand-primary: #46BEC4;
+  --color-brand-primary-hover: #5CCAD0;
+  --color-brand-secondary: #46BEC4;                  /* avatars */
+  --color-brand-secondary-hover: #5CCAD0;
+  --color-brand-text: #5CCAD0;                       /* teal as text / links */
+  --color-brand-soft: #1C3335;                       /* tinted teal fill */
 
-  --color-bg-sidebar: hsl(0 0% 17%);
-  --color-bg-canvas: hsl(0 0% 17%);
-  --color-bg-card: hsl(0 0% 22%);
-  --color-bg-overlay: hsl(0 0% 27%);
+  /* Surfaces - warm charcoal, three levels: frame (sidebar), main panel, card */
+  --color-bg-sidebar: #171410;
+  --color-bg-main: #1E1B17;
+  --color-bg-canvas: #1E1B17;
+  --color-bg-card: #26221D;
+  --color-bg-overlay: #26221D;
+  --color-bg-selected: #2C2721;
+  --color-bg-track: #38322B;
 
-  --color-bg-sidebar-hover: hsl(0 0% 22%);
-  --color-bg-canvas-hover: hsl(0 0% 22%);
-  --color-bg-card-hover: hsl(0 0% 27%);
+  /* Hover */
+  --color-bg-sidebar-hover: #231F1A;
+  --color-bg-canvas-hover: #24201B;
+  --color-bg-card-hover: #2D2823;
 
-  --color-text-primary: hsl(0 0% 92%);
-  --color-text-secondary: hsl(0 0% 72%);
-  --color-text-muted: hsl(0 0% 58%);
-  --color-text-on-brand: hsl(184 80% 10%);
+  /* Text - all three pass WCAG AA on a card */
+  --color-text-primary: #F3EDE4;
+  --color-text-secondary: #BDB3A4;
+  --color-text-muted: #978D7F;
+  --color-text-on-brand: #0B1C1D;
 
-  --color-border: hsl(0 0% 50%);
-  --color-border-strong: hsl(0 0% 62%);
-  --color-card-top-border: hsl(0 0% 52%);
+  /* Borders */
+  --color-border: #38322B;
+  --color-border-strong: #4D453B;
+  --color-card-top-border: #38322B;
+  --color-row-line: #2F2A24;
+  --color-frame-edge: #2A2620;
+  --color-danger-edge: #5A2E25;
 
-  --color-error: hsl(8 75% 62%);
-  --color-error-bg: hsl(8 45% 16%);
-  --color-error-text: hsl(8 80% 78%);
+  /* Semantic - status colours are for alerts only */
+  --color-error: #F2937E;
+  --color-error-bg: #3D211B;
+  --color-error-text: #F2937E;
 
-  --color-warning: hsl(38 80% 58%);
-  --color-warning-bg: hsl(38 50% 15%);
-  --color-warning-text: hsl(42 85% 76%);
+  --color-warning: #E9BC62;
+  --color-warning-bg: #382B15;
+  --color-warning-text: #E9BC62;
 
-  --color-success: hsl(140 50% 52%);
-  --color-success-bg: hsl(140 35% 14%);
-  --color-success-text: hsl(140 55% 76%);
+  --color-success: #74C795;
+  --color-success-bg: #1D3224;
+  --color-success-text: #74C795;
 
-  --color-info: hsl(184 74% 66%);
-  --color-info-bg: hsl(184 40% 14%);
-  --color-info-text: hsl(184 70% 76%);
+  --color-info: #46BEC4;
+  --color-info-bg: #1C3335;
+  --color-info-text: #5CCAD0;
 
-  --color-neutral: hsl(0 0% 50%);
-  --color-neutral-bg: hsl(0 0% 22%);
-  --color-neutral-text: hsl(0 0% 70%);
+  --color-neutral: #978D7F;
+  --color-neutral-bg: #2F2A24;
+  --color-neutral-text: #BDB3A4;
 
-  --shadow-card: 0 2px 8px hsl(0 0% 0% / 0.50), 0 1px 3px hsl(0 0% 0% / 0.35);
-  --shadow-overlay: 0 8px 24px hsl(0 0% 0% / 0.65);
-
-  --focus-ring: 0 0 0 3px hsl(184 74% 66% / 0.40);
-  /* Roles added by the light redesign, mapped onto this theme's existing values. */
-  --color-brand-text: var(--color-brand-primary);
-  --color-brand-soft: var(--color-info-bg);
-  --color-bg-main: var(--color-bg-card);
-  --color-bg-selected: var(--color-bg-sidebar-hover);
-  --color-bg-track: var(--color-neutral-bg);
-  --color-row-line: var(--color-border);
-  --color-frame-edge: transparent;
-  --color-danger-edge: var(--color-error);
+  /* Elevation - edges come from borders; shadows only add depth */
   --color-scrim: rgba(0, 0, 0, 0.40);
   --color-scrim-modal: rgba(0, 0, 0, 0.55);
-  --shadow-panel: var(--shadow-overlay);
-  --shadow-modal: var(--shadow-overlay);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.24);
+  --shadow-overlay: 0 12px 32px rgba(0, 0, 0, 0.40);
+  --shadow-panel: 0 24px 60px rgba(0, 0, 0, 0.45);
+  --shadow-modal: 0 32px 80px rgba(0, 0, 0, 0.50);
+
+  --focus-ring: 0 0 0 3px rgba(70, 190, 196, 0.40);
 }
 
-/* ===== Manual toggle — midnight (blue-tinted navy) ===== */
+/* ===== Manual toggle — midnight (cool ink) ===== */
 :root[data-theme='midnight'] {
   color-scheme: dark;
 
-  --color-brand-primary: hsl(184 74% 66%);
-  --color-brand-primary-hover: hsl(184 74% 74%);
-  --color-brand-secondary: hsl(184 60% 55%);
-  --color-brand-secondary-hover: hsl(184 60% 63%);
+  /* Brand - teal is the sole decorative accent */
+  --color-brand-primary: #5CCFD4;
+  --color-brand-primary-hover: #6FD6DB;
+  --color-brand-secondary: #5CCFD4;                  /* avatars */
+  --color-brand-secondary-hover: #6FD6DB;
+  --color-brand-text: #6FD6DB;                       /* teal as text / links */
+  --color-brand-soft: #15303A;                       /* tinted teal fill */
 
-  --color-bg-sidebar: hsl(222 22% 15%);
-  --color-bg-canvas: hsl(222 20% 12%);
-  --color-bg-card: hsl(222 20% 19%);
-  --color-bg-overlay: hsl(222 18% 24%);
+  /* Surfaces - cool ink, three levels: frame (sidebar), main panel, card */
+  --color-bg-sidebar: #0A0D14;
+  --color-bg-main: #10141D;
+  --color-bg-canvas: #10141D;
+  --color-bg-card: #171C27;
+  --color-bg-overlay: #171C27;
+  --color-bg-selected: #1A2030;
+  --color-bg-track: #252C3A;
 
-  --color-bg-sidebar-hover: hsl(222 22% 20%);
-  --color-bg-canvas-hover: hsl(222 20% 17%);
-  --color-bg-card-hover: hsl(222 20% 24%);
+  /* Hover */
+  --color-bg-sidebar-hover: #141925;
+  --color-bg-canvas-hover: #151A25;
+  --color-bg-card-hover: #1D2331;
 
-  --color-text-primary: hsl(220 20% 93%);
-  --color-text-secondary: hsl(220 12% 65%);
-  --color-text-muted: hsl(220 10% 62%);
-  --color-text-on-brand: hsl(184 80% 10%);
+  /* Text - all three pass WCAG AA on a card */
+  --color-text-primary: #E9EDF5;
+  --color-text-secondary: #A9B2C4;
+  --color-text-muted: #838DA1;
+  --color-text-on-brand: #08181A;
 
-  --color-border: hsl(222 16% 42%);
-  --color-border-strong: hsl(222 14% 56%);
-  --color-card-top-border: hsl(222 16% 44%);
+  /* Borders */
+  --color-border: #252C3A;
+  --color-border-strong: #38415A;
+  --color-card-top-border: #252C3A;
+  --color-row-line: #1E2431;
+  --color-frame-edge: #1B2130;
+  --color-danger-edge: #55282E;
 
-  --color-error: hsl(8 75% 62%);
-  --color-error-bg: hsl(8 40% 14%);
-  --color-error-text: hsl(8 80% 78%);
+  /* Semantic - status colours are for alerts only */
+  --color-error: #F59A88;
+  --color-error-bg: #3A1E22;
+  --color-error-text: #F59A88;
 
-  --color-warning: hsl(38 80% 58%);
-  --color-warning-bg: hsl(38 40% 14%);
-  --color-warning-text: hsl(42 85% 76%);
+  --color-warning: #EEC46E;
+  --color-warning-bg: #33291A;
+  --color-warning-text: #EEC46E;
 
-  --color-success: hsl(140 50% 52%);
-  --color-success-bg: hsl(140 30% 13%);
-  --color-success-text: hsl(140 55% 76%);
+  --color-success: #7ACD9D;
+  --color-success-bg: #1A2E28;
+  --color-success-text: #7ACD9D;
 
-  --color-info: hsl(184 74% 66%);
-  --color-info-bg: hsl(184 35% 13%);
-  --color-info-text: hsl(184 70% 76%);
+  --color-info: #5CCFD4;
+  --color-info-bg: #15303A;
+  --color-info-text: #6FD6DB;
 
-  --color-neutral: hsl(220 10% 52%);
-  --color-neutral-bg: hsl(222 18% 21%);
-  --color-neutral-text: hsl(220 12% 70%);
+  --color-neutral: #838DA1;
+  --color-neutral-bg: #1E2431;
+  --color-neutral-text: #A9B2C4;
 
-  --shadow-card: 0 2px 8px hsl(222 40% 5% / 0.55), 0 1px 3px hsl(222 40% 5% / 0.40);
-  --shadow-overlay: 0 8px 24px hsl(222 40% 5% / 0.70);
+  /* Elevation - edges come from borders; shadows only add depth */
+  --color-scrim: rgba(0, 0, 0, 0.45);
+  --color-scrim-modal: rgba(0, 0, 0, 0.60);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.24);
+  --shadow-overlay: 0 12px 32px rgba(0, 0, 0, 0.40);
+  --shadow-panel: 0 24px 60px rgba(0, 0, 0, 0.45);
+  --shadow-modal: 0 32px 80px rgba(0, 0, 0, 0.50);
 
-  --focus-ring: 0 0 0 3px hsl(184 74% 66% / 0.40);
-  /* Roles added by the light redesign, mapped onto this theme's existing values. */
-  --color-brand-text: var(--color-brand-primary);
-  --color-brand-soft: var(--color-info-bg);
-  --color-bg-main: var(--color-bg-card);
-  --color-bg-selected: var(--color-bg-sidebar-hover);
-  --color-bg-track: var(--color-neutral-bg);
-  --color-row-line: var(--color-border);
-  --color-frame-edge: transparent;
-  --color-danger-edge: var(--color-error);
-  --color-scrim: rgba(0, 0, 0, 0.40);
-  --color-scrim-modal: rgba(0, 0, 0, 0.55);
-  --shadow-panel: var(--shadow-overlay);
-  --shadow-modal: var(--shadow-overlay);
+  --focus-ring: 0 0 0 3px rgba(92, 207, 212, 0.40);
 }
