@@ -75,13 +75,13 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  height: 34px;
+  height: 35px;
   padding: 0 10px;
   border: none;
   border-radius: 8px;
   background: transparent;
   color: var(--color-text-secondary);
-  font-size: 14px;
+  font-size: 14.25px;
   font-weight: 500;
   text-align: left;
   cursor: pointer;
@@ -212,13 +212,13 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  height: 34px;
+  height: 35px;
   padding: 0 10px;
   border: none;
   border-radius: 8px;
   background: transparent;
   color: var(--color-text-primary);
-  font-size: 14px;
+  font-size: 14.25px;
   font-weight: 500;
   text-align: left;
   cursor: pointer;
@@ -349,7 +349,7 @@
   border: none;
   background: transparent;
   color: var(--color-text-primary);
-  font-size: 14px;
+  font-size: 14.25px;
 }
 
 .sidebar-v2__folder-input::placeholder {
@@ -528,7 +528,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 14px;
+  font-size: 14.25px;
   font-weight: 600;
 }
 
