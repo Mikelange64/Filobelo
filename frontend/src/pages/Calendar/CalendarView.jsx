@@ -10,8 +10,6 @@ const MONTH_NAMES = [
   'July', 'August', 'September', 'October', 'November', 'December',
 ]
 const WEEKDAY_FULL = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
-const MAX_CHIPS = 3
-const MAX_OVERDUE = 6
 
 // Only the weeks the month actually spans (4 to 6 rows), starting on Sunday.
 function getCalendarDays(year, month) {
@@ -119,6 +117,8 @@ function CalendarView() {
   const days = getCalendarDays(year, month)
   const selectedItems = byDay.get(dayKey(selected)) ?? []
   const rows = days.length / 7
+  // Six-week months get shorter cells, so show one chip fewer.
+  const maxChips = rows >= 6 ? 2 : 3
   const firstYear = Math.min(today.getFullYear(), year) - 5
   const yearOptions = Array.from({ length: Math.max(today.getFullYear(), year) + 5 - firstYear + 1 }, (_, i) => firstYear + i)
 
@@ -162,13 +162,13 @@ function CalendarView() {
           <div className="cal-month__weekdays">
             {WEEKDAYS.map((d) => <div key={d} className="cal-month__weekday ui-caps">{d}</div>)}
           </div>
-          <div className="cal-month__grid" style={{ gridTemplateRows: `repeat(${rows}, minmax(124px, 1fr))` }}>
+          <div className="cal-month__grid" style={{ gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))` }}>
             {days.map((date) => {
               const inMonth = date.getMonth() === month
               const isToday = isSameDay(date, today)
               const isSelected = isSameDay(date, selected)
               const dayItems = byDay.get(dayKey(date)) ?? []
-              const overflow = dayItems.length - MAX_CHIPS
+              const overflow = dayItems.length - maxChips
               return (
                 <div
                   key={dayKey(date)}
@@ -181,7 +181,7 @@ function CalendarView() {
                   onClick={() => goToDate(date)}
                 >
                   <span className="cal-day__num">{date.getDate()}</span>
-                  {inMonth && dayItems.slice(0, MAX_CHIPS).map((item) => (
+                  {inMonth && dayItems.slice(0, maxChips).map((item) => (
                     <button
                       type="button"
                       key={item.key}
@@ -235,7 +235,7 @@ function CalendarView() {
           {overdue.length > 0 && (
             <section className="ui-card cal-side-card cal-overdue">
               <div className="cal-overdue__head ui-caps">Overdue · {overdue.length}</div>
-              {overdue.slice(0, MAX_OVERDUE).map((item) => (
+              {overdue.map((item) => (
                 <button
                   type="button"
                   key={item.key}
@@ -250,9 +250,6 @@ function CalendarView() {
                   <span className="cal-overdue__late">{formatDayCount(getDaysRemaining(item.dueDate))}</span>
                 </button>
               ))}
-              {overdue.length > MAX_OVERDUE && (
-                <div className="cal-overdue__more">+{overdue.length - MAX_OVERDUE} more</div>
-              )}
             </section>
           )}
 

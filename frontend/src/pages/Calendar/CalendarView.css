@@ -3,7 +3,7 @@
   display: flex;
   flex-direction: column;
   gap: 24px;
-  min-height: 100%;
+  height: 100%;
   box-sizing: border-box;
 }
 
@@ -51,7 +51,7 @@
   display: flex;
   gap: 24px;
   min-height: 0;
-  align-items: flex-start;
+  align-items: stretch;
 }
 
 .calendar-page__side {
@@ -59,16 +59,20 @@
   display: flex;
   flex-direction: column;
   gap: 20px;
+  min-height: 0;
+  overflow-y: auto;
 }
+
+.calendar-page__side > * { flex-shrink: 0; }
 
 /* ── Month grid ── */
 
 .cal-month {
   flex: 1;
   min-width: 0;
-  align-self: stretch;
   display: flex;
   flex-direction: column;
+  min-height: 0;
   background: var(--color-bg-card);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-card);
@@ -91,6 +95,7 @@
 
 .cal-month__grid {
   flex: 1;
+  min-height: 0;
 }
 
 .cal-day {
@@ -100,6 +105,8 @@
   flex-direction: column;
   gap: 6px;
   min-width: 0;
+  min-height: 0;
+  overflow: hidden;
   border-right: 1px solid var(--color-row-line);
   border-bottom: 1px solid var(--color-row-line);
   cursor: pointer;
@@ -275,10 +282,15 @@
 .cal-legend__row { display: flex; align-items: center; gap: 8px; }
 
 @media (max-width: 1100px) {
-  .calendar-page { padding: 24px 20px 28px; }
+  .calendar-page { padding: 24px 20px 28px; height: auto; }
+  .cal-month__grid { grid-template-rows: none !important; grid-auto-rows: 124px; }
+  .calendar-page__side { overflow: visible; }
   .calendar-page__body { flex-direction: column; align-items: stretch; }
   .calendar-page__side { flex-basis: auto; }
 }
 
 /* Dot and flag share a 12px box so titles line up in the Overdue list. */
 .cal-overdue__row .cal-mark { margin: 0 2.5px; }
+
+/* Cells are height-capped, so their contents must not squash. */
+.cal-day > * { flex-shrink: 0; }
