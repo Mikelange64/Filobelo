@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
+import { toDateInputValue, dateInputToISO } from '../../utils/date'
+import useDelayedFlag from '../../hooks/useDelayedFlag'
 import './NewWorkspaceModal.css'
 
 const MONTH_NAMES = [
@@ -6,8 +8,12 @@ const MONTH_NAMES = [
   'July', 'August', 'September', 'October', 'November', 'December',
 ]
 
-const MAX_MEMBER_PRESETS = ['', '3', '5', '10']
-const MAX_MEMBER_LABELS = { '': 'No limit', '3': '3', '5': '5', '10': '10' }
+const MEMBER_LIMITS = [
+  { value: '', label: 'No limit' },
+  { value: '3', label: '3' },
+  { value: '5', label: '5' },
+  { value: '10', label: '10' },
+]
 
 function getCalendarDays(year, month) {
   const firstDay = new Date(year, month - 1, 1)
@@ -28,6 +34,13 @@ function isSameDay(a, b) {
     a.getDate() === b.getDate()
 }
 
+/** "YYYY-MM-DD" -> local Date at midnight. */
+function parseDateValue(value) {
+  if (!value) return null
+  const [y, m, d] = value.split('-').map(Number)
+  return new Date(y, m - 1, d)
+}
+
 function formatDate(d) {
   return `${d.getDate()} ${MONTH_NAMES[d.getMonth()].slice(0, 3)} ${d.getFullYear()}`
 }
@@ -42,6 +55,9 @@ function MiniCalPopover({ selectedDate, onSelect, onClose }) {
 
   useEffect(() => {
     function onDown(e) {
+      // The trigger toggles the popover itself; ignore it here so a click on
+      // it doesn't close and immediately reopen.
+      if (e.target.closest?.('.nwm-date__trigger')) return
       if (ref.current && !ref.current.contains(e.target)) onClose()
     }
     document.addEventListener('mousedown', onDown)
@@ -60,20 +76,20 @@ function MiniCalPopover({ selectedDate, onSelect, onClose }) {
   const days = getCalendarDays(year, month)
 
   return (
-    <div className="nwm-cal-pop" ref={ref} role="dialog" aria-label="Pick a date">
-      <div className="nwm-cal-pop__header">
-        <button type="button" className="nwm-cal-pop__nav" onClick={prevMonth} aria-label="Previous month">
+    <div className="nwm-cal" ref={ref} role="dialog" aria-label="Pick a due date">
+      <div className="nwm-cal__header">
+        <button type="button" className="ui-icon-btn ui-icon-btn--sm" onClick={prevMonth} aria-label="Previous month">
           <ChevronLeft />
         </button>
-        <span className="nwm-cal-pop__title">{MONTH_NAMES[month - 1]} {year}</span>
-        <button type="button" className="nwm-cal-pop__nav" onClick={nextMonth} aria-label="Next month">
+        <span className="nwm-cal__title">{MONTH_NAMES[month - 1]} {year}</span>
+        <button type="button" className="ui-icon-btn ui-icon-btn--sm" onClick={nextMonth} aria-label="Next month">
           <ChevronRight />
         </button>
       </div>
 
-      <div className="nwm-cal-pop__grid">
-        {['S','M','T','W','T','F','S'].map((d, i) => (
-          <span key={i} className="nwm-cal-pop__dow">{d}</span>
+      <div className="nwm-cal__grid">
+        {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
+          <span key={i} className="nwm-cal__dow">{d}</span>
         ))}
         {days.map((date, i) => {
           const inMonth = date.getMonth() + 1 === month
@@ -84,14 +100,15 @@ function MiniCalPopover({ selectedDate, onSelect, onClose }) {
               key={i}
               type="button"
               className={[
-                'nwm-cal-pop__day',
-                !inMonth ? 'nwm-cal-pop__day--other' : '',
-                isToday ? 'nwm-cal-pop__day--today' : '',
-                isSel ? 'nwm-cal-pop__day--selected' : '',
+                'nwm-cal__day',
+                !inMonth ? 'nwm-cal__day--other' : '',
+                isToday ? 'nwm-cal__day--today' : '',
+                isSel ? 'nwm-cal__day--selected' : '',
               ].filter(Boolean).join(' ')}
               onClick={() => { if (inMonth) { onSelect(date); onClose() } }}
               disabled={!inMonth}
               tabIndex={inMonth ? 0 : -1}
+              aria-pressed={isSel || undefined}
             >
               {date.getDate()}
             </button>
@@ -111,12 +128,16 @@ function NewWorkspaceModal({ onClose, onCreate, defaultDueDate = null }) {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [maxMembers, setMaxMembers] = useState('')
-  const [customMaxMode, setCustomMaxMode] = useState(false)
   const [showCalPop, setShowCalPop] = useState(false)
-  const [selectedDate, setSelectedDate] = useState(defaultDueDate ?? null)
+  // Due date kept as "YYYY-MM-DD" (local) and converted to the stored
+  // local-midnight ISO only on submit, via utils/date.
+  const [dueValue, setDueValue] = useState(() => toDateInputValue(defaultDueDate))
+  const showCreating = useDelayedFlag(loading)
 
   const titleRef = useRef(null)
   const descRef = useRef(null)
+
+  const selectedDate = parseDateValue(dueValue)
 
   useEffect(() => { titleRef.current?.focus() }, [])
   useEffect(() => { if (descOpen) descRef.current?.focus() }, [descOpen])
@@ -131,23 +152,18 @@ function NewWorkspaceModal({ onClose, onCreate, defaultDueDate = null }) {
     return () => document.removeEventListener('keydown', onKeyDown)
   }, [showCalPop, onClose])
 
-  function handleCalendarPick(date) {
-    setSelectedDate(date)
-  }
-
-  function clearDate() {
-    setSelectedDate(null)
-  }
+  const canSubmit = title.trim().length > 0 && !loading
 
   async function handleSubmit(e) {
     e.preventDefault()
+    if (!canSubmit) return
     setError('')
     setLoading(true)
     try {
       await onCreate({
         title: title.trim(),
         description: description.trim() || null,
-        due_date: selectedDate ? selectedDate.toISOString() : null,
+        due_date: dateInputToISO(dueValue),
         max_number: maxMembers ? parseInt(maxMembers, 10) : null,
       })
     } catch (err) {
@@ -156,133 +172,128 @@ function NewWorkspaceModal({ onClose, onCreate, defaultDueDate = null }) {
     }
   }
 
-  const maxMembersValid =
-    maxMembers.trim() === '' || (/^\d+$/.test(maxMembers.trim()) && parseInt(maxMembers, 10) >= 1)
-
-  const canSubmit = title.trim().length > 0 && maxMembersValid && !loading
-
   function handleFormKeyDown(e) {
-    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && canSubmit) {
-      handleSubmit(e)
-    }
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') handleSubmit(e)
   }
 
   return (
-    <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
-      <div className="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
-        <div className="nwm-topbar">
-          <span className="nwm-eyebrow" id="modal-title">New workspace</span>
-          <button type="button" className="modal__close" onClick={onClose} aria-label="Close">
-            <CloseIcon />
-          </button>
-        </div>
+    <div className="ui-overlay nwm-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
+      <div className="ui-modal nwm-modal" role="dialog" aria-modal="true" aria-labelledby="nwm-title">
+        <form className="nwm-form" onSubmit={handleSubmit} onKeyDown={handleFormKeyDown} noValidate>
+          <div className="ui-modal__header">
+            <h2 className="ui-modal__title" id="nwm-title">New workspace</h2>
+            <button type="button" className="ui-icon-btn" onClick={onClose} aria-label="Close">
+              <CloseIcon />
+            </button>
+          </div>
 
-        <form className="modal__body" onSubmit={handleSubmit} onKeyDown={handleFormKeyDown} noValidate>
-          <div className="nwm-title-row">
+          <div className="ui-field">
+            <label className="ui-field__label" htmlFor="nwm-name">Name</label>
             <input
               ref={titleRef}
+              id="nwm-name"
               type="text"
-              className="nwm-title-input"
+              className="ui-input nwm-name-input"
               placeholder="Untitled workspace"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               maxLength={50}
               required
+              aria-describedby={error ? 'nwm-error' : undefined}
             />
+            {descOpen || description ? (
+              <textarea
+                ref={descRef}
+                className="ui-textarea nwm-desc"
+                aria-label="Description"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                onBlur={() => { if (!description.trim()) setDescOpen(false) }}
+                maxLength={500}
+                rows={3}
+                placeholder="What is this workspace for?"
+              />
+            ) : (
+              <button type="button" className="nwm-add-desc" onClick={() => setDescOpen(true)}>
+                + Add description
+              </button>
+            )}
           </div>
 
-          {error && <p className="nwm-error" role="alert">{error}</p>}
-
-          {descOpen || description ? (
-            <textarea
-              ref={descRef}
-              className="nwm-desc-textarea"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              onBlur={() => { if (!description.trim()) setDescOpen(false) }}
-              maxLength={500}
-              rows={3}
-              placeholder="Add description…"
-            />
-          ) : (
-            <button type="button" className="nwm-desc-toggle" onClick={() => setDescOpen(true)}>
-              + Add description
-            </button>
-          )}
-
-          <div className="modal__row">
-            <div className="nwm-field-col">
-              <span className="nwm-field-label">Due date</span>
-              <div className="nwm-date-pill-wrap">
+          <div className="nwm-grid">
+            <div className="ui-field">
+              <span className="ui-field__label" id="nwm-due-label">Due date</span>
+              <div className="nwm-date">
                 <button
                   type="button"
-                  className={`nwm-date-pill${selectedDate ? ' nwm-date-pill--set' : ''}`}
+                  className={`nwm-date__trigger${selectedDate ? ' nwm-date__trigger--set' : ''}`}
                   onClick={() => setShowCalPop((v) => !v)}
+                  aria-haspopup="dialog"
+                  aria-expanded={showCalPop}
+                  aria-labelledby="nwm-due-label nwm-due-value"
                 >
                   <CalIcon />
-                  <span>{selectedDate ? formatDate(selectedDate) : 'No deadline'}</span>
+                  <span className="nwm-date__value" id="nwm-due-value">
+                    {selectedDate ? formatDate(selectedDate) : 'No deadline'}
+                  </span>
                 </button>
                 {selectedDate && (
-                  <button type="button" className="nwm-clear-btn" onClick={clearDate} aria-label="Clear date">
-                    ✕
+                  <button
+                    type="button"
+                    className="ui-icon-btn ui-icon-btn--sm nwm-date__clear"
+                    onClick={() => setDueValue('')}
+                    aria-label="Clear due date"
+                  >
+                    <CloseIcon size={14} />
                   </button>
                 )}
                 {showCalPop && (
                   <MiniCalPopover
                     selectedDate={selectedDate}
-                    onSelect={handleCalendarPick}
+                    onSelect={(date) => setDueValue(toDateInputValue(date))}
                     onClose={() => setShowCalPop(false)}
                   />
                 )}
               </div>
             </div>
+          </div>
 
-            <div className="nwm-field-col">
-              <span className="nwm-field-label">Max members</span>
-              {/* Presets always stay put. Choosing Custom swaps only the
-                  Custom button for an input of the same size, in the same
-                  spot, so the modal doesn't jump or lose the presets. */}
-              <div className="nwm-segmented">
-                {MAX_MEMBER_PRESETS.map((p) => (
-                  <button
-                    key={p || 'none'}
-                    type="button"
-                    className={`nwm-segmented__btn${!customMaxMode && maxMembers === p ? ' nwm-segmented__btn--active' : ''}`}
-                    onClick={() => { setCustomMaxMode(false); setMaxMembers(p) }}
-                  >
-                    {MAX_MEMBER_LABELS[p]}
-                  </button>
-                ))}
-                {customMaxMode ? (
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    className={`nwm-max-custom-input nwm-max-custom-input--inline${maxMembersValid ? '' : ' nwm-max-custom-input--invalid'}`}
-                    placeholder="Custom"
-                    aria-label="Custom maximum number of members"
-                    value={maxMembers}
-                    onChange={(e) => setMaxMembers(e.target.value)}
-                    autoFocus
-                  />
-                ) : (
-                  <button
-                    type="button"
-                    className="nwm-segmented__btn nwm-segmented__btn--custom"
-                    onClick={() => { setCustomMaxMode(true); setMaxMembers('') }}
-                  >
-                    Custom
-                  </button>
-                )}
-              </div>
+          <div className="ui-field">
+            <span className="ui-field__label" id="nwm-limit-label">Member limit</span>
+            <div className="ui-seg" role="radiogroup" aria-labelledby="nwm-limit-label">
+              {MEMBER_LIMITS.map((opt) => (
+                <button
+                  key={opt.value || 'none'}
+                  type="button"
+                  role="radio"
+                  aria-checked={maxMembers === opt.value}
+                  className="ui-seg__opt"
+                  onClick={() => setMaxMembers(opt.value)}
+                >
+                  {opt.label}
+                </button>
+              ))}
             </div>
           </div>
 
-          <div className="modal__footer">
-            <button type="button" className="nwm-btn-ghost" onClick={onClose}>
+          {error && (
+            <p className="nwm-error" id="nwm-error" role="alert">
+              <AlertIcon />
+              <span>{error}</span>
+            </p>
+          )}
+
+          <div className="nwm-footer">
+            <button type="button" className="ui-btn nwm-cancel" onClick={onClose}>
               Cancel
             </button>
-            <button type="submit" className="nwm-btn-primary" disabled={!canSubmit}>
-              {loading ? 'Creating…' : 'Create workspace'}
+            <button
+              type="submit"
+              className={`ui-btn ui-btn--primary${loading ? ' nwm-submit--busy' : ''}`}
+              disabled={!canSubmit}
+              aria-busy={loading || undefined}
+            >
+              {showCreating ? 'Creating…' : 'Create workspace'}
             </button>
           </div>
         </form>
@@ -291,38 +302,44 @@ function NewWorkspaceModal({ onClose, onCreate, defaultDueDate = null }) {
   )
 }
 
-function CloseIcon() {
+function CloseIcon({ size = 18 }) {
   return (
-    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-      <line x1="18" y1="6" x2="6" y2="18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-      <line x1="6" y1="6" x2="18" y2="18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+      <path d="M6 6l12 12M18 6L6 18" />
     </svg>
   )
 }
 
 function CalIcon() {
   return (
-    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-      <rect x="3" y="4" width="18" height="18" rx="2" />
-      <line x1="16" y1="2" x2="16" y2="6" />
-      <line x1="8" y1="2" x2="8" y2="6" />
-      <line x1="3" y1="10" x2="21" y2="10" />
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+      <rect x="4" y="5.5" width="16" height="14" rx="2.5" />
+      <path d="M4 10h16M8.5 3.5v4M15.5 3.5v4" />
+    </svg>
+  )
+}
+
+function AlertIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7.5v5M12 16.2v.3" />
     </svg>
   )
 }
 
 function ChevronLeft() {
   return (
-    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
-      <polyline points="15 18 9 12 15 6" />
+    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
+      <path d="M15 18l-6-6 6-6" />
     </svg>
   )
 }
 
 function ChevronRight() {
   return (
-    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
-      <polyline points="9 18 15 12 9 6" />
+    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
+      <path d="M9 18l6-6-6-6" />
     </svg>
   )
 }
