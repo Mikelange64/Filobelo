@@ -5,6 +5,7 @@ import WorkspaceListItem from './WorkspaceListItem'
 import ConfirmModal from '../shared/ConfirmModal'
 import ActionMenu, { MenuItem, MENU_ICON } from '../shared/ActionMenu'
 import useDismissableMenu from '../../hooks/useDismissableMenu'
+import { useTheme } from '../../context/ThemeContext'
 import { getCompletedWorkspaces } from '../../api/client'
 import { keys } from '../../api/queryClient'
 import { getWorkspaceFlag } from '../../utils/workspaceStatus'
@@ -655,8 +656,16 @@ function ArchivedList({ workspaces, folders, activeWorkspaceId, onSelectWorkspac
   )
 }
 
+// Same order as everywhere else: dark, midnight, light.
+const THEMES = [
+  { id: 'dark', label: 'Dark' },
+  { id: 'midnight', label: 'Midnight' },
+  { id: 'light', label: 'Light' },
+]
+
 function AccountMenu({ currentUser, onOpenSettings, onSignOut, compact = false }) {
   const [open, setOpen, ref] = useDismissableMenu()
+  const { theme, setTheme } = useTheme()
   return (
     <div className={`sidebar-v2__footer${compact ? ' sidebar-v2__footer--compact' : ''}`} ref={ref}>
       {open && (
@@ -665,6 +674,24 @@ function AccountMenu({ currentUser, onOpenSettings, onSignOut, compact = false }
             <span className="sidebar-v2__account-name">{currentUser?.name}</span>
             <span className="sidebar-v2__account-sub">Personal account</span>
           </div>
+          <div className="sidebar-v2__account-theme">
+            <span className="ui-caps">Theme</span>
+            <div className="ui-seg ui-seg--sm" role="radiogroup" aria-label="Theme">
+              {THEMES.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={theme === t.id}
+                  className="ui-seg__opt"
+                  onClick={() => setTheme(t.id)}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="ui-menu__sep" aria-hidden="true" />
           <button
             type="button"
             role="menuitem"

@@ -19,18 +19,19 @@ function GreetingHeader({ name, tasks = [] }) {
   return (
     <header className="greeting-header">
       <h1 className="greeting-header__title">{getGreeting(now.getHours())}{name ? `, ${name}` : ''}</h1>
-      <p className="greeting-header__date">
-        {formatToday(now)}
-        {overdue > 0 && (
-          <>
-            {' · '}
-            <span className="greeting-header__overdue">
+      <p className="greeting-header__date">{formatToday(now)}</p>
+      {tasks.length > 0 && (
+        <p className="greeting-header__summary">
+          {overdue > 0 && (
+            <span className="ui-pill ui-pill--sm ui-pill--error">
               {overdue} task{overdue === 1 ? '' : 's'} overdue
             </span>
-          </>
-        )}
-        {tasks.length > 0 && <>{' · '}{tasks.length} open</>}
-      </p>
+          )}
+          <span className="ui-pill ui-pill--sm">
+            {tasks.length} open task{tasks.length === 1 ? '' : 's'}
+          </span>
+        </p>
+      )}
     </header>
   )
 }

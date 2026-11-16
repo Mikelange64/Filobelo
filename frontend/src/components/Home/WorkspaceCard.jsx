@@ -19,16 +19,16 @@ function getCardPill(workspace) {
   return null
 }
 
-// The task to show as "Next up": the open task due soonest, or the first open
+// The task to show as "Next task": the open task due soonest, or the first open
 // task when none has a date. Returns { label, title, tone } or null.
 function getNextUp(tasks = []) {
-  if (tasks.length === 0) return { label: 'Next up', title: 'No tasks yet', muted: true }
+  if (tasks.length === 0) return { label: 'Next task', title: 'No tasks yet', muted: true }
   const open = tasks.filter((t) => t.status !== 'DONE')
-  if (open.length === 0) return { label: 'Next up', title: 'All tasks done', muted: true }
+  if (open.length === 0) return { label: 'Next task', title: 'All tasks done', muted: true }
   const dated = open
     .filter((t) => t.dueDate)
     .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate))
-  if (dated.length === 0) return { label: 'Next up · no due date', title: open[0].title }
+  if (dated.length === 0) return { label: 'Next task · no due date', title: open[0].title }
   const task = dated[0]
   const days = getDaysRemaining(task.dueDate)
   let when
@@ -37,7 +37,7 @@ function getNextUp(tasks = []) {
   else if (days === 0) { when = 'due today'; tone = 'warning' }
   else if (days === 1) { when = 'due tomorrow'; tone = 'warning' }
   else when = `due in ${formatDayCount(days)}`
-  return { label: 'Next up', when, tone, title: task.title }
+  return { label: 'Next task', when, tone, title: task.title }
 }
 
 function ContextMenu({ x, y, onComplete, onClose }) {
