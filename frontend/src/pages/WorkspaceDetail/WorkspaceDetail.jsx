@@ -26,8 +26,11 @@ import {
     uploadResourceFile,
 } from "../../api/client";
 import { keys, writeCache } from "../../api/queryClient";
-import { getDaysRemaining, formatDueDate } from "../../utils/date";
-import { getWorkspaceUrgency } from "../../utils/workspaceStatus";
+import {
+    getDaysRemaining,
+    formatDayCount,
+    formatAbsoluteDate,
+} from "../../utils/date";
 import {
     toAvatarUrl,
     normalizeTask,
@@ -36,10 +39,13 @@ import {
 } from "../../components/WorkspaceDetail/helpers";
 import {
     DotsIcon,
-    DownloadIcon,
-    StarIcon,
+    PinIcon,
+    PlusIcon,
+    ChevronRightIcon,
 } from "../../components/WorkspaceDetail/icons";
+import { PAGE_MENU_ICON } from "../../components/WorkspaceDetail/pageMenuIcons";
 import useDismissableMenu from "../../hooks/useDismissableMenu";
+import ActionMenu, { MENU_ICON } from "../../components/shared/ActionMenu";
 import MemberAvatar from "../../components/WorkspaceDetail/MemberAvatar";
 import TaskRow from "../../components/WorkspaceDetail/TaskRow";
 import MemberPicker from "../../components/WorkspaceDetail/MemberPicker";
@@ -56,19 +62,34 @@ import "./WorkspaceDetail.css";
 
 // ─── main component ─────────────────────────────────────────────────────────
 
-const URGENCY_COLOR = {
-    error: "var(--color-error)",
-    warning: "var(--color-warning)",
-    success: "var(--color-success)",
-    neutral: "var(--color-neutral)",
-};
+// The one status pill the header may carry, worded like the Home cards.
+// A workspace that is simply on track shows none.
+function getHeaderPill(workspace, progress) {
+    if (workspace.isCompleted) return { label: "Completed", tone: "success" };
+    if (progress === 100) return { label: "All tasks done", tone: "success" };
+    const days = getDaysRemaining(workspace.dueDate);
+    if (days === null) return null;
+    if (days < 0) return { label: `${formatDayCount(days)} overdue`, tone: "error" };
+    if (days === 0) return { label: "Due today", tone: "warning" };
+    if (days <= 3) return { label: `Due in ${formatDayCount(days)}`, tone: "warning" };
+    return null;
+}
+
+// Open tasks are listed in groups by when they are due. Only Overdue is
+// coloured; the rows themselves carry the "due soon" tone.
+const TASK_GROUPS = [
+    { id: "overdue", label: "Overdue", tone: "error", test: (d) => d !== null && d < 0 },
+    { id: "week", label: "This week", test: (d) => d !== null && d >= 0 && d <= 7 },
+    { id: "later", label: "Later", test: (d) => d !== null && d > 7 },
+    { id: "none", label: "No due date", test: (d) => d === null },
+];
 
 // Stable fallback so "no tasks loaded yet" isn't a new [] on every render.
 const EMPTY = [];
 
 const TABS = [
     { id: "tasks", label: "Tasks" },
-    { id: "kanban", label: "Kanban" },
+    { id: "kanban", label: "Board" },
     { id: "members", label: "Members" },
     { id: "settings", label: "Settings" },
 ];
@@ -84,6 +105,8 @@ function WorkspaceDetail() {
         onArchive: shellArchive,
         onTogglePin,
         onComingSoon,
+        workspaces: shellWorkspaces,
+        folders: shellFolders,
         onTaskToggled,
         onWorkspaceTasksChanged,
         onWorkspaceCompleted,
@@ -92,8 +115,10 @@ function WorkspaceDetail() {
         onToast,
     } = useOutletContext();
     const currentUserId = user?.id;
-    const [headerMenuOpen, setHeaderMenuOpen, headerMenuRef] =
+    const [headerMenuOpen, setHeaderMenuOpen, headerMenuRef, headerMenuFloatingRef] =
         useDismissableMenu();
+    // Bumped by the header Invite button: remounts the invite panel open.
+    const [inviteRequest, setInviteRequest] = useState(0);
 
   const [activeTab, setActiveTab]               = useState('tasks')
   const [completedOpen, setCompletedOpen]       = useState(false)
@@ -518,6 +543,18 @@ function WorkspaceDetail() {
         }
     }
 
+    function requestRemoveMember(member) {
+        setConfirmDialog({
+            title: "Remove member?",
+            message: `${member.name} will lose access to this workspace's tasks and conversations. You can invite them again later.`,
+            confirmLabel: "Remove",
+            onConfirm: async () => {
+                setConfirmDialog(null);
+                await handleRemoveMember(member.id);
+            },
+        });
+    }
+
     async function handleRemoveMember(userId) {
         const prev = detailMembers;
         setDetailMembers((m) => m?.filter((mb) => mb.id !== userId) ?? null);
@@ -609,9 +646,10 @@ function WorkspaceDetail() {
         });
     }
 
-    // Dropping a card on the Kanban trash is easy to do by accident, and a
-    // deleted task takes its notes, links and files with it.
-    function handleKanbanTrashDrop(taskId) {
+    // Deleting from a row menu or by dropping a card on the Board trash is
+    // easy to do by accident, and a deleted task takes its notes, links and
+    // files with it.
+    function requestDeleteTask(taskId) {
         const task = tasks.find((t) => t.id === taskId);
         if (!task) return;
         setConfirmDialog({
@@ -644,209 +682,231 @@ function WorkspaceDetail() {
     // Derived
     const activeTasks = tasks.filter((t) => t.status !== "DONE");
     const completedTasks = tasks.filter((t) => t.status === "DONE");
-    const overdueCount = activeTasks.filter(
-        (t) => getDaysRemaining(t.dueDate) < 0,
-    ).length;
-    const dueThisWeekCount = activeTasks.filter((t) => {
-        const d = getDaysRemaining(t.dueDate);
-        return d !== null && d >= 0 && d <= 7;
-    }).length;
     const localProgress =
         tasks.length > 0
             ? Math.round((completedTasks.length / tasks.length) * 100)
             : 0;
-    const urgency = getWorkspaceUrgency({
-        dueDate: workspace.dueDate,
-        progress: localProgress,
-    });
-    const progressColor =
-        URGENCY_COLOR[urgency] ?? "var(--color-brand-primary)";
+    const headerPill = getHeaderPill(workspace, localProgress);
+    // The square is the colour of the folder this workspace sits in (folder
+    // membership is per user, so it comes from the shell's list), or nothing.
+    const folderId = shellWorkspaces?.find((w) => w.id === workspaceId)?.folderId;
+    const folderColor = folderId
+        ? shellFolders?.find((f) => f.id === folderId)?.color
+        : null;
     const memberById = new Map(workspace.members.map((m) => [m.id, m]));
     const isAdmin = workspace.currentUserRole === "admin";
     const sortedActiveTasks = sortByUrgency(activeTasks);
+    const taskGroups = TASK_GROUPS.map((g) => ({
+        ...g,
+        tasks: sortedActiveTasks.filter((t) => g.test(getDaysRemaining(t.dueDate))),
+    })).filter((g) => g.tasks.length > 0);
     const selectedTask = tasks.find((t) => t.id === selectedTaskId) ?? null;
     const displayMembers =
         detailMembers ?? workspace.members.map((m) => ({ ...m, role: null }));
     const reassignTask_ = tasks.find((t) => t.id === reassignTaskId) ?? null;
 
+    const headerMenuItems = [
+        {
+            id: "pin",
+            label: workspace.isPinned ? "Unpin from sidebar" : "Pin to sidebar",
+            icon: workspace.isPinned ? MENU_ICON.unpin : MENU_ICON.pin,
+            onSelect: handleTogglePinWorkspace,
+        },
+        isAdmin && {
+            id: "complete",
+            label: workspace.isCompleted ? "Reopen workspace" : "Mark complete",
+            icon: workspace.isCompleted ? MENU_ICON.reopen : MENU_ICON.done,
+            disabled: completingWorkspace,
+            separatorBefore: true,
+            onSelect: workspace.isCompleted
+                ? handleReopenWorkspace
+                : handleRequestComplete,
+        },
+        {
+            id: "archive",
+            label: "Archive",
+            icon: MENU_ICON.archive,
+            separatorBefore: !isAdmin,
+            onSelect: handleArchiveWorkspace,
+        },
+        {
+            id: "settings",
+            label: "Settings",
+            icon: PAGE_MENU_ICON.settings,
+            separatorBefore: true,
+            onSelect: () => handleTabChange("settings"),
+        },
+    ];
+
+    function renderTaskRow(task) {
+        return (
+            <TaskRow
+                key={task.id}
+                task={task}
+                member={memberById.get(task.ownerId)}
+                isAdmin={isAdmin}
+                currentUserId={currentUserId}
+                isSelected={task.id === selectedTaskId}
+                onSelect={() => handleSelectTask(task.id)}
+                onToggle={() => handleToggleTask(task.id)}
+                onReassign={() => setReassignTaskId(task.id)}
+                onDelete={() => requestDeleteTask(task.id)}
+                onRename={(taskId, title) => handleSaveTask(taskId, { title })}
+                onColorChange={(taskId, color) => handleSaveTask(taskId, { color })}
+            />
+        );
+    }
+
     return (
         <div className="workspace-detail">
+            <div className="wd-page">
             {/* ── Header ── */}
             <header className="wd-header">
                 <nav className="wd-breadcrumb" aria-label="Breadcrumb">
                     <Link to="/" className="wd-breadcrumb__link">
-                        All workspaces
+                        Workspaces
                     </Link>
-                    <span className="wd-breadcrumb__sep" aria-hidden="true">
-                        ›
-                    </span>
-                    <span className="wd-breadcrumb__current">
+                    <span aria-hidden="true">/</span>
+                    <span className="wd-breadcrumb__current" aria-current="page">
                         {workspace.title}
                     </span>
                 </nav>
 
-                <div className="wd-header__main">
-                    <div className="wd-header__info">
-                        <div className="wd-header__title-row">
-                            <h1 className="wd-header__title">
-                                {workspace.title}
-                            </h1>
-                            {workspace.isPinned && (
-                                <span className="wd-header__pin-indicator" aria-label="Pinned">
-                                    <StarIcon filled />
-                                </span>
-                            )}
-                            {workspace.dueDate && localProgress < 100 && (
-                                <span
-                                    className={`wd-urgency-badge wd-urgency-badge--${urgency}`}
-                                >
-                                    <span
-                                        className="wd-urgency-badge__dot"
-                                        aria-hidden="true"
-                                    />
-                                    {formatDueDate(workspace.dueDate)}
-                                </span>
-                            )}
-                        </div>
-                        <p className="wd-header__description">
-                            {workspace.description}
-                        </p>
-                    </div>
+                <div className="wd-header__title-row">
+                    {folderColor && (
+                        <span
+                            className="wd-header__square"
+                            style={{ backgroundColor: folderColor }}
+                            aria-hidden="true"
+                        />
+                    )}
+                    <h1 className="wd-header__title">{workspace.title}</h1>
+                    {workspace.isPinned && (
+                        <span className="wd-header__pin" role="img" aria-label="Pinned" title="Pinned">
+                            <PinIcon />
+                        </span>
+                    )}
+                    {headerPill && (
+                        <span className={`ui-pill ui-pill--${headerPill.tone}`}>
+                            {headerPill.label}
+                        </span>
+                    )}
 
-                    <div className="wd-header__side">
-                        <div className="wd-header__member-stack">
+                    <div className="wd-header__actions">
+                        <div className="wd-header__member-stack" aria-label={`${workspace.members.length} member${workspace.members.length === 1 ? "" : "s"}`}>
                             {workspace.members.slice(0, 3).map((m) => (
-                                <MemberAvatar key={m.id} member={m} size={30} />
+                                <MemberAvatar key={m.id} member={m} size={32} />
                             ))}
                             {workspace.members.length > 3 && (
                                 <span
                                     className="member-avatar member-avatar--overflow"
-                                    style={{
-                                        width: 30,
-                                        height: 30,
-                                        fontSize: 11,
-                                    }}
+                                    style={{ width: 32, height: 32, fontSize: 12 }}
                                 >
                                     +{workspace.members.length - 3}
                                 </span>
                             )}
                         </div>
 
-                        <button
-                            type="button"
-                            className="wd-header__icon-btn"
-                            onClick={() => onComingSoon?.()}
-                            aria-label="Export workspace"
-                            data-tooltip="Export"
-                        >
-                            <DownloadIcon />
-                        </button>
-
-                        <div
-                            className="wd-header__menu-wrap"
-                            ref={headerMenuRef}
-                        >
+                        {isAdmin && (
                             <button
                                 type="button"
-                                className="wd-header__icon-btn"
+                                className="ui-btn ui-btn--secondary ui-btn--sm"
+                                onClick={() => {
+                                    setInviteRequest((n) => n + 1);
+                                    handleTabChange("members");
+                                }}
+                            >
+                                Invite
+                            </button>
+                        )}
+
+                        <div ref={headerMenuRef}>
+                            <button
+                                type="button"
+                                className="ui-icon-btn ui-icon-btn--bordered"
                                 onClick={() => setHeaderMenuOpen((v) => !v)}
-                                aria-label="More options"
+                                aria-label="More workspace actions"
+                                aria-haspopup="menu"
+                                aria-expanded={headerMenuOpen}
                             >
                                 <DotsIcon />
                             </button>
                             {headerMenuOpen && (
-                                <ul
-                                    className="wd-menu-list wd-menu-list--header"
-                                    role="menu"
-                                >
-                                    <li role="none">
-                                        <button
-                                            type="button"
-                                            role="menuitem"
-                                            className="wd-menu-item"
-                                            onClick={() => {
-                                                setHeaderMenuOpen(false);
-                                                handleTogglePinWorkspace();
-                                            }}
-                                        >
-                                            {workspace.isPinned ? "Unpin" : "Pin"}
-                                        </button>
-                                    </li>
-                                    <li role="none">
-                                        <button
-                                            type="button"
-                                            role="menuitem"
-                                            className="wd-menu-item"
-                                            onClick={() => {
-                                                setHeaderMenuOpen(false);
-                                                handleArchiveWorkspace();
-                                            }}
-                                        >
-                                            Archive
-                                        </button>
-                                    </li>
-                                    {isAdmin && (
-                                        <li role="none">
-                                            <button
-                                                type="button"
-                                                role="menuitem"
-                                                className="wd-menu-item"
-                                                disabled={completingWorkspace}
-                                                onClick={() => {
-                                                    setHeaderMenuOpen(false);
-                                                    if (workspace.isCompleted) {
-                                                        handleReopenWorkspace();
-                                                    } else {
-                                                        handleRequestComplete();
-                                                    }
-                                                }}
-                                            >
-                                                {workspace.isCompleted ? "Reopen workspace" : "Mark complete"}
-                                            </button>
-                                        </li>
-                                    )}
-                                </ul>
+                                <ActionMenu
+                                    anchorRef={headerMenuRef}
+                                    floatingRef={headerMenuFloatingRef}
+                                    placement="below"
+                                    items={headerMenuItems}
+                                    label="Workspace actions"
+                                    onClose={() => setHeaderMenuOpen(false)}
+                                />
                             )}
                         </div>
                     </div>
                 </div>
 
+                {workspace.description && (
+                    <p className="wd-header__description">{workspace.description}</p>
+                )}
+
                 <div className="wd-header__progress">
-                    <div className="wd-header__progress-track">
+                    <div
+                        className="wd-header__progress-track"
+                        role="progressbar"
+                        aria-label="Tasks done"
+                        aria-valuenow={localProgress}
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                    >
                         <div
                             className="wd-header__progress-fill"
-                            style={{
-                                width: `${localProgress}%`,
-                                backgroundColor: progressColor,
-                            }}
+                            style={{ width: `${localProgress}%` }}
                         />
                     </div>
-                    <span className="wd-header__progress-pct">
-                        {localProgress}%
+                    <span>
+                        <strong>
+                            {completedTasks.length} of {tasks.length}
+                        </strong>{" "}
+                        task{tasks.length === 1 ? "" : "s"} done
                     </span>
+                    {workspace.dueDate && (
+                        <>
+                            <span aria-hidden="true">·</span>
+                            <span>Due {formatAbsoluteDate(workspace.dueDate)}</span>
+                        </>
+                    )}
                 </div>
             </header>
 
             {/* ── Tabs ── */}
-            <div className="wd-tabs" role="tablist">
-                {TABS.map((tab) => {
-                    const isActive = activeTab === tab.id;
-                    return (
-                        <button
-                            key={tab.id}
-                            type="button"
-                            role="tab"
-                            aria-selected={isActive}
-                            className={`wd-tab${isActive ? " wd-tab--active" : ""}`}
-                            onClick={() => handleTabChange(tab.id)}
-                        >
-                            {tab.label}
-                            {tab.soon && (
-                                <span className="wd-tab__soon">SOON</span>
-                            )}
-                        </button>
-                    );
-                })}
+            <div className="wd-tabbar">
+                <div className="wd-tabbar__tabs" role="tablist">
+                    {TABS.map((tab) => {
+                        const isActive = activeTab === tab.id;
+                        return (
+                            <button
+                                key={tab.id}
+                                type="button"
+                                role="tab"
+                                aria-selected={isActive}
+                                className={`wd-tabbar__tab${isActive ? " wd-tabbar__tab--active" : ""}`}
+                                onClick={() => handleTabChange(tab.id)}
+                            >
+                                {tab.label}
+                            </button>
+                        );
+                    })}
+                </div>
+                {(activeTab === "tasks" || activeTab === "kanban") && (
+                    <button
+                        type="button"
+                        className="ui-btn ui-btn--primary ui-btn--sm wd-tabbar__new"
+                        onClick={() => setShowNewTaskModal(true)}
+                    >
+                        <PlusIcon />
+                        New task
+                    </button>
+                )}
             </div>
 
             {/* ── Tab content ── */}
@@ -854,129 +914,66 @@ function WorkspaceDetail() {
                 {/* Tasks tab */}
                 {activeTab === "tasks" && (
                     <div className="tasks-tab">
-                        <div className="tasks-tab__summary">
-                            <span className="tasks-tab__count">
-                                {completedTasks.length} of {tasks.length} task
-                                {tasks.length !== 1 ? "s" : ""} complete
-                            </span>
-                            {overdueCount > 0 && (
-                                <span className="task-pill task-pill--error">
-                                    {overdueCount} overdue
-                                </span>
-                            )}
-                            {dueThisWeekCount > 0 && (
-                                <span className="task-pill task-pill--warning">
-                                    {dueThisWeekCount} due this week
-                                </span>
-                            )}
-                            <button
-                                type="button"
-                                className="tasks-tab__add-btn"
-                                onClick={() => setShowNewTaskModal(true)}
-                            >
-                                <span aria-hidden="true">+</span> Add task
-                            </button>
-                        </div>
-
-                        {sortedActiveTasks.length > 0 && (
-                            <div className="task-list">
-                                {sortedActiveTasks.map((task) => (
-                                    <TaskRow
-                                        key={task.id}
-                                        task={task}
-                                        member={memberById.get(task.ownerId)}
-                                        isAdmin={isAdmin}
-                                        currentUserId={currentUserId}
-                                        onSelect={() =>
-                                            handleSelectTask(task.id)
-                                        }
-                                        onToggle={() =>
-                                            handleToggleTask(task.id)
-                                        }
-                                        onReassign={() =>
-                                            setReassignTaskId(task.id)
-                                        }
-                                        onDelete={() =>
-                                            handleDeleteTask(task.id)
-                                        }
-                                        onRename={(taskId, title) =>
-                                            handleSaveTask(taskId, { title })
-                                        }
-                                        onColorChange={(taskId, color) =>
-                                            handleSaveTask(taskId, { color })
-                                        }
-                                    />
-                                ))}
+                        {tasks.length === 0 && (
+                            <div className="tasks-tab__empty">
+                                <p className="tasks-tab__empty-title">No tasks yet</p>
+                                <p className="tasks-tab__empty-sub">
+                                    Break this workspace into tasks to track what's left.
+                                </p>
+                                <button
+                                    type="button"
+                                    className="ui-btn ui-btn--primary ui-btn--sm"
+                                    onClick={() => setShowNewTaskModal(true)}
+                                >
+                                    <PlusIcon />
+                                    New task
+                                </button>
                             </div>
                         )}
 
-                        <button
-                            type="button"
-                            className="inline-add-trigger"
-                            onClick={() => setShowNewTaskModal(true)}
-                        >
-                            <span
-                                className="inline-add-trigger__icon"
-                                aria-hidden="true"
+                        {tasks.length > 0 && activeTasks.length === 0 && (
+                            <p className="tasks-tab__all-done">
+                                Every task here is done.
+                            </p>
+                        )}
+
+                        {taskGroups.map((group) => (
+                            <section
+                                key={group.id}
+                                className="task-group"
+                                aria-labelledby={`task-group-${group.id}`}
                             >
-                                +
-                            </span>
-                            Add a task…
-                        </button>
+                                <h2
+                                    id={`task-group-${group.id}`}
+                                    className={`ui-caps task-group__label${group.tone ? ` task-group__label--${group.tone}` : ""}`}
+                                >
+                                    {group.label} · {group.tasks.length}
+                                </h2>
+                                <div className="task-list">
+                                    {group.tasks.map(renderTaskRow)}
+                                </div>
+                            </section>
+                        ))}
 
                         {completedTasks.length > 0 && (
-                            <div className="completed-section">
+                            <section className="task-group">
                                 <button
                                     type="button"
-                                    className="completed-section__toggle"
+                                    className="ui-caps completed-toggle"
+                                    aria-expanded={completedOpen}
                                     onClick={() => setCompletedOpen((v) => !v)}
                                 >
-                                    <span className="completed-section__arrow">
-                                        {completedOpen ? "▼" : "▶"}
-                                    </span>
-                                    COMPLETED
-                                    <span className="completed-section__count">
-                                        {completedTasks.length}
-                                    </span>
+                                    <ChevronRightIcon
+                                        className={`completed-toggle__chevron${completedOpen ? " completed-toggle__chevron--open" : ""}`}
+                                    />
+                                    Completed · {completedTasks.length}
                                 </button>
                                 {completedOpen && (
-                                    <div className="task-list task-list--completed">
-                                        {completedTasks.map((task) => (
-                                            <TaskRow
-                                                key={task.id}
-                                                task={task}
-                                                member={memberById.get(
-                                                    task.ownerId,
-                                                )}
-                                                isAdmin={isAdmin}
-                                                currentUserId={currentUserId}
-                                                onSelect={() =>
-                                                    handleSelectTask(task.id)
-                                                }
-                                                onToggle={() =>
-                                                    handleToggleTask(task.id)
-                                                }
-                                                onReassign={() =>
-                                                    setReassignTaskId(task.id)
-                                                }
-                                                onDelete={() =>
-                                                    handleDeleteTask(task.id)
-                                                }
-                                                onRename={(taskId, title) =>
-                                                    handleSaveTask(taskId, {
-                                                        title,
-                                                    })
-                                                }
-                                                onColorChange={(taskId, color) =>
-                                                    handleSaveTask(taskId, {
-                                                        color,
-                                                    })
-                                                }
-                                            />
-                                        ))}
+                                    <div className="task-list">
+                                        {completedTasks.map(renderTaskRow)}
                                     </div>
                                 )}
-                            </div>
+                            </section>
                         )}
                     </div>
                 )}
@@ -986,29 +983,33 @@ function WorkspaceDetail() {
                     <div className="members-tab">
                         {isAdmin && (
                             <InvitePanel
+                                key={inviteRequest}
+                                defaultOpen={inviteRequest > 0}
                                 workspaceId={workspaceId}
                                 onMemberAdded={handleMemberAdded}
                             />
                         )}
-                        {membersLoading && !detailMembers && (
-                            <p className="members-tab__loading">
-                                Loading members…
-                            </p>
-                        )}
-                        <ul className="members-list">
-                            {displayMembers.map((m) => (
-                                <MemberListRow
-                                    key={m.id}
-                                    member={m}
-                                    isAdmin={isAdmin}
-                                    isSelf={m.id === currentUserId}
-                                    onRemove={handleRemoveMember}
-                                    onPromote={handlePromoteToAdmin}
-                                    onLeave={handleLeaveWorkspace}
-                                    onMessage={onComingSoon}
-                                />
-                            ))}
-                        </ul>
+                        <section className="task-group" aria-labelledby="members-heading">
+                            <h2 id="members-heading" className="ui-caps task-group__label">
+                                Members · {displayMembers.length}
+                            </h2>
+                            {membersLoading && !detailMembers && (
+                                <p className="members-tab__loading">Loading roles…</p>
+                            )}
+                            <ul className="members-list">
+                                {displayMembers.map((m) => (
+                                    <MemberListRow
+                                        key={m.id}
+                                        member={m}
+                                        isAdmin={isAdmin}
+                                        isSelf={m.id === currentUserId}
+                                        onRemove={requestRemoveMember}
+                                        onPromote={handlePromoteToAdmin}
+                                        onLeave={handleLeaveWorkspace}
+                                    />
+                                ))}
+                            </ul>
+                        </section>
                     </div>
                 )}
 
@@ -1016,10 +1017,11 @@ function WorkspaceDetail() {
                     <KanbanBoard
                         tasks={tasks}
                         memberById={memberById}
+                        selectedTaskId={selectedTaskId}
                         onSelect={handleSelectTask}
                         onStatusChange={handleTaskStatusChange}
                         onAddTask={() => setShowNewTaskModal(true)}
-                        onDelete={handleKanbanTrashDrop}
+                        onDelete={requestDeleteTask}
                     />
                 )}
 
@@ -1037,6 +1039,7 @@ function WorkspaceDetail() {
                         onToast={onToast}
                     />
                 )}
+            </div>
             </div>
 
             {/* ── Slide-over ── */}
@@ -1151,7 +1154,7 @@ function WorkspaceDetail() {
                         <div className="completion-modal__actions">
                             <button
                                 type="button"
-                                className="completion-modal__btn completion-modal__btn--primary"
+                                className="ui-btn ui-btn--primary"
                                 onClick={() => {
                                     setShowCompletionModal(false);
                                     handleMarkWorkspaceComplete();
@@ -1162,7 +1165,7 @@ function WorkspaceDetail() {
                             </button>
                             <button
                                 type="button"
-                                className="completion-modal__btn completion-modal__btn--ghost"
+                                className="ui-btn ui-btn--ghost"
                                 onClick={() => setShowCompletionModal(false)}
                             >
                                 Keep working
@@ -1183,10 +1186,7 @@ function WorkspaceDetail() {
                         aria-label="Confirm completion"
                         onClick={(e) => e.stopPropagation()}
                     >
-                        <h2
-                            className="completion-modal__heading"
-                            style={{ fontSize: "1.25rem" }}
-                        >
+                        <h2 className="completion-modal__heading completion-modal__heading--sm">
                             {tasks.filter((t) => t.status !== "DONE").length} task
                             {tasks.filter((t) => t.status !== "DONE").length !== 1
                                 ? "s"
@@ -1199,7 +1199,7 @@ function WorkspaceDetail() {
                         <div className="completion-modal__actions">
                             <button
                                 type="button"
-                                className="completion-modal__btn completion-modal__btn--primary"
+                                className="ui-btn ui-btn--primary"
                                 onClick={() => {
                                     setShowConfirmComplete(false);
                                     handleMarkWorkspaceComplete();
@@ -1210,7 +1210,7 @@ function WorkspaceDetail() {
                             </button>
                             <button
                                 type="button"
-                                className="completion-modal__btn completion-modal__btn--ghost"
+                                className="ui-btn ui-btn--ghost"
                                 onClick={() => setShowConfirmComplete(false)}
                             >
                                 Cancel
@@ -1234,10 +1234,7 @@ function WorkspaceDetail() {
                         aria-label="Reopen workspace"
                         onClick={(e) => e.stopPropagation()}
                     >
-                        <h2
-                            className="completion-modal__heading"
-                            style={{ fontSize: "1.25rem" }}
-                        >
+                        <h2 className="completion-modal__heading completion-modal__heading--sm">
                             This workspace is completed
                         </h2>
                         <p className="completion-modal__sub">
@@ -1246,14 +1243,14 @@ function WorkspaceDetail() {
                         <div className="completion-modal__actions">
                             <button
                                 type="button"
-                                className="completion-modal__btn completion-modal__btn--primary"
+                                className="ui-btn ui-btn--primary"
                                 onClick={handleReopenAndAdd}
                             >
                                 Reopen &amp; keep working
                             </button>
                             <button
                                 type="button"
-                                className="completion-modal__btn completion-modal__btn--ghost"
+                                className="ui-btn ui-btn--ghost"
                                 onClick={() => {
                                     setShowReopenModal(false);
                                     setPendingTaskData(null);

@@ -1,65 +1,68 @@
 import useDismissableMenu from '../../hooks/useDismissableMenu'
+import ActionMenu, { MENU_ICON } from '../shared/ActionMenu'
 import { DotsIcon } from './icons'
+import { PAGE_MENU_ICON } from './pageMenuIcons'
 import MemberAvatar from './MemberAvatar'
 
-export default function MemberListRow({ member, isAdmin, isSelf, onRemove, onPromote, onLeave, onMessage }) {
-  const [menuOpen, setMenuOpen, menuRef] = useDismissableMenu()
+export default function MemberListRow({ member, isAdmin, isSelf, onRemove, onPromote, onLeave }) {
+  const [menuOpen, setMenuOpen, menuRef, floatingRef] = useDismissableMenu()
+
+  const items = isSelf
+    ? [{ id: 'leave', label: 'Leave workspace', icon: MENU_ICON.leave, danger: true, onSelect: onLeave }]
+    : [
+        isAdmin && member.role !== 'admin' && {
+          id: 'promote',
+          label: 'Make admin',
+          icon: PAGE_MENU_ICON.promote,
+          onSelect: () => onPromote(member.id),
+        },
+        isAdmin && {
+          id: 'remove',
+          label: 'Remove from workspace',
+          icon: MENU_ICON.leave,
+          danger: true,
+          separatorBefore: member.role !== 'admin',
+          onSelect: () => onRemove(member),
+        },
+      ].filter(Boolean)
 
   return (
-    <li className="member-list-row">
-      <MemberAvatar member={member} size={38} />
-      <div className="member-list-row__info">
-        <span className="member-list-row__name">{member.name}</span>
-        {member.role === 'admin' && <span className="member-list-row__badge">Admin</span>}
-        {isSelf && <span className="member-list-row__self">you</span>}
+    <li className={`member-row${menuOpen ? ' member-row--menu-open' : ''}`}>
+      <MemberAvatar member={member} size={32} />
+      <div className="member-row__info">
+        <span className="member-row__name">{member.name}</span>
+        {isSelf && <span className="member-row__self">You</span>}
       </div>
-      <div className="member-list-row__menu-wrap" ref={menuRef}>
-        <button
-          type="button"
-          className="member-list-row__menu-trigger"
-          onClick={(e) => { e.stopPropagation(); setMenuOpen((v) => !v) }}
-          aria-label="Member actions"
-        >
-          <DotsIcon />
-        </button>
-        {menuOpen && (
-          <ul className="wd-menu-list" role="menu">
-            {isSelf ? (
-              <li role="none">
-                <button type="button" role="menuitem" className="wd-menu-item wd-menu-item--danger"
-                  onClick={() => { onLeave(); setMenuOpen(false) }}>
-                  Leave workspace
-                </button>
-              </li>
-            ) : (
-              <>
-                <li role="none">
-                  <button type="button" role="menuitem" className="wd-menu-item"
-                    onClick={() => { onMessage?.(); setMenuOpen(false) }}>
-                    Message
-                  </button>
-                </li>
-                {isAdmin && member.role !== 'admin' && (
-                  <li role="none">
-                    <button type="button" role="menuitem" className="wd-menu-item"
-                      onClick={() => { onPromote(member.id); setMenuOpen(false) }}>
-                      Promote to Admin
-                    </button>
-                  </li>
-                )}
-                {isAdmin && (
-                  <li role="none">
-                    <button type="button" role="menuitem" className="wd-menu-item wd-menu-item--danger"
-                      onClick={() => { onRemove(member.id); setMenuOpen(false) }}>
-                      Remove from workspace
-                    </button>
-                  </li>
-                )}
-              </>
-            )}
-          </ul>
-        )}
-      </div>
+      {member.role === 'admin' && <span className="member-row__role">Admin</span>}
+
+      {/* A plain member looking at someone else has nothing to do here, so
+          there's no ⋯ at all rather than an empty menu. */}
+      {items.length > 0 ? (
+        <div className="member-row__menu" ref={menuRef}>
+          <button
+            type="button"
+            className="ui-icon-btn ui-icon-btn--sm"
+            aria-label={`Actions for ${member.name}`}
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            onClick={(e) => { e.stopPropagation(); setMenuOpen((v) => !v) }}
+          >
+            <DotsIcon />
+          </button>
+          {menuOpen && (
+            <ActionMenu
+              anchorRef={menuRef}
+              floatingRef={floatingRef}
+              placement="below"
+              items={items}
+              label={`Actions for ${member.name}`}
+              onClose={() => setMenuOpen(false)}
+            />
+          )}
+        </div>
+      ) : (
+        <span className="member-row__menu-spacer" aria-hidden="true" />
+      )}
     </li>
   )
 }
