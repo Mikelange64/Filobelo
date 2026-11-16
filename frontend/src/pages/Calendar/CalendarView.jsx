@@ -4,6 +4,7 @@ import { getWorkspaceUrgency } from '../../utils/workspaceStatus'
 import { formatAbsoluteDate, formatDayCount, getDaysRemaining } from '../../utils/date'
 import './CalendarView.css'
 
+const LIST_CAP = 7
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -87,6 +88,14 @@ function CalendarView() {
     () =>
       items
         .filter((i) => getDaysRemaining(i.dueDate) < 0 && i.urgency === 'error')
+        .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate)),
+    [items]
+  )
+
+  const comingUp = useMemo(
+    () =>
+      items
+        .filter((i) => getDaysRemaining(i.dueDate) >= 0)
         .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate)),
     [items]
   )
@@ -233,25 +242,25 @@ function CalendarView() {
           </section>
 
           {overdue.length > 0 && (
-            <section className="ui-card cal-side-card cal-overdue">
-              <div className="cal-overdue__head ui-caps">Overdue · {overdue.length}</div>
-              {overdue.map((item) => (
-                <button
-                  type="button"
-                  key={item.key}
-                  className="cal-overdue__row"
-                  onClick={() => onSelectWorkspace(item.workspaceId)}
-                >
-                  <ItemMark item={item} />
-                  <span className="cal-entry__text">
-                    <span className="cal-entry__title">{item.title}</span>
-                    <ItemMeta item={item} />
-                  </span>
-                  <span className="cal-overdue__late">{formatDayCount(getDaysRemaining(item.dueDate))}</span>
-                </button>
-              ))}
-            </section>
+            <ItemList
+              title="Overdue"
+              tone="error"
+              items={overdue}
+              onSelect={onSelectWorkspace}
+              label={(item) => formatDayCount(getDaysRemaining(item.dueDate))}
+            />
           )}
+
+          <ItemList
+            title="Coming up"
+            items={comingUp}
+            emptyText="Nothing coming up."
+            onSelect={onSelectWorkspace}
+            label={(item) => {
+              const days = getDaysRemaining(item.dueDate)
+              return days <= 0 ? 'Today' : days === 1 ? 'Tomorrow' : `in ${days} days`
+            }}
+          />
 
           <div className="cal-legend">
             <span className="cal-legend__row"><span className="cal-mark" style={{ background: 'var(--color-text-muted)' }} />Task (dot = folder colour, ring = no folder)</span>
@@ -269,6 +278,35 @@ function ItemMark({ item, large = false }) {
   if (item.kind === 'workspace') return <FlagIcon size={large ? 16 : 12} />
   if (!item.color) return <span className="cal-mark cal-mark--ring" />
   return <span className="cal-mark" style={{ background: item.color }} />
+}
+
+// Overdue / Coming up. Shows the first LIST_CAP rows; "+n more" expands the
+// rest in place (and "Show less" folds them back).
+function ItemList({ title, tone = 'neutral', items, label, onSelect, emptyText }) {
+  const [expanded, setExpanded] = useState(false)
+  const shown = expanded ? items : items.slice(0, LIST_CAP)
+  const hidden = items.length - LIST_CAP
+  return (
+    <section className={`ui-card cal-side-card cal-list cal-list--${tone}`}>
+      <div className="cal-list__head ui-caps">{title} · {items.length}</div>
+      {items.length === 0 && <div className="cal-list__empty">{emptyText}</div>}
+      {shown.map((item) => (
+        <button type="button" key={item.key} className="cal-list__row" onClick={() => onSelect(item.workspaceId)}>
+          <ItemMark item={item} />
+          <span className="cal-entry__text">
+            <span className="cal-entry__title">{item.title}</span>
+            <ItemMeta item={item} />
+          </span>
+          <span className="cal-list__label">{label(item)}</span>
+        </button>
+      ))}
+      {hidden > 0 && (
+        <button type="button" className="cal-list__more" onClick={() => setExpanded((v) => !v)}>
+          {expanded ? 'Show less' : `+${hidden} more`}
+        </button>
+      )}
+    </section>
+  )
 }
 
 // Task: workspace name, then due date. Workspace: due date only (the flag

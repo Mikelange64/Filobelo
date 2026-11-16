@@ -230,14 +230,15 @@
 .cal-entry__title { font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
 .cal-entry__sub { font-size: 13px; color: var(--color-text-secondary); }
 
-.cal-overdue { padding: 0; gap: 0; overflow: hidden; }
+.cal-list { padding: 0; gap: 0; overflow: hidden; }
 
-.cal-overdue__head {
+.cal-list__head {
   padding: 16px 18px 8px;
-  color: var(--color-error-text);
 }
 
-.cal-overdue__row {
+.cal-list--error .cal-list__head { color: var(--color-error-text); }
+
+.cal-list__row {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -251,24 +252,41 @@
   cursor: pointer;
 }
 
-.cal-overdue__row:hover { background: var(--color-bg-card-hover); }
-.cal-overdue__row .cal-flag { color: var(--color-text-muted); }
-.cal-overdue__row .cal-entry__title { font-weight: 500; }
-.cal-overdue__row .cal-entry__sub { font-size: 12px; color: var(--color-text-muted); }
+.cal-list__row:hover { background: var(--color-bg-card-hover); }
+.cal-list__row .cal-flag { color: var(--color-text-muted); }
+.cal-list__row .cal-entry__title { font-weight: 500; }
+.cal-list__row .cal-entry__sub { font-size: 12px; color: var(--color-text-muted); }
 
-.cal-overdue__late {
+.cal-list__label {
   font-size: 12px;
   font-weight: 600;
-  color: var(--color-error-text);
+  color: var(--color-text-secondary);
   white-space: nowrap;
 }
 
-.cal-overdue__more {
+.cal-list--error .cal-list__label { color: var(--color-error-text); }
+
+.cal-list__empty {
   padding: 12px 18px;
   border-top: 1px solid var(--color-row-line);
   font-size: 13px;
   color: var(--color-text-secondary);
 }
+
+button.cal-list__more {
+  width: 100%;
+  border: none;
+  border-top: 1px solid var(--color-row-line);
+  background: transparent;
+  padding: 12px 18px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--color-brand-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+button.cal-list__more:hover { background: var(--color-bg-card-hover); }
 
 .cal-legend {
   display: flex;
@@ -290,7 +308,7 @@
 }
 
 /* Dot and flag share a 12px box so titles line up in the Overdue list. */
-.cal-overdue__row .cal-mark { margin: 0 2.5px; }
+.cal-list__row .cal-mark { margin: 0 2.5px; }
 
 /* Cells are height-capped, so their contents must not squash. */
 .cal-day > * { flex-shrink: 0; }
