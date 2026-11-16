@@ -37,3 +37,6 @@ SETUP.md
 # --- Setup ---
 backend/setup/PostgeSql_setup.md
 backend/setup/Redis_setup.md
+
+# --- Specs ---
+docs/specs/
