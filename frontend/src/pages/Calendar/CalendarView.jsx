@@ -119,11 +119,15 @@ function CalendarView() {
   const days = getCalendarDays(year, month)
   const selectedItems = byDay.get(dayKey(selected)) ?? []
   const rows = days.length / 7
+  const firstYear = Math.min(today.getFullYear(), year) - 5
+  const yearOptions = Array.from({ length: Math.max(today.getFullYear(), year) + 5 - firstYear + 1 }, (_, i) => firstYear + i)
 
   return (
     <div className="calendar-page">
       <header className="calendar-page__header">
-        <h1 className="calendar-page__title">{MONTH_NAMES[month]} {year}</h1>
+        <button type="button" className="ui-btn ui-btn--secondary ui-btn--sm" onClick={() => goToDate(new Date())}>
+          Today
+        </button>
         <div className="calendar-page__nav">
           <button type="button" className="ui-icon-btn ui-icon-btn--bordered" onClick={() => shiftMonth(-1)} aria-label="Previous month">
             <Chevron dir="left" />
@@ -132,9 +136,25 @@ function CalendarView() {
             <Chevron dir="right" />
           </button>
         </div>
-        <button type="button" className="ui-btn ui-btn--secondary ui-btn--sm" onClick={() => goToDate(new Date())}>
-          Today
-        </button>
+        <h1 className="calendar-page__title">{MONTH_NAMES[month]} {year}</h1>
+        <div className="calendar-page__jump">
+          <select
+            className="cal-select"
+            value={month}
+            onChange={(e) => { setMonth(Number(e.target.value)); setSelected(new Date(year, Number(e.target.value), 1)) }}
+            aria-label="Month"
+          >
+            {MONTH_NAMES.map((m, i) => <option key={m} value={i}>{m}</option>)}
+          </select>
+          <select
+            className="cal-select"
+            value={year}
+            onChange={(e) => { setYear(Number(e.target.value)); setSelected(new Date(Number(e.target.value), month, 1)) }}
+            aria-label="Year"
+          >
+            {yearOptions.map((y) => <option key={y} value={y}>{y}</option>)}
+          </select>
+        </div>
       </header>
 
       <div className="calendar-page__body">

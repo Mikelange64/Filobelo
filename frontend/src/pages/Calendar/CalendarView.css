@@ -24,8 +24,27 @@
 .calendar-page__nav {
   display: flex;
   gap: 4px;
-  margin-left: 4px;
 }
+
+.calendar-page__jump {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.cal-select {
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-bg-card);
+  color: var(--color-text-primary);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.cal-select:hover { border-color: var(--color-border-strong); }
 
 .calendar-page__body {
   flex: 1;
