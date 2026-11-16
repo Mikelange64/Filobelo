@@ -464,7 +464,7 @@
   z-index: 900;
 }
 
-/* Rich menu (shared/ActionMenu): icon + semibold label + one-key shortcut.
+/* Rich menu (shared/ActionMenu): icon + semibold label.
    Destructive items are red, icon included, and sit alone at the bottom. */
 .ui-menu--rich {
   min-width: 248px;
@@ -501,21 +501,6 @@
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.ui-menu__kbd {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 22px;
-  height: 22px;
-  padding: 0 6px;
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  font-family: inherit;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--color-text-secondary);
 }
 
 .ui-menu__chevron {

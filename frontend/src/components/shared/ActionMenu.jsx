@@ -1,19 +1,17 @@
-import { Fragment, useEffect, useState } from 'react'
+import { Fragment, useState } from 'react'
 import Popover from './Popover'
 export { MENU_ICON } from './menuIcons'
 
-// The ⋯ menu used across the sidebar: icon, semibold label, one-key shortcut,
-// destructive items in red. Rendered through Popover, so it is never clipped
-// or painted over.
+// The ⋯ menu used across the sidebar: icon, semibold label, destructive items
+// in red. No keyboard shortcuts on purpose: the menu is opened with the mouse,
+// and the option is right there. Rendered through Popover, so it is never
+// clipped or painted over.
 //
 // items: [{
-//   id, label, icon (svg path d), shortcut ('P', ',', '⌫' ...),
+//   id, label, icon (svg path d),
 //   onSelect, danger, disabled, hint, active, separatorBefore,
-//   submenu: ReactNode   // flies out to the right, opened by hover/click/key
+//   submenu: ReactNode   // flies out to the right, opened by hover or click
 // }]
-//
-// While the menu is open a plain key press (no modifier, not typing in a
-// field) runs the item with that shortcut. '⌫' matches Backspace and Delete.
 
 export function MenuIcon({ d, size = 17 }) {
   return (
@@ -23,19 +21,7 @@ export function MenuIcon({ d, size = 17 }) {
   )
 }
 
-
-function matchesShortcut(shortcut, key) {
-  if (!shortcut) return false
-  if (shortcut === '⌫') return key === 'Backspace' || key === 'Delete'
-  return shortcut.toLowerCase() === key.toLowerCase()
-}
-
-function isTyping(target) {
-  const tag = target?.tagName
-  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target?.isContentEditable
-}
-
-export function MenuItem({ icon, label, shortcut, hint, danger, active, disabled, trailing, onClick, onMouseEnter, highlighted, role = 'menuitem', ...rest }) {
+export function MenuItem({ icon, label, hint, danger, active, disabled, trailing, onClick, onMouseEnter, highlighted, role = 'menuitem', ...rest }) {
   return (
     <button
       type="button"
@@ -49,7 +35,6 @@ export function MenuItem({ icon, label, shortcut, hint, danger, active, disabled
       {icon ? (typeof icon === 'string' ? <MenuIcon d={icon} /> : icon) : null}
       <span className="ui-menu__label">{label}</span>
       {hint && <span className="ui-menu__hint">{hint}</span>}
-      {shortcut && !disabled && <kbd className="ui-menu__kbd">{shortcut}</kbd>}
       {trailing}
     </button>
   )
@@ -66,23 +51,6 @@ function ChevronRight() {
 export default function ActionMenu({ anchorRef, floatingRef, items, onClose, placement = 'right', className = '', label }) {
   const [openSub, setOpenSub] = useState(null)
   const visible = items.filter(Boolean)
-
-  useEffect(() => {
-    function onKeyDown(e) {
-      if (e.metaKey || e.ctrlKey || e.altKey || isTyping(e.target)) return
-      const item = visible.find((it) => !it.disabled && matchesShortcut(it.shortcut, e.key))
-      if (!item) return
-      e.preventDefault()
-      if (item.submenu) {
-        setOpenSub((cur) => (cur === item.id ? null : item.id))
-        return
-      }
-      onClose?.()
-      item.onSelect?.()
-    }
-    document.addEventListener('keydown', onKeyDown)
-    return () => document.removeEventListener('keydown', onKeyDown)
-  })
 
   return (
     <Popover
@@ -101,7 +69,6 @@ export default function ActionMenu({ anchorRef, floatingRef, items, onClose, pla
           <MenuItem
             icon={item.icon}
             label={item.label}
-            shortcut={item.shortcut}
             hint={item.hint}
             danger={item.danger}
             active={item.active}

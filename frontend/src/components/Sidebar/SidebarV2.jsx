@@ -300,19 +300,17 @@ function FolderItem({ folder, foldersByParent, workspaces, folders, activeWorksp
               label={`Options for ${folder.name}`}
               onClose={closeMenu}
               items={[
-                { id: 'sub', label: 'New subfolder', icon: MENU_ICON.newFolder, shortcut: 'N', onSelect: startSubfolder },
+                { id: 'sub', label: 'New subfolder', icon: MENU_ICON.newFolder, onSelect: startSubfolder },
                 {
                   id: 'color',
                   label: 'Change colour',
                   icon: MENU_ICON.palette,
-                  shortcut: 'C',
                   submenu: <ColorPicker inline selected={folder.color} onChange={changeColor} />,
                 },
                 (moveTargets.length > 0 || folder.parent_id != null) && {
                   id: 'move',
                   label: 'Move to',
                   icon: MENU_ICON.move,
-                  shortcut: 'M',
                   submenu: (
                     <>
                       <MenuItem
@@ -342,7 +340,6 @@ function FolderItem({ folder, foldersByParent, workspaces, folders, activeWorksp
                   id: 'delete',
                   label: 'Delete folder',
                   icon: MENU_ICON.trash,
-                  shortcut: '⌫',
                   danger: true,
                   separatorBefore: true,
                   onSelect: () => setConfirmDelete(true),
@@ -598,9 +595,9 @@ function CompletedList({ folders, activeWorkspaceId, onSelectWorkspace, onReopen
                 </span>
               )}
               menuItems={[
-                { id: 'open', label: 'Open', icon: MENU_ICON.open, shortcut: 'O', onSelect: () => onSelectWorkspace?.(ws.id) },
+                { id: 'open', label: 'Open', icon: MENU_ICON.open, onSelect: () => onSelectWorkspace?.(ws.id) },
                 isAdmin
-                  ? { id: 'reopen', label: 'Reopen', icon: MENU_ICON.reopen, shortcut: 'R', onSelect: () => onReopen?.(ws.id) }
+                  ? { id: 'reopen', label: 'Reopen', icon: MENU_ICON.reopen, onSelect: () => onReopen?.(ws.id) }
                   : { id: 'reopen', label: 'Reopen', icon: MENU_ICON.reopen, hint: 'Admins only', disabled: true },
               ]}
             />
@@ -647,8 +644,8 @@ function ArchivedList({ workspaces, folders, activeWorkspaceId, onSelectWorkspac
             onSelect={onSelectWorkspace}
             marker={null}
             menuItems={[
-              { id: 'open', label: 'Open', icon: MENU_ICON.open, shortcut: 'O', onSelect: () => onSelectWorkspace?.(ws.id) },
-              { id: 'restore', label: 'Restore', icon: MENU_ICON.restore, shortcut: 'R', onSelect: () => onRestore?.(ws.id) },
+              { id: 'open', label: 'Open', icon: MENU_ICON.open, onSelect: () => onSelectWorkspace?.(ws.id) },
+              { id: 'restore', label: 'Restore', icon: MENU_ICON.restore, onSelect: () => onRestore?.(ws.id) },
             ]}
           />
         ))}

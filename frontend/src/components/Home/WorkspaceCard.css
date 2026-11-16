@@ -94,10 +94,45 @@
 }
 
 .workspace-card__status {
+  display: flex;
+  align-items: center;
+  min-height: 22px;
+}
+
+.workspace-card__no-deadline {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-text-muted);
+}
+
+/* Fills the middle of the card; the progress block stays at the bottom. */
+.workspace-card__next {
   flex: 1;
   display: flex;
-  align-items: flex-start;
-  min-height: 22px;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.workspace-card__next-label {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.workspace-card__next-when--error { color: var(--color-error); font-weight: 600; }
+.workspace-card__next-when--warning { color: var(--color-warning); font-weight: 600; }
+
+.workspace-card__next-title {
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.workspace-card__next-title--muted {
+  color: var(--color-text-secondary);
+  font-weight: 400;
 }
 
 .workspace-card__foot {

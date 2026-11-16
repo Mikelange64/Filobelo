@@ -19,6 +19,27 @@ function getCardPill(workspace) {
   return null
 }
 
+// The task to show as "Next up": the open task due soonest, or the first open
+// task when none has a date. Returns { label, title, tone } or null.
+function getNextUp(tasks = []) {
+  if (tasks.length === 0) return { label: 'Next up', title: 'No tasks yet', muted: true }
+  const open = tasks.filter((t) => t.status !== 'DONE')
+  if (open.length === 0) return { label: 'Next up', title: 'All tasks done', muted: true }
+  const dated = open
+    .filter((t) => t.dueDate)
+    .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate))
+  if (dated.length === 0) return { label: 'Next up · no due date', title: open[0].title }
+  const task = dated[0]
+  const days = getDaysRemaining(task.dueDate)
+  let when
+  let tone = null
+  if (days < 0) { when = `${formatDayCount(days)} late`; tone = 'error' }
+  else if (days === 0) { when = 'due today'; tone = 'warning' }
+  else if (days === 1) { when = 'due tomorrow'; tone = 'warning' }
+  else when = `due in ${formatDayCount(days)}`
+  return { label: 'Next up', when, tone, title: task.title }
+}
+
 function ContextMenu({ x, y, onComplete, onClose }) {
   const ref = useRef(null)
 
@@ -62,6 +83,7 @@ function FolderGlyph() {
 // only - status is the pill, never the colour.
 function WorkspaceCard({ workspace, folder, members, onSelect, onComplete }) {
   const pill = getCardPill(workspace)
+  const nextUp = getNextUp(workspace.tasks)
   const [ctxMenu, setCtxMenu] = useState(null)
 
   // Use real member objects when available; otherwise generate placeholders from the count
@@ -110,7 +132,24 @@ function WorkspaceCard({ workspace, folder, members, onSelect, onComplete }) {
         </span>
 
         <span className="workspace-card__status">
-          {pill && <span className={`ui-pill ui-pill--sm ui-pill--${pill.tone}`}>{pill.label}</span>}
+          {pill
+            ? <span className={`ui-pill ui-pill--sm ui-pill--${pill.tone}`}>{pill.label}</span>
+            : !workspace.dueDate && <span className="workspace-card__no-deadline">No deadline</span>}
+        </span>
+
+        <span className="workspace-card__next">
+          <span className="workspace-card__next-label">
+            {nextUp.label}
+            {nextUp.when && (
+              <>
+                {' · '}
+                <span className={nextUp.tone ? `workspace-card__next-when--${nextUp.tone}` : undefined}>{nextUp.when}</span>
+              </>
+            )}
+          </span>
+          <span className={`workspace-card__next-title${nextUp.muted ? ' workspace-card__next-title--muted' : ''}`}>
+            {nextUp.title}
+          </span>
         </span>
 
         <span className="workspace-card__foot">
