@@ -1,8 +1,33 @@
 import { useState } from 'react'
 import { patchWorkspace } from '../../api/client'
-import { formatDueDate, toDateInputValue, dateInputToISO } from '../../utils/date'
+import { formatAbsoluteDate, formatDueDate, toDateInputValue, dateInputToISO } from '../../utils/date'
 import useDelayedFlag from '../../hooks/useDelayedFlag'
 import './SettingsTab.css'
+
+// Workspace page → Settings tab. Same form language as the account settings
+// modal: a two-column row per section (title + why on the left, controls on
+// the right). Only admins edit; members see the values read-only.
+
+function Section({ title, desc, children }) {
+  return (
+    <section className="wss-section">
+      <div className="wss-section__aside">
+        <h2 className="wss-section__title">{title}</h2>
+        {desc && <p className="wss-section__desc">{desc}</p>}
+      </div>
+      <div className="wss-section__body">{children}</div>
+    </section>
+  )
+}
+
+function ReadOnlyField({ label, value, empty }) {
+  return (
+    <div className="ui-field">
+      <span className="ui-field__label">{label}</span>
+      <p className={`wss-value${value ? '' : ' wss-value--empty'}`}>{value || empty}</p>
+    </div>
+  )
+}
 
 export default function SettingsTab({ workspace, isAdmin, workspaceId, onWorkspaceUpdate, onLeave, onArchive, onComplete, onReopen, onToast }) {
   const [title, setTitle] = useState(workspace.title)
@@ -44,106 +69,168 @@ export default function SettingsTab({ workspace, isAdmin, workspaceId, onWorkspa
     }
   }
 
+  function handleDiscard() {
+    setTitle(workspace.title)
+    setDescription(workspace.description ?? '')
+    setDueDate(toDateInputValue(workspace.dueDate))
+  }
+
+  let saveHint = null
+  if (justSaved && !isDirty) saveHint = <span className="wss-save-row__success" role="status">Saved</span>
+  else if (!isDirty) saveHint = <span className="wss-save-row__hint">No changes yet</span>
+  else if (!trimTitle) saveHint = <span className="wss-save-row__error">Name can’t be empty</span>
+
+  const memberNote = isAdmin ? '' : ' Only admins can change these.'
+
+  let dangerDesc
+  if (isSoleMember) dangerDesc = isAdmin ? 'Archive keeps everything. Delete can’t be undone.' : 'Delete can’t be undone.'
+  else dangerDesc = isAdmin ? 'Archive keeps everything. Leaving removes your access.' : 'Leaving removes your access.'
+
+  const deleteDesc = 'Permanently deletes the workspace and all its tasks. You’re the only member.'
+
   return (
-    <div className="settings-tab">
-      <section className="settings-section">
-        <h2 className="settings-section__title">General</h2>
-
-        <div className="settings-field">
-          <label className="settings-field__label">Name</label>
-          {isAdmin
-            ? <input className="settings-field__input" value={title} onChange={(e) => setTitle(e.target.value)} />
-            : <p className="settings-field__value">{workspace.title}</p>
-          }
-        </div>
-
-        <div className="settings-field">
-          <label className="settings-field__label">Description</label>
-          {isAdmin
-            ? <textarea className="settings-field__textarea" value={description} onChange={(e) => setDescription(e.target.value)} rows={3} />
-            : <p className="settings-field__value">{workspace.description}</p>
-          }
-        </div>
-
-        <div className="settings-field">
-          <label className="settings-field__label">Due date</label>
-          {isAdmin
-            ? <input type="date" className="settings-field__input" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
-            : <p className="settings-field__value">{workspace.dueDate ? formatDueDate(workspace.dueDate) : 'No due date'}</p>
-          }
-        </div>
-
-        {isAdmin && (
-          <button type="button" className="settings-save-btn" onClick={handleSave} disabled={!canSave}>
-            {showSaving ? 'Saving…' : justSaved && !isDirty ? 'Saved ✓' : 'Save changes'}
-          </button>
+    <div className="wss">
+      <Section title="General" desc={`How this workspace appears in the sidebar and on Home.${memberNote}`}>
+        {isAdmin ? (
+          <>
+            <div className="ui-field">
+              <label className="ui-field__label" htmlFor="wss-name">Name</label>
+              <input
+                id="wss-name"
+                className="ui-input"
+                value={title}
+                maxLength={50}
+                onChange={(e) => setTitle(e.target.value)}
+              />
+            </div>
+            <div className="ui-field">
+              <label className="ui-field__label" htmlFor="wss-desc">Description</label>
+              <textarea
+                id="wss-desc"
+                className="ui-textarea"
+                value={description}
+                maxLength={500}
+                placeholder="What is this workspace for?"
+                onChange={(e) => setDescription(e.target.value)}
+              />
+            </div>
+          </>
+        ) : (
+          <>
+            <ReadOnlyField label="Name" value={workspace.title} />
+            <ReadOnlyField label="Description" value={workspace.description} empty="No description" />
+          </>
         )}
-      </section>
+      </Section>
+
+      <Section title="Schedule" desc={`The deadline drives the overdue alerts.${memberNote}`}>
+        <div className="wss-grid">
+          {isAdmin ? (
+            <div className="ui-field">
+              <label className="ui-field__label" htmlFor="wss-due">Due date</label>
+              <input
+                id="wss-due"
+                type="date"
+                className="ui-input"
+                value={dueDate}
+                onChange={(e) => setDueDate(e.target.value)}
+              />
+            </div>
+          ) : (
+            <ReadOnlyField
+              label="Due date"
+              value={workspace.dueDate ? `${formatAbsoluteDate(workspace.dueDate)} · ${formatDueDate(workspace.dueDate)}` : ''}
+              empty="No due date"
+            />
+          )}
+        </div>
+
+        {/* One save covers General and Schedule. */}
+        {isAdmin && (
+          <div className="wss-save-row">
+            {saveHint}
+            {isDirty && (
+              <button type="button" className="ui-btn ui-btn--ghost" onClick={handleDiscard} disabled={saving}>
+                Discard
+              </button>
+            )}
+            <button type="button" className="ui-btn ui-btn--primary" onClick={handleSave} disabled={!canSave}>
+              {showSaving ? 'Saving…' : 'Save changes'}
+            </button>
+          </div>
+        )}
+      </Section>
 
       {isAdmin && (
-        <section className="settings-section">
-          <h2 className="settings-section__title">Completion</h2>
-          <div className="settings-danger-row">
-            {workspace.isCompleted ? (
+        <Section title="Completion" desc="Finished everything? Close it out.">
+          <div className="wss-card">
+            <div className="wss-row">
+              {workspace.isCompleted ? (
+                <>
+                  <div className="wss-row__text">
+                    <span className="wss-row__title">Workspace completed</span>
+                    <span className="wss-row__desc">Reopen it to keep working on it.</span>
+                  </div>
+                  <button type="button" className="ui-btn ui-btn--secondary" onClick={onReopen}>
+                    Reopen
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div className="wss-row__text">
+                    <span className="wss-row__title">Mark workspace complete</span>
+                    <span className="wss-row__desc">Moves it to your completed list. You can reopen it any time.</span>
+                  </div>
+                  <button type="button" className="ui-btn ui-btn--secondary" onClick={onComplete}>
+                    Mark complete
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </Section>
+      )}
+
+      <Section title="Danger zone" desc={dangerDesc}>
+        <div className="wss-card wss-card--danger">
+          {isAdmin && (
+            <div className="wss-row">
+              <div className="wss-row__text">
+                <span className="wss-row__title">Archive workspace</span>
+                <span className="wss-row__desc">Hides it from the active list. Restore it any time from Archived in the sidebar.</span>
+              </div>
+              <button type="button" className="ui-btn ui-btn--secondary" onClick={onArchive}>
+                Archive
+              </button>
+            </div>
+          )}
+          {/* Confirmation is a modal owned by the page (onLeave opens it), so
+              this row never changes shape. */}
+          <div className="wss-row">
+            {isSoleMember ? (
               <>
-                <div>
-                  <p className="settings-danger-label">Workspace completed</p>
-                  <p className="settings-danger-desc">Reopen this workspace to keep working on it.</p>
+                <div className="wss-row__text">
+                  <span className="wss-row__title wss-row__title--danger">Delete workspace</span>
+                  <span className="wss-row__desc">{deleteDesc}</span>
                 </div>
-                <button type="button" className="settings-complete-btn settings-complete-btn--reopen" onClick={onReopen}>
-                  Reopen
+                <button type="button" className="ui-btn ui-btn--danger" onClick={onLeave}>
+                  Delete…
                 </button>
               </>
             ) : (
               <>
-                <div>
-                  <p className="settings-danger-label">Mark workspace complete</p>
-                  <p className="settings-danger-desc">Closes this workspace and moves it to your completed list.</p>
+                <div className="wss-row__text">
+                  <span className="wss-row__title">Leave workspace</span>
+                  <span className="wss-row__desc">You’ll lose access to its tasks and discussions.</span>
                 </div>
-                <button type="button" className="settings-complete-btn" onClick={onComplete}>
-                  Mark complete
+                <button type="button" className="ui-btn ui-btn--danger-outline" onClick={onLeave}>
+                  Leave…
                 </button>
               </>
             )}
           </div>
-        </section>
-      )}
-
-      <section className="settings-section settings-section--danger">
-        <h2 className="settings-section__title">Danger zone</h2>
-
-        <div className="settings-danger-row">
-          <div>
-            <p className="settings-danger-label">{isSoleMember ? 'Delete workspace' : 'Leave workspace'}</p>
-            <p className="settings-danger-desc">
-              {isSoleMember
-                ? "You're the only member — this permanently deletes the workspace and all its tasks."
-                : 'You will lose access to all tasks and discussions.'}
-            </p>
-          </div>
-          {/* Confirmation is a modal owned by the page (onLeave opens it), so
-              this row never changes shape. */}
-          <button
-            type="button"
-            className={`settings-danger-btn${isSoleMember ? ' settings-danger-btn--critical' : ''}`}
-            onClick={onLeave}
-          >
-            {isSoleMember ? 'Delete' : 'Leave'}
-          </button>
         </div>
-
-        {isAdmin && (
-          <div className="settings-danger-row">
-            <div>
-              <p className="settings-danger-label">Archive workspace</p>
-              <p className="settings-danger-desc">Hides this workspace from the active list. Restore it any time from Archived in the sidebar.</p>
-            </div>
-            <button type="button" className="settings-danger-btn" onClick={onArchive}>
-              Archive
-            </button>
-          </div>
-        )}
-      </section>
+      </Section>
     </div>
   )
 }

@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import SidebarV2 from './components/Sidebar/SidebarV2'
 import NewWorkspaceModal from './components/Home/NewWorkspaceModal'
-import ProfileModal from './components/Profile/ProfileModal'
+import SettingsModal from './components/Profile/SettingsModal'
 import CalendarModal from './components/Calendar/CalendarModal'
 import Toast from './components/shared/Toast'
 import { useAuth } from './context/AuthContext'
@@ -434,7 +434,7 @@ function AppShell() {
       )}
 
       {showProfileModal && (
-        <ProfileModal onClose={() => setShowProfileModal(false)} onToast={setToast} />
+        <SettingsModal onClose={() => setShowProfileModal(false)} onToast={setToast} />
       )}
 
       {toast && <Toast message={toast} onDismiss={dismissToast} />}
