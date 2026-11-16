@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import useDismissableMenu from '../../hooks/useDismissableMenu'
+import useDelayedFlag from '../../hooks/useDelayedFlag'
 import { createLink } from '../../api/client'
 import ResourceRow from './ResourceRow'
 
@@ -8,6 +9,7 @@ export default function LinksPanel({ workspaceId, taskId, resources, loading, on
   const [title, setTitle] = useState('')
   const [url, setUrl] = useState('')
   const [saving, setSaving] = useState(false)
+  const showSaving = useDelayedFlag(saving)
   const [formError, setFormError] = useState('')
 
   useEffect(() => {
@@ -18,10 +20,6 @@ export default function LinksPanel({ workspaceId, taskId, resources, loading, on
     }
   }, [adding])
 
-  function resetForm() {
-    setAdding(false)
-  }
-
   async function handleAdd() {
     if (!title.trim() || !url.trim()) return
     setSaving(true)
@@ -29,7 +27,7 @@ export default function LinksPanel({ workspaceId, taskId, resources, loading, on
     try {
       const created = await createLink(workspaceId, taskId, { title: title.trim(), url: url.trim() })
       onAdded(created)
-      resetForm()
+      setAdding(false)
     } catch (err) {
       setFormError(err.detail ?? 'Could not add link')
     } finally {
@@ -38,11 +36,11 @@ export default function LinksPanel({ workspaceId, taskId, resources, loading, on
   }
 
   return (
-    <div className="resources-panel">
+    <div className="resources-panel" role="tabpanel" aria-label="Links">
       {loading ? (
         <p className="slide-over__muted">Loading…</p>
-      ) : resources.length === 0 && !adding ? (
-        <div className="resources-panel__empty">No links yet.</div>
+      ) : resources.length === 0 ? (
+        !adding && <p className="resources-panel__empty">No links yet.</p>
       ) : (
         <div className="resources-panel__list">
           {resources.map((r) => (
@@ -52,33 +50,40 @@ export default function LinksPanel({ workspaceId, taskId, resources, loading, on
       )}
 
       {adding ? (
-        <div className="resources-panel__form" ref={formRef}>
+        <div className="resource-form" ref={formRef}>
           <input
-            className="resources-panel__input"
+            className="ui-input"
             placeholder="Title"
+            aria-label="Link title"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             autoFocus
           />
           <input
-            className="resources-panel__input"
+            className="ui-input"
             placeholder="https://…"
+            aria-label="Link address"
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') handleAdd() }}
           />
-          <div className="resources-panel__form-actions">
-            <button type="button" className="invite-panel__add-btn" onClick={handleAdd} disabled={saving}>
-              {saving ? 'Adding…' : 'Add link'}
+          {formError && <p className="resource-form__error" role="alert">{formError}</p>}
+          <div className="resource-form__actions">
+            <button type="button" className="ui-btn ui-btn--ghost ui-btn--xs" onClick={() => setAdding(false)}>Cancel</button>
+            <button
+              type="button"
+              className="ui-btn ui-btn--primary ui-btn--xs"
+              onClick={handleAdd}
+              disabled={saving || !title.trim() || !url.trim()}
+            >
+              {showSaving ? 'Adding…' : 'Add link'}
             </button>
-            <button type="button" className="invite-panel__cancel" onClick={resetForm}>✕</button>
           </div>
-          {formError && <p className="invite-panel__error">{formError}</p>}
         </div>
       ) : (
-        <div className="resources-panel__add-row">
-          <button type="button" className="resources-panel__add-btn" onClick={() => setAdding(true)}>+ Link</button>
-        </div>
+        <button type="button" className="ui-btn ui-btn--dashed ui-btn--sm resources-panel__add" onClick={() => setAdding(true)}>
+          + Add link
+        </button>
       )}
     </div>
   )

@@ -4,7 +4,7 @@ import ResourceRow from './ResourceRow'
 import NoteModal from './NoteModal'
 import NoteViewer from './NoteViewer'
 
-export default function NotesPanel({ workspaceId, taskId, taskColor, resources, loading, onAdded, onDelete, onUpdate, onToast }) {
+export default function NotesPanel({ workspaceId, taskId, resources, loading, onAdded, onDelete, onUpdate, onToast }) {
   const [modalTarget, setModalTarget] = useState(null) // null | 'new' | resource
   const [viewingNote, setViewingNote] = useState(null) // null | resource
 
@@ -19,11 +19,11 @@ export default function NotesPanel({ workspaceId, taskId, taskColor, resources, 
   }
 
   return (
-    <div className="resources-panel">
+    <div className="resources-panel" role="tabpanel" aria-label="Notes">
       {loading ? (
         <p className="slide-over__muted">Loading…</p>
       ) : resources.length === 0 ? (
-        <div className="resources-panel__empty">No notes yet.</div>
+        <p className="resources-panel__empty">No notes yet.</p>
       ) : (
         <div className="resources-panel__list">
           {resources.map((r) => (
@@ -39,9 +39,9 @@ export default function NotesPanel({ workspaceId, taskId, taskColor, resources, 
         </div>
       )}
 
-      <div className="resources-panel__add-row">
-        <button type="button" className="resources-panel__add-btn" onClick={() => setModalTarget('new')}>+ Note</button>
-      </div>
+      <button type="button" className="ui-btn ui-btn--dashed ui-btn--sm resources-panel__add" onClick={() => setModalTarget('new')}>
+        + Add note
+      </button>
 
       {viewingNote && (
         <NoteViewer
@@ -55,7 +55,6 @@ export default function NotesPanel({ workspaceId, taskId, taskColor, resources, 
         <NoteModal
           initialTitle={modalTarget === 'new' ? '' : modalTarget.title}
           initialContent={modalTarget === 'new' ? '' : modalTarget.content}
-          accentColor={taskColor}
           onSave={handleSave}
           onClose={() => setModalTarget(null)}
         />

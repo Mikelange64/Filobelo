@@ -1,9 +1,11 @@
 import { useState, useRef } from 'react'
 import { uploadResourceFile } from '../../api/client'
+import useDelayedFlag from '../../hooks/useDelayedFlag'
 import ResourceRow from './ResourceRow'
 
 export default function FilesPanel({ workspaceId, taskId, resources, loading, onAdded, onToast, onDelete }) {
   const [uploading, setUploading] = useState(false)
+  const showUploading = useDelayedFlag(uploading)
   const fileRef = useRef(null)
 
   async function handleFileChange(e) {
@@ -22,11 +24,11 @@ export default function FilesPanel({ workspaceId, taskId, resources, loading, on
   }
 
   return (
-    <div className="resources-panel">
+    <div className="resources-panel" role="tabpanel" aria-label="Files">
       {loading ? (
         <p className="slide-over__muted">Loading…</p>
       ) : resources.length === 0 ? (
-        <div className="resources-panel__empty">No files yet.</div>
+        <p className="resources-panel__empty">No files yet.</p>
       ) : (
         <div className="resources-panel__list">
           {resources.map((r) => (
@@ -35,17 +37,15 @@ export default function FilesPanel({ workspaceId, taskId, resources, loading, on
         </div>
       )}
 
-      <div className="resources-panel__add-row">
-        <input ref={fileRef} type="file" className="resources-panel__file-input" onChange={handleFileChange} tabIndex={-1} />
-        <button
-          type="button"
-          className="resources-panel__add-btn"
-          onClick={() => fileRef.current?.click()}
-          disabled={uploading}
-        >
-          {uploading ? 'Uploading…' : '+ File'}
-        </button>
-      </div>
+      <input ref={fileRef} type="file" className="resources-panel__file-input" onChange={handleFileChange} tabIndex={-1} aria-hidden="true" />
+      <button
+        type="button"
+        className="ui-btn ui-btn--dashed ui-btn--sm resources-panel__add"
+        onClick={() => fileRef.current?.click()}
+        disabled={uploading}
+      >
+        {showUploading ? 'Uploading…' : '+ Add file'}
+      </button>
     </div>
   )
 }
