@@ -3,7 +3,7 @@ import EmptyState from './EmptyState'
 import { getActiveWorkspaces, sortByUrgency } from '../../utils/workspaceStatus'
 import './WorkspaceGrid.css'
 
-const GRID_SIZE = 6
+const GRID_SIZE = 4
 
 function WorkspaceGrid({ workspaces, folders = [], membersByWorkspaceId, onSelectWorkspace, onNewWorkspace, onComplete, mascotSlot }) {
   const active = sortByUrgency(getActiveWorkspaces(workspaces))

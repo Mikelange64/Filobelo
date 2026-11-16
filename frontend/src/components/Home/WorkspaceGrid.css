@@ -4,15 +4,15 @@
   gap: 14px;
 }
 
-/* At most three cards per row, always stretched to fill the width: the
-   column minimum is either 300px or a third of the row, whichever is larger.
-   Narrower panels drop to two, then one. */
+/* One row of four portrait cards, stretched to fill the width: the column
+   minimum is either 210px or a quarter of the row, whichever is larger.
+   Narrower panels drop to two per row, then one. */
 .workspace-grid {
   --grid-gap: 16px;
   display: grid;
   grid-template-columns: repeat(
     auto-fill,
-    minmax(max(280px, calc((100% - 2 * var(--grid-gap)) / 3)), 1fr)
+    minmax(max(210px, calc((100% - 3 * var(--grid-gap)) / 4)), 1fr)
   );
   gap: var(--grid-gap);
 }

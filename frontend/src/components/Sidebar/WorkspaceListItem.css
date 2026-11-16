@@ -25,20 +25,20 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  height: 32px;
+  height: 34px;
   padding: 0 10px;
   border: none;
   border-radius: 8px;
   background: transparent;
   color: var(--color-text-primary);
   font-size: 14px;
-  font-weight: 400;
+  font-weight: 500;
   text-align: left;
   cursor: pointer;
 }
 
 .workspace-item--active .workspace-item__select {
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .workspace-item__square {
