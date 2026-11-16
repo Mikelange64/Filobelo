@@ -308,3 +308,11 @@
   background: var(--color-border-strong);
   border-radius: 3px;
 }
+
+/* Halve the thumb: transparent end caps shorten the rail, and the thumb is
+   sized as a share of the rail. Chromium/Safari only. */
+.calendar-page__side::-webkit-scrollbar-button:single-button {
+  display: block;
+  height: 20vh;
+  background: transparent;
+}
