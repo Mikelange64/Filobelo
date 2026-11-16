@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import { getWorkspaceUrgency } from '../../utils/workspaceStatus'
-import { formatAbsoluteDate, formatDueDate, formatDayCount, getDaysRemaining } from '../../utils/date'
+import { formatAbsoluteDate, formatDayCount, getDaysRemaining } from '../../utils/date'
 import './CalendarView.css'
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -219,11 +219,7 @@ function CalendarView() {
                 <ItemMark item={item} large />
                 <span className="cal-entry__text">
                   <span className="cal-entry__title">{item.title}</span>
-                  <span className="cal-entry__sub">
-                    {item.kind === 'workspace'
-                      ? `Workspace deadline · ${formatDueDate(item.dueDate)}`
-                      : `Task · ${item.workspaceTitle}`}
-                  </span>
+                  <ItemMeta item={item} />
                 </span>
               </button>
             ))}
@@ -249,9 +245,7 @@ function CalendarView() {
                   <ItemMark item={item} />
                   <span className="cal-entry__text">
                     <span className="cal-entry__title">{item.title}</span>
-                    <span className="cal-entry__sub">
-                      {item.kind === 'task' ? `${item.workspaceTitle} · ` : 'Workspace · '}due {formatAbsoluteDate(item.dueDate)}
-                    </span>
+                    <ItemMeta item={item} />
                   </span>
                   <span className="cal-overdue__late">{formatDayCount(getDaysRemaining(item.dueDate))}</span>
                 </button>
@@ -278,6 +272,17 @@ function ItemMark({ item, large = false }) {
   if (item.kind === 'workspace') return <FlagIcon size={large ? 16 : 12} />
   if (!item.color) return <span className="cal-mark cal-mark--ring" />
   return <span className="cal-mark" style={{ background: item.color }} />
+}
+
+// Task: workspace name, then due date. Workspace: due date only (the flag
+// already says what it is).
+function ItemMeta({ item }) {
+  return (
+    <>
+      {item.kind === 'task' && <span className="cal-entry__sub">{item.workspaceTitle}</span>}
+      <span className="cal-entry__sub">Due {formatAbsoluteDate(item.dueDate)}</span>
+    </>
+  )
 }
 
 function FlagIcon({ size }) {
