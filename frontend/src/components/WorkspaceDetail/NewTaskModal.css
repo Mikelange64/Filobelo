@@ -407,25 +407,53 @@
   white-space: nowrap;
 }
 
-.ntm-link-form {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 12px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-control);
-  background: var(--color-bg-canvas);
+/* ─── Add-link dialog (small, above the task modal) ───────────────────────── */
+
+.ntm-link-overlay {
+  z-index: 1100;
+  animation: ntm-fade-in 0.12s ease-out;
 }
 
-.ntm-link-form__input {
-  height: 40px;
+.ntm-link-dialog {
+  width: min(400px, 100%);
+  gap: 20px;
+  padding: 28px;
+  animation: ntm-pop-in 0.14s ease-out;
+}
+
+.ntm-link-dialog__title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.ntm-link-dialog .ui-field__label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.ntm-link-dialog .ui-input {
+  height: 44px;
+  font-weight: 500;
+}
+
+.ntm-link-dialog .ui-btn {
+  height: 42px;
   font-size: 15px;
+  font-weight: 600;
 }
 
-.ntm-link-form__actions {
+.ntm-link-dialog .ui-btn--primary {
+  font-weight: 700;
+}
+
+.ntm-link-dialog__footer {
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
+  gap: 10px;
+  padding-top: 4px;
 }
 
 /* ─── Error + footer ──────────────────────────────────────────────────────── */

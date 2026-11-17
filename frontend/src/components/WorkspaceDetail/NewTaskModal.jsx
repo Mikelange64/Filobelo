@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { WORKSPACE_COLORS } from '../../constants/colors'
 import { toDateInputValue, dateInputToISO } from '../../utils/date'
 import useDelayedFlag from '../../hooks/useDelayedFlag'
@@ -172,6 +173,71 @@ function AssigneeMenu({ members, currentUserId, value, onSelect, onClose }) {
   )
 }
 
+// ─── Add-link dialog ─────────────────────────────────────────────────────────
+
+/** Small dialog over the New task modal, so adding a link never changes the
+ * size of the form behind it. Portalled to <body> to sit above its overlay. */
+function LinkDialog({ onAdd, onClose }) {
+  const [title, setTitle] = useState('')
+  const [url, setUrl] = useState('')
+  const canAdd = title.trim().length > 0 && url.trim().length > 0
+
+  useEffect(() => {
+    function onKeyDown(e) {
+      if (e.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [onClose])
+
+  function submit() {
+    if (canAdd) onAdd({ title: title.trim(), url: url.trim() })
+  }
+
+  return createPortal(
+    <div className="ui-overlay ntm-link-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
+      <div className="ui-modal ntm-link-dialog" role="dialog" aria-modal="true" aria-labelledby="ntm-link-title">
+        <div className="ui-modal__header">
+          <h3 className="ntm-link-dialog__title" id="ntm-link-title">Add link</h3>
+          <button type="button" className="ui-icon-btn" onClick={onClose} aria-label="Close">
+            <CloseIcon />
+          </button>
+        </div>
+
+        <div className="ui-field">
+          <label className="ui-field__label" htmlFor="ntm-link-name">Title</label>
+          <input
+            id="ntm-link-name"
+            className="ui-input"
+            placeholder="Brand guidelines"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); submit() } }}
+            autoFocus
+          />
+        </div>
+        <div className="ui-field">
+          <label className="ui-field__label" htmlFor="ntm-link-url">URL</label>
+          <input
+            id="ntm-link-url"
+            className="ui-input"
+            placeholder="https://…"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); submit() } }}
+          />
+        </div>
+
+        <div className="ntm-link-dialog__footer">
+          <button type="button" className="ui-btn ntm-plain-btn" onClick={onClose}>Cancel</button>
+          <button type="button" className="ui-btn ui-btn--primary" onClick={submit} disabled={!canAdd}>Add link</button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  )
+}
+
 // ─── Main modal ──────────────────────────────────────────────────────────────
 
 function NewTaskModal({ workspace, currentUserId, onClose, onCreate }) {
@@ -189,8 +255,6 @@ function NewTaskModal({ workspace, currentUserId, onClose, onCreate }) {
   const showCreating = useDelayedFlag(loading)
 
   const [addingLink, setAddingLink] = useState(false)
-  const [linkTitle, setLinkTitle] = useState('')
-  const [linkUrl, setLinkUrl] = useState('')
   const [pendingLinks, setPendingLinks] = useState([])
   const [pendingFiles, setPendingFiles] = useState([])
 
@@ -206,24 +270,18 @@ function NewTaskModal({ workspace, currentUserId, onClose, onCreate }) {
   useEffect(() => {
     function onKeyDown(e) {
       if (e.key !== 'Escape') return
+      if (addingLink) return // the link dialog handles its own Escape
       if (showCalPop) setShowCalPop(false)
       else if (showAssignee) { setShowAssignee(false); assigneeTriggerRef.current?.focus() }
       else onClose()
     }
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
-  }, [showCalPop, showAssignee, onClose])
+  }, [showCalPop, showAssignee, addingLink, onClose])
 
-  function cancelLink() {
+  function handleAddLink(link) {
+    setPendingLinks((prev) => [...prev, link])
     setAddingLink(false)
-    setLinkTitle('')
-    setLinkUrl('')
-  }
-
-  function handleAddLink() {
-    if (!linkTitle.trim() || !linkUrl.trim()) return
-    setPendingLinks((prev) => [...prev, { title: linkTitle.trim(), url: linkUrl.trim() }])
-    cancelLink()
   }
 
   function handleRemoveLink(index) {
@@ -425,46 +483,10 @@ function NewTaskModal({ workspace, currentUserId, onClose, onCreate }) {
               </ul>
             )}
 
-            {addingLink && (
-              <div className="ntm-link-form">
-                <input
-                  className="ui-input ntm-link-form__input"
-                  placeholder="Title"
-                  aria-label="Link title"
-                  value={linkTitle}
-                  onChange={(e) => setLinkTitle(e.target.value)}
-                  autoFocus
-                />
-                <input
-                  className="ui-input ntm-link-form__input"
-                  placeholder="https://…"
-                  aria-label="Link URL"
-                  value={linkUrl}
-                  onChange={(e) => setLinkUrl(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddLink() } }}
-                />
-                <div className="ntm-link-form__actions">
-                  <button type="button" className="ui-btn ui-btn--xs ntm-plain-btn" onClick={cancelLink}>
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    className="ui-btn ui-btn--xs ui-btn--secondary"
-                    onClick={handleAddLink}
-                    disabled={!linkTitle.trim() || !linkUrl.trim()}
-                  >
-                    Add link
-                  </button>
-                </div>
-              </div>
-            )}
-
             <div className="ntm-resources__triggers">
-              {!addingLink && (
-                <button type="button" className="ui-btn ui-btn--dashed ui-btn--sm" onClick={() => setAddingLink(true)}>
-                  <LinkIcon /> Add link
-                </button>
-              )}
+              <button type="button" className="ui-btn ui-btn--dashed ui-btn--sm" onClick={() => setAddingLink(true)}>
+                <LinkIcon /> Add link
+              </button>
               <button type="button" className="ui-btn ui-btn--dashed ui-btn--sm" onClick={() => fileInputRef.current?.click()}>
                 <FileIcon /> Attach file
               </button>
@@ -500,6 +522,7 @@ function NewTaskModal({ workspace, currentUserId, onClose, onCreate }) {
           </div>
         </form>
       </div>
+      {addingLink && <LinkDialog onAdd={handleAddLink} onClose={() => setAddingLink(false)} />}
     </div>
   )
 }
