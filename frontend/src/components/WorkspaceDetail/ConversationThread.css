@@ -280,6 +280,24 @@
     line-height: 1.5;
 }
 
+/* Workspace chat: your own messages, on the right */
+.chat-msg--team-mine {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+    padding: 8px 20px;
+}
+
+.chat-msg--team-mine .chat-msg__bubble {
+    max-width: 80%;
+}
+
+.chat-msg--team-mine.chat-msg--continued {
+    padding: 0 20px 4px;
+    margin-top: -2px;
+}
+
 /* Typing indicator */
 .chat-typing {
     display: inline-flex;

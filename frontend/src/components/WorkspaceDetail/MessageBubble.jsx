@@ -59,9 +59,9 @@ function TypingDots() {
 // One message. Two voices:
 // - "assistant" (Ask Filobelo): your questions are teal bubbles on the right,
 //   Filobelo's answers are plain text beside its mark.
-// - "team" (workspace chat): every message, yours included, is avatar, name,
-//   time and text on the left. `continued` drops the avatar and name for a
-//   follow-up from the same person a moment later.
+// - "team" (workspace chat): other people are avatar, name, time and text on
+//   the left; your own messages are teal bubbles on the right. `continued`
+//   drops the avatar, name and time for a follow-up a moment later.
 export default function MessageBubble({ message, member, variant = 'team', isSelf = false, isBot = false, isTyping = false, continued = false }) {
   const time = new Date(message.created_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
   const sources = message.sources ?? []
@@ -83,6 +83,18 @@ export default function MessageBubble({ message, member, variant = 'team', isSel
             : <div className="chat-msg__text" title={time}>{message.content}</div>}
           <SourcesBadge sources={sources} />
         </div>
+      </div>
+    )
+  }
+
+  // Workspace chat, your own message: a bubble on the right. No avatar or
+  // name (it's you), just the time above the first of a run.
+  if (isSelf) {
+    return (
+      <div className={`chat-msg chat-msg--team-mine${continued ? ' chat-msg--continued' : ''}`}>
+        {!continued && <span className="chat-msg__time">{time}</span>}
+        <div className="chat-msg__bubble" title={continued ? time : undefined}>{message.content}</div>
+        <SourcesBadge sources={sources} />
       </div>
     )
   }
