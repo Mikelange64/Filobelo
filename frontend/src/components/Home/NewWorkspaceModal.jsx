@@ -399,35 +399,35 @@ function NewWorkspaceModal({ onClose, onCreate, defaultDueDate = null }) {
                   {opt.label}
                 </button>
               ))}
-              <button
-                type="button"
-                role="radio"
-                aria-checked={customLimit}
-                className="ui-seg__opt"
-                onClick={() => { if (!customLimit) { setCustomLimit(true); setMaxMembers('') } }}
-              >
-                Custom
-              </button>
-            </div>
-            {customLimit && (
-              <div className="nwm-custom">
+              {customLimit ? (
+                /* The Custom option turns into the number field in place, same
+                   size as the other options, so the modal never changes size. */
                 <input
                   ref={limitRef}
                   type="text"
                   inputMode="numeric"
-                  className={`ui-input nwm-custom__input${limitInvalid ? ' nwm-custom__input--invalid' : ''}`}
-                  placeholder="e.g. 8"
+                  className={`nwm-seg__custom${limitInvalid ? ' nwm-seg__custom--invalid' : ''}`}
+                  placeholder="Number"
                   aria-label="Custom member limit"
                   aria-invalid={limitInvalid || undefined}
+                  title={limitInvalid ? 'Enter a whole number, 1 or more' : undefined}
                   value={maxMembers}
                   onChange={(e) => setMaxMembers(e.target.value)}
+                  onBlur={() => { if (!maxMembers.trim()) setCustomLimit(false) }}
                   maxLength={4}
                 />
-                <span className={`nwm-custom__hint${limitInvalid ? ' nwm-custom__hint--invalid' : ''}`}>
-                  {limitInvalid ? 'Enter a whole number, 1 or more' : 'members at most, including you'}
-                </span>
-              </div>
-            )}
+              ) : (
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked="false"
+                  className="ui-seg__opt"
+                  onClick={() => { setCustomLimit(true); setMaxMembers('') }}
+                >
+                  Custom
+                </button>
+              )}
+            </div>
           </div>
 
           {error && (
