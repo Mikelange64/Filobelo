@@ -1,206 +1,264 @@
-/* ─── Settings tab ───────────────────────────────────────────────────────────── */
+/* ─── Workspace Settings tab ─────────────────────────────────────────────────
+   Values from the Workspace · Settings mockup: sections are a 240px aside +
+   controls, 40px apart, 28px vertical padding, divided by a border line. */
 
-.settings-tab {
-    max-width: 560px;
+.wss {
     display: flex;
     flex-direction: column;
-    gap: 32px;
+    max-width: 880px;
 }
 
-.settings-section {
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
+.wss-section {
+    display: grid;
+    grid-template-columns: 240px minmax(0, 1fr);
+    gap: 40px;
+    padding: 28px 0;
+    border-bottom: 1px solid var(--color-border);
 }
 
-.settings-section--danger {
-    border: 1px solid color-mix(in srgb, var(--color-error) 45%, transparent);
-    border-radius: var(--radius-card);
-    padding: 20px;
-    gap: 0;
+.wss-section:first-child {
+    padding-top: 8px;
 }
 
-.settings-section__title {
-    margin: 0 0 4px;
-    font-size: 0.82rem;
-    font-weight: 700;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: var(--color-text-muted);
+.wss-section:last-child {
+    border-bottom: none;
 }
 
-.settings-section--danger .settings-section__title {
-    color: var(--color-error-text);
-    margin-bottom: 16px;
-}
-
-.settings-field {
+.wss-section__aside {
     display: flex;
     flex-direction: column;
     gap: 6px;
 }
 
-.settings-field__label {
-    font-size: 0.8rem;
-    font-weight: 600;
+.wss-section__title {
+    margin: 0;
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--color-text-primary);
+}
+
+.wss-section__desc {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1.5;
     color: var(--color-text-secondary);
 }
 
-.settings-field__input {
-    padding: 8px 11px;
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-control);
-    background: var(--color-bg-canvas);
-    color: var(--color-text-primary);
-    font-size: 0.9rem;
-    font-family: inherit;
-    outline: none;
-    transition:
-        border-color 0.15s,
-        box-shadow 0.15s;
-}
-
-.settings-field__input:focus {
-    border-color: var(--color-brand-primary);
-    box-shadow: var(--focus-ring);
-}
-
-.settings-field__textarea {
-    padding: 8px 11px;
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-control);
-    background: var(--color-bg-canvas);
-    color: var(--color-text-primary);
-    font-size: 0.9rem;
-    font-family: inherit;
-    resize: vertical;
-    outline: none;
-    transition:
-        border-color 0.15s,
-        box-shadow 0.15s;
-}
-
-.settings-field__textarea:focus {
-    border-color: var(--color-brand-primary);
-    box-shadow: var(--focus-ring);
-}
-
-.settings-field__value {
-    margin: 0;
-    font-size: 0.9rem;
-    color: var(--color-text-primary);
-}
-
-.settings-save-btn {
-    align-self: flex-start;
-    padding: 8px 20px;
-    border: none;
-    border-radius: var(--radius-control);
-    background: var(--color-brand-primary);
-    color: var(--color-text-on-brand);
-    font-size: 0.875rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: opacity 0.15s;
-}
-
-.settings-save-btn:disabled {
-    opacity: 0.6;
-    cursor: default;
-}
-
-.settings-danger-row {
+.wss-section__body {
     display: flex;
-    align-items: center;
+    flex-direction: column;
+    gap: 18px;
+    min-width: 0;
+}
+
+.wss-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 16px;
-    padding: 14px 0;
-    border-bottom: 1px solid
-        color-mix(in srgb, var(--color-error) 25%, transparent);
 }
 
-.settings-danger-row:last-child {
-    border-bottom: none;
-    padding-bottom: 0;
-}
-.settings-danger-row:first-of-type {
-    padding-top: 0;
-}
-
-.settings-danger-label {
-    margin: 0 0 3px;
-    font-size: 0.875rem;
-    font-weight: 600;
-    color: var(--color-text-primary);
-}
-
-.settings-danger-desc {
+/* Read-only value for members, aligned with where an input's text sits. */
+.wss-value {
     margin: 0;
-    font-size: 0.8rem;
+    font-size: 16px;
+    font-weight: 500;
+    line-height: 1.5;
+    color: var(--color-text-primary);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.wss-value--empty {
     color: var(--color-text-muted);
 }
 
-.settings-danger-btn {
-    flex-shrink: 0;
-    margin-left: auto;
-    width: 90px;
-    padding: 6px 0;
-    border: 1px solid var(--color-error-text);
-    border-radius: var(--radius-control);
-    background: transparent;
-    color: var(--color-error-text);
-    font-size: 0.84rem;
+/* One step up from the base primitives (weight +1 step, text +1px), the same
+   pass the other redesigned screens got. Scoped to the tab because ui.css is
+   shared; these belong in ui.css if the step becomes the app default. */
+.wss .ui-field__label {
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.wss .ui-input,
+.wss .ui-textarea {
+    font-size: 16px;
     font-weight: 500;
-    cursor: pointer;
-    text-align: center;
-    transition: background 0.15s;
 }
 
-.settings-danger-btn:hover {
-    background: var(--color-error-bg);
+.wss .ui-btn {
+    font-size: 15px;
+    font-weight: 600;
 }
 
-.settings-danger-btn--critical {
-    background: color-mix(in srgb, var(--color-error) 78%, black);
-    color: #fff;
+/* ── Save row ── */
+
+.wss-save-row {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
 }
 
-.settings-danger-btn--critical:hover {
-    background: color-mix(in srgb, var(--color-error) 65%, black);
-    opacity: 1;
+.wss-save-row__hint {
+    margin-right: 2px;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--color-text-muted);
 }
 
+.wss-save-row__success {
+    margin-right: 2px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--color-success-text);
+}
 
-.settings-danger-confirm {
+.wss-save-row__error {
+    margin-right: 2px;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--color-error-text);
+}
+
+/* ── Action cards (completion, danger zone) ── */
+
+.wss-card {
+    overflow: hidden;
+    background: var(--color-bg-card);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-card);
+}
+
+.wss-card--danger {
+    border-color: var(--color-danger-edge);
+}
+
+.wss-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+    padding: 18px 20px;
+}
+
+.wss-row + .wss-row {
+    border-top: 1px solid var(--color-border);
+}
+
+.wss-card--danger .wss-row + .wss-row {
+    border-top-color: var(--color-danger-edge);
+}
+
+.wss-row__text {
     display: flex;
     flex-direction: column;
-    gap: 6px;
-    flex-shrink: 0;
+    gap: 4px;
+    min-width: 0;
 }
 
-.settings-complete-btn {
-    padding: 8px 16px;
-    background: var(--color-brand-primary);
-    color: var(--color-text-on-brand);
-    border: none;
-    border-radius: var(--radius-control);
-    font-size: 0.875rem;
-    font-weight: 600;
-    cursor: pointer;
-    white-space: nowrap;
-    flex-shrink: 0;
-    transition: background-color 0.15s;
-}
-
-.settings-complete-btn:hover {
-    background: var(--color-brand-primary-hover);
-}
-
-.settings-complete-btn--reopen {
-    background: var(--color-neutral-bg);
+.wss-row__title {
+    font-size: 16px;
+    font-weight: 700;
     color: var(--color-text-primary);
-    border: 1px solid var(--color-border-strong);
 }
 
-.settings-complete-btn--reopen:hover {
-    background: var(--color-bg-canvas-hover);
+.wss-row__title--danger {
+    color: var(--color-error-text);
+}
+
+.wss-row__desc {
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1.5;
+    color: var(--color-text-secondary);
+}
+
+/* ─── Due date (trigger + shared DatePicker), like the create modals ─── */
+
+.wss-date {
+  position: relative;
+}
+
+.wss-date__trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 42px;
+  padding: 0 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-bg-card);
+  color: var(--color-text-primary);
+  font-size: 16px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.wss-date__trigger svg {
+  flex-shrink: 0;
+  color: var(--color-text-secondary);
+}
+
+.wss-date__trigger:hover,
+.wss-date__trigger[aria-expanded='true'] {
+  border-color: var(--color-border-strong);
+}
+
+.wss-date__value {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Leave room for the clear button that sits over the right edge. */
+.wss-date__trigger--set {
+  padding-right: 42px;
+  font-weight: 600;
+}
+
+.wss-date__trigger--set svg {
+  color: var(--color-brand-text);
+}
+
+.wss-date__clear {
+  position: absolute;
+  top: 7px;
+  right: 8px;
+}
+
+.wss-date__popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 10;
+  width: 300px;
+  padding: 12px;
+  background: var(--color-bg-overlay);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-overlay);
+}
+
+@media (max-width: 760px) {
+    .wss-section {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 16px;
+    }
+
+    .wss-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .wss-row {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+    }
 }

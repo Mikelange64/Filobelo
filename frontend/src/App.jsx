@@ -2,6 +2,7 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAuth } from './context/AuthContext'
 import AppShell from './AppShell'
 import HomeView from './pages/Home/HomeView'
+import CalendarView from './pages/Calendar/CalendarView'
 import WorkspaceDetail from './pages/WorkspaceDetail/WorkspaceDetail'
 import Landing from './pages/Landing/Landing'
 import Login from './pages/Login/Login'
@@ -37,6 +38,7 @@ function App() {
       <Route path="/verify-email" element={<VerifyEmail />} />
       <Route path="/" element={<RootRoute><AppShell /></RootRoute>}>
         <Route index element={<HomeView />} />
+        <Route path="calendar" element={<CalendarView />} />
         <Route path="workspaces/:id" element={<WorkspaceDetail />} />
       </Route>
     </Routes>

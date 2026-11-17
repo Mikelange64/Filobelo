@@ -10,6 +10,7 @@ import { getCompletedWorkspaces } from '../../api/client'
 import { keys } from '../../api/queryClient'
 import { getWorkspaceFlag } from '../../utils/workspaceStatus'
 import { flattenFolderTree } from '../../utils/folders'
+import { getStartCollapsed } from '../../utils/sidebarPref'
 import { SWATCH_COLORS } from '../../constants/colors'
 import './SidebarV2.css'
 
@@ -739,8 +740,9 @@ function AccountMenu({ currentUser, onOpenSettings, onSignOut, compact = false }
 // Per-viewer UI memory (sidebar collapsed, which sections are folded). Plain
 // localStorage, wrapped: private windows can throw, and the sidebar must work
 // without it.
-function usePersistentState(key, initial) {
+function usePersistentState(key, initial, forced) {
   const [value, setValue] = useState(() => {
+    if (forced !== undefined) return forced
     try {
       const raw = localStorage.getItem(key)
       return raw == null ? initial : JSON.parse(raw)
@@ -875,7 +877,7 @@ function SidebarV2({
   // Which list the middle of the sidebar shows. Not persisted: Active is the
   // default every time the app opens.
   const [mode, setMode] = useState('active')
-  const [collapsed, setCollapsed] = usePersistentState('filobelo.sidebar.collapsed', false)
+  const [collapsed, setCollapsed] = usePersistentState('filobelo.sidebar.collapsed', false, getStartCollapsed() ? true : undefined)
   const [sections, setSections] = usePersistentState('filobelo.sidebar.sections', { pinned: true, folders: true, workspaces: true })
   const navRef = useRef(null)
   const toggleSection = (id) => setSections((prev) => ({ ...prev, [id]: !(prev?.[id] ?? true) }))

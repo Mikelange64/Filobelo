@@ -3,9 +3,10 @@ import { searchUser, inviteMember, inviteExternal } from '../../api/client'
 import { toAvatarUrl } from './helpers'
 import MemberAvatar from './MemberAvatar'
 
-// Invite panel — shown at top of Members tab for admins
-export default function InvitePanel({ workspaceId, onMemberAdded }) {
-  const [open, setOpen] = useState(false)
+// Invite panel - shown at the top of the Members tab for admins. The header
+// Invite button opens the tab with it already expanded (defaultOpen).
+export default function InvitePanel({ workspaceId, onMemberAdded, defaultOpen = false }) {
+  const [open, setOpen] = useState(defaultOpen)
   const [query, setQuery] = useState('')
   const [found, setFound] = useState(null)
   const [notFound, setNotFound] = useState(false)
@@ -75,58 +76,74 @@ export default function InvitePanel({ workspaceId, onMemberAdded }) {
 
   if (!open) {
     return (
-      <button type="button" className="invite-trigger" onClick={() => setOpen(true)}>
+      <button type="button" className="ui-btn ui-btn--dashed ui-btn--sm invite-trigger" onClick={() => setOpen(true)}>
         + Invite member
       </button>
     )
   }
 
   return (
-    <div className="invite-panel">
-      <p className="invite-panel__label">Search by username or email</p>
-      <div className="invite-panel__row">
+    <div className="ui-card invite-card">
+      <div className="invite-card__head">
+        <label className="invite-card__label" htmlFor="invite-query">Invite by username or email</label>
+        <button
+          type="button"
+          className="ui-icon-btn ui-icon-btn--sm"
+          aria-label="Close invite"
+          onClick={() => { setOpen(false); resetState() }}
+        >
+          <CloseIcon />
+        </button>
+      </div>
+      <div className="invite-card__row">
         <input
-          className="invite-panel__input"
+          id="invite-query"
+          className="ui-input invite-card__input"
           placeholder="username or email@example.com"
           value={query}
           onChange={(e) => { setQuery(e.target.value); setFound(null); setNotFound(false); setError(''); setInviteSent(false) }}
           onKeyDown={(e) => { if (e.key === 'Enter') handleSearch() }}
           autoFocus
         />
-        <button type="button" className="invite-panel__search-btn" onClick={handleSearch} disabled={searching}>
-          {searching ? '…' : 'Search'}
-        </button>
-        <button type="button" className="invite-panel__cancel" onClick={() => { setOpen(false); resetState() }}>
-          ✕
+        <button type="button" className="ui-btn ui-btn--primary" onClick={handleSearch} disabled={searching || !query.trim()}>
+          {searching ? 'Searching…' : 'Search'}
         </button>
       </div>
 
       {found && (
-        <div className="invite-panel__result">
-          <MemberAvatar member={{ name: found.username, avatarUrl: toAvatarUrl(found.image_path) }} size={32} />
-          <span className="invite-panel__result-name">{found.username}</span>
-          <button type="button" className="invite-panel__add-btn" onClick={handleAdd} disabled={adding}>
+        <div className="invite-card__result">
+          <MemberAvatar member={{ id: found.id, name: found.username, avatarUrl: toAvatarUrl(found.image_path) }} size={32} />
+          <span className="invite-card__result-name">{found.username}</span>
+          <button type="button" className="ui-btn ui-btn--primary ui-btn--sm" onClick={handleAdd} disabled={adding}>
             {adding ? 'Adding…' : 'Add to workspace'}
           </button>
         </div>
       )}
 
       {notFound && !inviteSent && (
-        <div className="invite-panel__not-found">
-          <p className="invite-panel__not-found-msg">
+        <div className="invite-card__result">
+          <p className="invite-card__msg">
             No Filobelo account for <strong>{query.trim()}</strong>.
           </p>
-          <button type="button" className="invite-panel__add-btn" onClick={handleSendJoinInvite} disabled={adding}>
+          <button type="button" className="ui-btn ui-btn--primary ui-btn--sm" onClick={handleSendJoinInvite} disabled={adding}>
             {adding ? 'Sending…' : 'Send join invitation'}
           </button>
         </div>
       )}
 
       {inviteSent && (
-        <p className="invite-panel__success">Invitation sent to {query.trim()}</p>
+        <p className="invite-card__success">Invitation sent to {query.trim()}</p>
       )}
 
-      {error && <p className="invite-panel__error">{error}</p>}
+      {error && <p className="invite-card__error" role="alert">{error}</p>}
     </div>
+  )
+}
+
+function CloseIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
+      <path d="M6 6l12 12M18 6L6 18" />
+    </svg>
   )
 }
