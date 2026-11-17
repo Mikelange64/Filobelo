@@ -526,6 +526,14 @@
     }
 }
 
+/* Row menus open beside the ⋯ (Popover placement="right"), into the space
+   right of the list. The rich menu's 248px minimum is more than that space
+   on many windows, which flips the menu back over the list; these labels
+   fit in less, so allow it to be narrower. */
+.ui-menu--rich.wd-row-menu {
+    min-width: 196px;
+}
+
 /* Colour flyout in the row menu: to the right by default (the menu sits in
    the free space beside the list); back to the left when that would run off
    screen. */

@@ -142,7 +142,7 @@ export default function TaskRow({ task, member, isAdmin, currentUserId, isSelect
             anchorRef={menuRef}
             floatingRef={floatingRef}
             placement="right"
-            className={`task-row-menu${flyoutLeft ? ' task-row-menu--flyout-left' : ''}`}
+            className={`wd-row-menu task-row-menu${flyoutLeft ? ' task-row-menu--flyout-left' : ''}`}
             items={menuItems}
             label={`Actions for ${task.title}`}
             onClose={() => setMenuOpen(false)}

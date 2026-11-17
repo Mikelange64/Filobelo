@@ -54,6 +54,7 @@ export default function MemberListRow({ member, isAdmin, isSelf, onRemove, onPro
               anchorRef={menuRef}
               floatingRef={floatingRef}
               placement="right"
+              className="wd-row-menu"
               items={items}
               label={`Actions for ${member.name}`}
               onClose={() => setMenuOpen(false)}
