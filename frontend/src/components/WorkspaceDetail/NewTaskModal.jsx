@@ -177,7 +177,6 @@ function AssigneeMenu({ members, currentUserId, value, onSelect, onClose }) {
 function NewTaskModal({ workspace, currentUserId, onClose, onCreate }) {
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
-  const [descOpen, setDescOpen] = useState(false)
   const [color, setColor] = useState(WORKSPACE_COLORS[0])
   const [ownerId, setOwnerId] = useState(currentUserId)
   const [error, setError] = useState('')
@@ -196,7 +195,6 @@ function NewTaskModal({ workspace, currentUserId, onClose, onCreate }) {
   const [pendingFiles, setPendingFiles] = useState([])
 
   const titleRef = useRef(null)
-  const descRef = useRef(null)
   const fileInputRef = useRef(null)
   const assigneeTriggerRef = useRef(null)
 
@@ -204,7 +202,6 @@ function NewTaskModal({ workspace, currentUserId, onClose, onCreate }) {
   const owner = workspace.members.find((m) => m.id === ownerId)
 
   useEffect(() => { titleRef.current?.focus() }, [])
-  useEffect(() => { if (descOpen) descRef.current?.focus() }, [descOpen])
 
   useEffect(() => {
     function onKeyDown(e) {
@@ -300,23 +297,15 @@ function NewTaskModal({ workspace, currentUserId, onClose, onCreate }) {
               required
               aria-describedby={error ? 'ntm-error' : undefined}
             />
-            {descOpen || description ? (
-              <textarea
-                ref={descRef}
-                className="ui-textarea ntm-desc"
-                aria-label="Description"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                onBlur={() => { if (!description.trim()) setDescOpen(false) }}
-                maxLength={300}
-                rows={3}
-                placeholder="Add details for whoever picks this up"
-              />
-            ) : (
-              <button type="button" className="ntm-add-desc" onClick={() => setDescOpen(true)}>
-                + Add description
-              </button>
-            )}
+            <textarea
+              className="ui-textarea ntm-desc"
+              aria-label="Description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              maxLength={300}
+              rows={3}
+              placeholder="Add details for whoever picks this up"
+            />
           </div>
 
           <div className="ui-field">

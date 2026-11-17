@@ -214,7 +214,6 @@ function FolderMenu({ rows, value, onSelect, onClose }) {
 function NewWorkspaceModal({ onClose, onCreate, defaultDueDate = null }) {
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
-  const [descOpen, setDescOpen] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [maxMembers, setMaxMembers] = useState('')
@@ -234,14 +233,12 @@ function NewWorkspaceModal({ onClose, onCreate, defaultDueDate = null }) {
   const folder = folders.find((f) => f.id === folderId) ?? null
 
   const titleRef = useRef(null)
-  const descRef = useRef(null)
   const folderTriggerRef = useRef(null)
   const limitRef = useRef(null)
 
   const selectedDate = parseDateValue(dueValue)
 
   useEffect(() => { titleRef.current?.focus() }, [])
-  useEffect(() => { if (descOpen) descRef.current?.focus() }, [descOpen])
   useEffect(() => { if (customLimit) limitRef.current?.focus() }, [customLimit])
 
   useEffect(() => {
@@ -308,23 +305,15 @@ function NewWorkspaceModal({ onClose, onCreate, defaultDueDate = null }) {
               required
               aria-describedby={error ? 'nwm-error' : undefined}
             />
-            {descOpen || description ? (
-              <textarea
-                ref={descRef}
-                className="ui-textarea nwm-desc"
-                aria-label="Description"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                onBlur={() => { if (!description.trim()) setDescOpen(false) }}
-                maxLength={500}
-                rows={3}
-                placeholder="What is this workspace for?"
-              />
-            ) : (
-              <button type="button" className="nwm-add-desc" onClick={() => setDescOpen(true)}>
-                + Add description
-              </button>
-            )}
+            <textarea
+              className="ui-textarea nwm-desc"
+              aria-label="Description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              maxLength={500}
+              rows={3}
+              placeholder="What is this workspace for?"
+            />
           </div>
 
           <div className="nwm-grid">

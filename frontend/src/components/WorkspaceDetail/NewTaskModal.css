@@ -16,7 +16,6 @@
 .ntm-modal {
   position: relative; /* the date picker opens beside the modal, not over it */
   width: min(520px, 100%);
-  min-height: min(680px, calc(var(--app-height) - 48px));
   margin: auto;
   max-height: none;
   animation: ntm-pop-in 0.16s ease-out;
@@ -109,23 +108,6 @@
 .ntm-name-input {
   height: 48px;
   font-size: 17px;
-}
-
-.ntm-add-desc {
-  align-self: flex-start;
-  height: 32px;
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: var(--color-brand-text);
-  font-size: 15px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.ntm-add-desc:hover {
-  color: var(--color-brand-primary-hover);
-  text-decoration: underline;
 }
 
 .ntm-desc {
