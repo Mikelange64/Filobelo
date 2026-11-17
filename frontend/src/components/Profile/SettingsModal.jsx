@@ -339,7 +339,7 @@ function AppearancePanel() {
 
       <section className="sm-pref">
         <div className="sm-row-text">
-          <h3 className="sm-section__title" id="sm-scale-label">Text size</h3>
+          <h3 className="sm-section__title" id="sm-scale-label">Size</h3>
           <span className="sm-row-text__desc">Scales the whole interface, like browser zoom.</span>
         </div>
         <div
