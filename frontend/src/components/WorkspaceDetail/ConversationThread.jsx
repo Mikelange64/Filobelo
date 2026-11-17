@@ -1,19 +1,247 @@
 import { useState, useEffect, useLayoutEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { listMessages, sendMessage, updateConversation, deleteConversation } from '../../api/client'
 import useDismissableMenu from '../../hooks/useDismissableMenu'
-import { DotsIcon, SearchIcon, SendIcon, SparkleIcon } from './icons'
-import MessageBubble from './MessageBubble'
-import filobeloReading from '../../assets/mascott/filobelo_reading.svg'
+import ActionMenu, { MENU_ICON } from '../shared/ActionMenu'
+import ConfirmModal from '../shared/ConfirmModal'
+import MemberAvatar from './MemberAvatar'
+import { DotsIcon } from './icons'
+import MessageBubble, { BotMark } from './MessageBubble'
 import './ConversationThread.css'
+
+// ── Panel chrome shared by every view of the conversations panel ─────────
+// (list, start screen, thread). Kept here, next to the thread that uses
+// most of it; ConversationsPanel imports it.
+
+function Glyph({ d, size = 18, width = 1.9 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={width} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d={d} />
+    </svg>
+  )
+}
+
+const BACK_D = 'M15 6l-6 6 6 6'
+const EXPAND_D = 'M14 4h6v6M20 4l-7 7M10 20H4v-6M4 20l7-7'
+const COLLAPSE_D = 'M20 4l-6 6M14 5v5h5M4 20l6-6M10 19v-5H5'
+const CLOSE_D = 'M6 6l12 12M18 6L6 18'
+const NEW_D = 'M12 20h8M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z'
+// A window with its right-hand column marked: dock the panel to the side.
+const DOCK_D = 'M4 5h16v14H4zM14.5 5v14'
+const SEND_D = 'M12 19V5M6 11l6-6 6 6'
+
+export function HeaderButton({ label, onClick, children, ...rest }) {
+  return (
+    <button type="button" className="ui-icon-btn chat-header__btn" aria-label={label} title={label} onClick={onClick} {...rest}>
+      {children}
+    </button>
+  )
+}
+
+export function NewChatButton({ label, onClick }) {
+  return (
+    <HeaderButton label={label} onClick={onClick}>
+      <Glyph d={NEW_D} />
+    </HeaderButton>
+  )
+}
+
+// Up to three member avatars, overlapping: the workspace-chat identity.
+export function MemberStack({ members, size = 26 }) {
+  const shown = members.slice(0, 3)
+  return (
+    <span className="chat-member-stack" style={{ '--stack-size': `${size}px` }}>
+      {shown.map((m) => <MemberAvatar key={m.id} member={m} size={size} />)}
+    </span>
+  )
+}
+
+export function ChatHeader({ onBack, backLabel, mark, title, subtitle, actions, docked, onToggleDocked, expanded, onToggleExpanded, onClose }) {
+  return (
+    <div className="chat-header">
+      {onBack && (
+        <HeaderButton label={backLabel} onClick={onBack}>
+          <Glyph d={BACK_D} width={2} />
+        </HeaderButton>
+      )}
+      {mark && <span className="chat-header__mark">{mark}</span>}
+      <div className="chat-header__text">
+        <span className="chat-header__title">
+          {typeof title === 'string' ? <span className="chat-header__title-text">{title}</span> : title}
+        </span>
+        {subtitle && <span className="chat-header__subtitle">{subtitle}</span>}
+      </div>
+      {actions}
+      <HeaderButton
+        label={docked ? 'Undock (float over the page)' : 'Dock to the side'}
+        aria-pressed={docked}
+        onClick={onToggleDocked}
+      >
+        <Glyph d={DOCK_D} size={17} />
+      </HeaderButton>
+      <HeaderButton label={expanded ? 'Make smaller' : 'Expand'} onClick={onToggleExpanded}>
+        <Glyph d={expanded ? COLLAPSE_D : EXPAND_D} size={16} width={2} />
+      </HeaderButton>
+      <HeaderButton label="Close" onClick={onClose}>
+        <Glyph d={CLOSE_D} size={16} width={2} />
+      </HeaderButton>
+    </div>
+  )
+}
+
+// The message box: grows with its text (up to a cap, then scrolls), Enter
+// sends and Shift+Enter adds a line.
+export function Composer({ value, onChange, onSend, canSend, placeholder, hint, autoFocus = false, textareaRef }) {
+  const ownRef = useRef(null)
+  const ref = textareaRef ?? ownRef
+
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${el.scrollHeight}px`
+  }, [value, ref])
+
+  return (
+    <div className="chat-composer">
+      <div className="chat-composer__box">
+        <textarea
+          ref={ref}
+          className="chat-composer__input"
+          rows={1}
+          placeholder={placeholder}
+          aria-label={placeholder}
+          value={value}
+          autoFocus={autoFocus}
+          onChange={(e) => onChange(e.target.value)}
+          onKeyDown={(e) => {
+            // Enter sends, Shift+Enter adds a line. While an IME is composing
+            // (keyCode 229 covers browsers that do not set isComposing on the
+            // confirming keystroke) Enter belongs to the IME.
+            if (e.key !== 'Enter' || e.shiftKey) return
+            if (e.nativeEvent.isComposing || e.keyCode === 229) return
+            e.preventDefault()
+            onSend()
+          }}
+        />
+        <div className="chat-composer__bar">
+          <span className="chat-composer__hint">{hint}</span>
+          <button
+            type="button"
+            className={`chat-composer__send${canSend ? ' chat-composer__send--ready' : ''}`}
+            onClick={() => onSend()}
+            disabled={!canSend}
+            aria-label="Send message"
+          >
+            <Glyph d={SEND_D} size={16} width={2.2} />
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// The ⋯ menu for one conversation: the same items in the thread header and
+// on a row of the conversation list.
+export function ConversationMenu({ conversation, anchorRef, floatingRef, onClose, onPin, onRename, onArchive, onDelete }) {
+  const items = [
+    {
+      id: 'pin',
+      label: conversation.is_pinned ? 'Unpin' : 'Pin to top',
+      icon: conversation.is_pinned ? MENU_ICON.unpin : MENU_ICON.pin,
+      onSelect: onPin,
+    },
+    { id: 'rename', label: 'Rename', icon: MENU_ICON.rename, onSelect: onRename },
+    {
+      id: 'archive',
+      label: conversation.is_archived ? 'Unarchive' : 'Archive',
+      icon: conversation.is_archived ? MENU_ICON.restore : MENU_ICON.archive,
+      onSelect: onArchive,
+    },
+    {
+      id: 'delete',
+      label: conversation.type === 'BOT' ? 'Delete chat' : 'Delete conversation',
+      icon: MENU_ICON.trash,
+      danger: true,
+      separatorBefore: true,
+      onSelect: onDelete,
+    },
+  ]
+  return (
+    <ActionMenu
+      anchorRef={anchorRef}
+      floatingRef={floatingRef}
+      placement="below"
+      items={items}
+      label={`Options for ${conversation.title}`}
+      onClose={onClose}
+    />
+  )
+}
+
+// Portalled to <body> so it is never clipped by the panel.
+export function DeleteConversationDialog({ conversation, workspaceTitle, onConfirm, onCancel }) {
+  const isBot = conversation.type === 'BOT'
+  return createPortal(
+    <ConfirmModal
+      title={isBot ? 'Delete this chat?' : 'Delete conversation?'}
+      message={isBot
+        ? `“${conversation.title}” and its messages are deleted. There is no undo.`
+        : `“${conversation.title}” and all its messages are deleted for everyone in ${workspaceTitle}. There is no undo.`}
+      confirmLabel="Delete"
+      danger
+      onConfirm={onConfirm}
+      onCancel={onCancel}
+    />,
+    document.body,
+  )
+}
+
+// ── Thread ───────────────────────────────────────────────────────────────
 
 const DELETED_MEMBER = { name: 'Deleted user', avatarUrl: null }
 const FILOBELO_BOT = { name: 'Filobelo', avatarUrl: null }
-const MIN_INPUT_RADIUS = 18
 const PAGE_SIZE = 50
 const POLL_INTERVAL_MS = 4000
 // How close (px) to an edge of the message list counts as "at" that edge.
 const NEAR_BOTTOM_PX = 80
 const NEAR_TOP_PX = 60
+// Consecutive messages from one person within this gap share one name line.
+const GROUP_GAP_MS = 5 * 60 * 1000
+
+function sameDay(a, b) {
+  return a.toDateString() === b.toDateString()
+}
+
+function dayLabel(date) {
+  const now = new Date()
+  if (sameDay(date, now)) return 'Today'
+  const yesterday = new Date(now)
+  yesterday.setDate(now.getDate() - 1)
+  if (sameDay(date, yesterday)) return 'Yesterday'
+  return date.toLocaleDateString([], {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    ...(date.getFullYear() === now.getFullYear() ? {} : { year: 'numeric' }),
+  })
+}
+
+// Filobelo: a quiet centred date and time. Workspace chat: a date between rules.
+function DaySeparator({ date, withTime }) {
+  if (withTime) {
+    const time = date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+    return <div className="chat-day chat-day--plain">{dayLabel(date)}, {time}</div>
+  }
+  return (
+    <div className="chat-day chat-day--ruled" role="separator">
+      <span className="chat-day__rule" />
+      {dayLabel(date)}
+      <span className="chat-day__rule" />
+    </div>
+  )
+}
+
 
 // Optimistic bubbles carry a string id until the server copy replaces them.
 const isStored = (m) => typeof m.id === 'number'
@@ -40,20 +268,28 @@ function mergeMessages(existing, incoming) {
 
 const errorText = (err, fallback) => (typeof err?.detail === 'string' ? err.detail : fallback)
 
-export default function ConversationThread({ workspaceId, conversation, memberById, currentUserId, isAdmin, onToast, onUpdated, onDeleted, onClose, onComingSoon, autoFocusTitle, onAutoFocusTitleConsumed }) {
+export default function ConversationThread({
+  workspaceId, workspaceTitle, conversation, memberById, currentUserId, isAdmin,
+  onToast, onUpdated, onDeleted, onClose, onBack, onNewChat,
+  docked, onToggleDocked, expanded, onToggleExpanded,
+  autoFocusTitle, onAutoFocusTitleConsumed,
+  initialMessage, onInitialMessageConsumed,
+}) {
   const [messages, setMessages] = useState([])
   const [loading, setLoading] = useState(true)
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
   const [hasMore, setHasMore] = useState(false)
   const [loadingOlder, setLoadingOlder] = useState(false)
-  const [menuOpen, setMenuOpen, menuRef] = useDismissableMenu()
+  const [menuOpen, setMenuOpen, menuRef, menuFloatingRef] = useDismissableMenu()
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [renaming, setRenaming] = useState(false)
   const [renameValue, setRenameValue] = useState(conversation.title)
   const listRef = useRef(null)
   const textareaRef = useRef(null)
-  const baseInputHeightRef = useRef(null)
+  // The conversation whose first message (typed on the Filobelo start
+  // screen) has already been handed to handleSend, so it goes out once.
+  const initialSentRef = useRef(null)
   // Mirror of `messages` for async code (polling, paging) that needs the
   // current list without being re-created on every change.
   const messagesRef = useRef([])
@@ -279,22 +515,25 @@ export default function ConversationThread({ workspaceId, conversation, memberBy
     }
   }, [workspaceId, conversationId, isBotConversation, loading])
 
+  // A Filobelo chat started from the start screen arrives with the question
+  // already typed: send it once the (empty) thread has finished loading.
   useEffect(() => {
-    const el = textareaRef.current
-    if (!el) return
-    el.style.height = 'auto'
-    const scrollHeight = el.scrollHeight
-    if (baseInputHeightRef.current === null) baseInputHeightRef.current = scrollHeight
-    el.style.height = `${scrollHeight}px`
+    if (loading || !initialMessage || initialSentRef.current === conversationId) return
+    initialSentRef.current = conversationId
+    onInitialMessageConsumed?.()
+    handleSend(initialMessage)
+    // Once per conversation, when its load settles; the ref guards repeats.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, conversationId])
 
-    // Pill-shaped at one line, gradually straightening into a rounded rectangle
-    // as the box grows past its first line — matches the WhatsApp-style look.
-    const baseHeight = baseInputHeightRef.current
-    const maxRadius = baseHeight / 2
-    const growth = scrollHeight - baseHeight
-    const t = Math.min(1, Math.max(0, growth / (baseHeight * 0.6)))
-    el.style.borderRadius = `${maxRadius - (maxRadius - MIN_INPUT_RADIUS) * t}px`
-  }, [draft])
+  // Opening a conversation puts the cursor in the message box, unless it was
+  // just created and its name is about to be edited instead.
+  useEffect(() => {
+    if (!autoFocusTitle) textareaRef.current?.focus()
+    // Only on opening: autoFocusTitle flips back to false right after a new
+    // conversation's rename starts, and must not pull focus away from it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversationId])
 
   useEffect(() => {
     setRenameValue(conversation.title)
@@ -307,8 +546,8 @@ export default function ConversationThread({ workspaceId, conversation, memberBy
     setConfirmingDelete(false)
   }, [conversation.id, conversation.title])
 
-  async function handleSend() {
-    const trimmed = draft.trim()
+  async function handleSend(text = draft) {
+    const trimmed = text.trim()
     if (!trimmed || sending) return
     const epoch = epochRef.current
     const isCurrent = () => epochRef.current === epoch
@@ -443,19 +682,9 @@ export default function ConversationThread({ workspaceId, conversation, memberBy
     }
   }
 
-  async function handleTogglePin() {
-    setMenuOpen(false)
+  async function updateFlags(patch) {
     try {
-      onUpdated(await updateConversation(workspaceId, conversationId, { is_pinned: !conversation.is_pinned }))
-    } catch (err) {
-      onToast?.(err.detail ?? 'Could not update conversation')
-    }
-  }
-
-  async function handleToggleArchive() {
-    setMenuOpen(false)
-    try {
-      onUpdated(await updateConversation(workspaceId, conversationId, { is_archived: !conversation.is_archived }))
+      onUpdated(await updateConversation(workspaceId, conversationId, patch))
     } catch (err) {
       onToast?.(err.detail ?? 'Could not update conversation')
     }
@@ -476,6 +705,7 @@ export default function ConversationThread({ workspaceId, conversation, memberBy
   async function handleDelete() {
     try {
       await deleteConversation(workspaceId, conversationId)
+      setConfirmingDelete(false)
       onDeleted(conversationId)
     } catch (err) {
       onToast?.(err.detail ?? 'Could not delete conversation')
@@ -488,118 +718,146 @@ export default function ConversationThread({ workspaceId, conversation, memberBy
     return memberById.get(message.sender_id) ?? DELETED_MEMBER
   }
 
+  const memberCount = memberById.size
+  const subtitle = isBotConversation
+    ? workspaceTitle
+    : `${workspaceTitle} · ${memberCount} member${memberCount === 1 ? '' : 's'}`
+
+  const title = renaming ? (
+    <input
+      className="chat-header__title-input"
+      value={renameValue}
+      maxLength={100}
+      aria-label="Conversation name"
+      onChange={(e) => setRenameValue(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') handleRenameSave()
+        if (e.key === 'Escape') {
+          // Cancels the rename only, not the whole panel.
+          e.stopPropagation()
+          setRenaming(false)
+          setRenameValue(conversation.title)
+        }
+      }}
+      onBlur={handleRenameSave}
+      onFocus={(e) => e.target.select()}
+      autoFocus
+    />
+  ) : (
+    <>
+      <span className="chat-header__title-text">{conversation.title}</span>
+      {conversation.is_archived && <span className="ui-pill chat-header__badge">Archived</span>}
+    </>
+  )
+
+  // Waiting for the first question typed on the start screen to go out.
+  const firstMessagePending = Boolean(initialMessage) && initialSentRef.current !== conversationId
+
+  function renderMessages() {
+    const rows = []
+    let prev = null
+    for (const m of messages) {
+      const at = new Date(m.created_at)
+      const prevAt = prev && new Date(prev.created_at)
+      const newDay = !prev || !sameDay(prevAt, at)
+      if (newDay) rows.push(<DaySeparator key={`day-${m.id}`} date={at} withTime={isBotConversation} />)
+      const continued = !newDay
+        && !isBotConversation
+        && prev.sender_type === m.sender_type
+        && prev.sender_id === m.sender_id
+        && at - prevAt < GROUP_GAP_MS
+      rows.push(
+        <MessageBubble
+          key={m.id}
+          message={m}
+          member={resolveMember(m)}
+          variant={isBotConversation ? 'assistant' : 'team'}
+          isSelf={m.sender_type === 'USER' && m.sender_id === currentUserId}
+          isBot={m.sender_type === 'BOT'}
+          continued={continued}
+        />
+      )
+      prev = m
+    }
+    return rows
+  }
+
   return (
-    <div className="conversation-thread">
-      <div className="conversation-thread__header">
-        {renaming ? (
-          <input
-            className="conversation-thread__title-input"
-            value={renameValue}
-            onChange={(e) => setRenameValue(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') handleRenameSave()
-              if (e.key === 'Escape') { setRenaming(false); setRenameValue(conversation.title) }
-            }}
-            onBlur={handleRenameSave}
-            onFocus={(e) => e.target.select()}
-            autoFocus
-          />
-        ) : (
-          <span className="conversation-thread__title">
-            {isBotConversation && <span className="conversation-thread__bot-icon"><SparkleIcon size={14} /></span>}
-            {conversation.title}
-            {conversation.is_archived && <span className="conversation-thread__badge">Archived</span>}
-          </span>
+    <div className={`chat-thread${isBotConversation ? ' chat-thread--assistant' : ' chat-thread--team'}`}>
+      <ChatHeader
+        onBack={onBack}
+        backLabel={isBotConversation ? 'All Filobelo chats' : 'All conversations'}
+        mark={isBotConversation ? <BotMark size={30} solid /> : <MemberStack members={[...memberById.values()]} />}
+        title={title}
+        subtitle={subtitle}
+        docked={docked}
+        onToggleDocked={onToggleDocked}
+        expanded={expanded}
+        onToggleExpanded={onToggleExpanded}
+        onClose={onClose}
+        actions={(
+          <>
+            {isBotConversation && onNewChat && <NewChatButton label="New chat" onClick={onNewChat} />}
+            {canManage && (
+              <div className="chat-header__menu" ref={menuRef}>
+                <HeaderButton
+                  label="Chat options"
+                  aria-haspopup="menu"
+                  aria-expanded={menuOpen}
+                  onClick={() => setMenuOpen((v) => !v)}
+                >
+                  <DotsIcon />
+                </HeaderButton>
+                {menuOpen && (
+                  <ConversationMenu
+                    conversation={conversation}
+                    anchorRef={menuRef}
+                    floatingRef={menuFloatingRef}
+                    onClose={() => setMenuOpen(false)}
+                    onPin={() => updateFlags({ is_pinned: !conversation.is_pinned })}
+                    onRename={() => setRenaming(true)}
+                    onArchive={() => updateFlags({ is_archived: !conversation.is_archived })}
+                    onDelete={() => setConfirmingDelete(true)}
+                  />
+                )}
+              </div>
+            )}
+          </>
         )}
+      />
 
-        <div className="conversation-thread__header-actions">
-          <button type="button" className="conversation-thread__icon-btn" onClick={() => onComingSoon?.()} aria-label="Search messages">
-            <SearchIcon />
-          </button>
-
-          {canManage && (
-            <div className="conversation-thread__menu-wrap" ref={menuRef}>
-              <button type="button" className="conversation-thread__menu-trigger" onClick={() => setMenuOpen((v) => !v)} aria-label="Conversation actions">
-                <DotsIcon />
-              </button>
-              {menuOpen && (
-                <ul className="wd-menu-list" role="menu">
-                  <li role="none">
-                    <button type="button" role="menuitem" className="wd-menu-item" onClick={handleTogglePin}>
-                      {conversation.is_pinned ? 'Unpin conversation' : 'Pin conversation'}
-                    </button>
-                  </li>
-                  <li role="none">
-                    <button type="button" role="menuitem" className="wd-menu-item"
-                      onClick={() => { setMenuOpen(false); setRenaming(true) }}>
-                      Rename
-                    </button>
-                  </li>
-                  <li role="none">
-                    <button type="button" role="menuitem" className="wd-menu-item" onClick={handleToggleArchive}>
-                      {conversation.is_archived ? 'Unarchive conversation' : 'Archive conversation'}
-                    </button>
-                  </li>
-                  <li role="none">
-                    {confirmingDelete ? (
-                      <button type="button" role="menuitem" className="wd-menu-item wd-menu-item--danger" onClick={handleDelete}>
-                        Confirm delete?
-                      </button>
-                    ) : (
-                      <button type="button" role="menuitem" className="wd-menu-item wd-menu-item--danger"
-                        onClick={() => setConfirmingDelete(true)}>
-                        Delete conversation
-                      </button>
-                    )}
-                  </li>
-                </ul>
-              )}
-            </div>
-          )}
-
-          <button type="button" className="conversation-thread__icon-btn" onClick={onClose} aria-label="Close">✕</button>
-        </div>
-      </div>
-
-      <div className="conversation-thread__messages" ref={listRef} onScroll={handleListScroll}>
+      <div className="chat-thread__messages" ref={listRef} onScroll={handleListScroll}>
         {loading ? (
-          <p className="slide-over__muted">Loading…</p>
-        ) : messages.length === 0 ? (
-          isBotConversation ? (
-            <div className="conversations-tab__empty">
-              <img src={filobeloReading} alt="" className="conversation-thread__empty-mascot" />
-              <p>Ask Filobelo anything about this workspace</p>
+          <p className="chat-thread__note">Loading…</p>
+        ) : messages.length === 0 && !sending ? (
+          firstMessagePending ? null : isBotConversation ? (
+            <div className="chat-thread__empty">
+              <BotMark size={44} />
+              <p>Ask Filobelo anything about this workspace.</p>
             </div>
           ) : (
-            <p className="slide-over__muted">No messages yet. Say hello!</p>
+            <div className="chat-thread__empty">
+              <p>No messages yet. Say hello!</p>
+            </div>
           )
         ) : (
           <>
             {hasMore && (
               <button
                 type="button"
-                className="conversation-thread__load-earlier"
+                className="ui-btn ui-btn--ghost ui-btn--xs chat-thread__load-earlier"
                 onClick={loadOlder}
                 disabled={loadingOlder}
               >
                 {loadingOlder ? 'Loading…' : 'Load earlier messages'}
               </button>
             )}
-            {messages.map((m) => (
-              <MessageBubble
-                key={m.id}
-                message={m}
-                member={resolveMember(m)}
-                isSelf={m.sender_id === currentUserId}
-                isBot={m.sender_type === 'BOT'}
-                hideAvatar={isBotConversation && m.sender_id === currentUserId}
-              />
-            ))}
+            {renderMessages()}
             {isBotConversation && sending && (
               <MessageBubble
-                message={{ content: 'Filobelo is typing…', created_at: new Date().toISOString() }}
+                message={{ content: '', created_at: new Date().toISOString() }}
                 member={FILOBELO_BOT}
-                isSelf={false}
+                variant="assistant"
                 isBot
                 isTyping
               />
@@ -608,34 +866,24 @@ export default function ConversationThread({ workspaceId, conversation, memberBy
         )}
       </div>
 
-      <div className="conversation-thread__input-row">
-        <textarea
-          ref={textareaRef}
-          className="conversation-thread__input"
-          placeholder="Type a message…"
-          rows={1}
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            // Enter sends, Shift+Enter adds a line. While an IME is composing
-            // (keyCode 229 covers browsers that do not set isComposing on the
-            // confirming keystroke) Enter belongs to the IME.
-            if (e.key !== 'Enter' || e.shiftKey) return
-            if (e.nativeEvent.isComposing || e.keyCode === 229) return
-            e.preventDefault()
-            handleSend()
-          }}
+      <Composer
+        textareaRef={textareaRef}
+        value={draft}
+        onChange={setDraft}
+        onSend={() => handleSend()}
+        canSend={!sending && Boolean(draft.trim())}
+        placeholder={isBotConversation ? 'Ask about this workspace…' : `Message everyone in ${workspaceTitle}…`}
+        hint={isBotConversation ? 'Filobelo can make mistakes' : 'Shift + Enter for a new line'}
+      />
+
+      {confirmingDelete && (
+        <DeleteConversationDialog
+          conversation={conversation}
+          workspaceTitle={workspaceTitle}
+          onConfirm={handleDelete}
+          onCancel={() => setConfirmingDelete(false)}
         />
-        <button
-          type="button"
-          className="conversation-thread__send-btn"
-          onClick={handleSend}
-          disabled={sending || !draft.trim()}
-          aria-label="Send message"
-        >
-          <SendIcon />
-        </button>
-      </div>
+      )}
     </div>
   )
 }
