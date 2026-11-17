@@ -1,263 +1,359 @@
-.ntm-overlay {
-  position: fixed;
-  inset: 0;
-  background: hsl(30 15% 8% / 0.38);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
-  overflow-y: auto;
-  z-index: 400;
-}
+/*
+ * New task modal. Sibling of NewWorkspaceModal.css (nwm-): same shell,
+ * field style, date trigger, footer and button order, under the ntm- prefix.
+ * Shell, fields, segmented/menus and buttons come from ui.css.
+ */
 
-@keyframes ntm-pop-in {
-  from { opacity: 0; transform: translate(-50%, 4px) scale(0.98); }
-  to { opacity: 1; transform: translate(-50%, 0) scale(1); }
+/* The overlay scrolls instead of the modal, so popovers are never clipped.
+   margin:auto centres the modal while it fits and lets it grow past the
+   viewport (top stays reachable) when it doesn't. */
+.ntm-overlay {
+  align-items: flex-start;
+  overflow-y: auto;
+  animation: ntm-fade-in 0.14s ease-out;
 }
 
 .ntm-modal {
-  position: absolute;
-  left: 50%;
-  top: 100px;
-  transform: translateX(-50%);
-  width: 560px;
-  max-width: calc(100vw - 32px);
-  margin-bottom: 40px;
-  background: var(--color-bg-overlay);
-  border: 1px solid var(--color-border);
-  border-radius: 18px;
-  box-shadow: 0 24px 70px hsl(0 0% 0% / 0.28);
+  position: relative; /* the date picker opens beside the modal, not over it */
+  width: min(520px, 100%);
+  margin: auto;
+  max-height: none;
   animation: ntm-pop-in 0.16s ease-out;
 }
 
-/* ─── Top bar: eyebrow + close ────────────────────────────────────────────── */
+@keyframes ntm-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
 
-.ntm-topbar {
+@keyframes ntm-pop-in {
+  from { opacity: 0; transform: translateY(4px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+
+.ntm-form {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 24px 32px 0;
-}
-
-.ntm-eyebrow {
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--color-text-muted);
-}
-
-.ntm-close {
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: var(--color-text-muted);
-  padding: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 4px;
-  transition: color 0.15s, background-color 0.15s;
-}
-
-.ntm-close:hover {
-  color: var(--color-text-primary);
-  background: var(--color-bg-canvas-hover);
-}
-
-.ntm-body {
-  padding: 20px 32px 28px;
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-}
-
-/* ─── Title row: color dots + inline heading input ─────────────────────────── */
-
-.ntm-title-row {
-  display: flex;
-  align-items: center;
-  gap: 18px;
-}
-
-.ntm-title-input {
   flex: 1;
-  min-width: 0;
-  border: none;
-  background: transparent;
-  font-family: inherit;
-  font-size: 1.55rem;
+  flex-direction: column;
+  gap: 30px;
+  padding: 40px 36px;
+}
+
+/* Heavier text, as on Home: titles 700, labels and controls 600, body 500. */
+.ntm-modal .ui-modal__title {
+  font-size: 25px;
   font-weight: 700;
-  color: var(--color-text-primary);
-  padding: 2px 0;
+  letter-spacing: -0.01em;
 }
 
-.ntm-title-input::placeholder {
-  color: var(--color-text-muted);
-  font-weight: 700;
-}
-
-.ntm-color-caption {
-  margin: -10px 0 0;
-  padding-bottom: 14px;
-  border-bottom: 1px solid var(--color-border);
-  font-size: 0.78rem;
-  color: var(--color-text-muted);
-}
-
-.ntm-error {
-  margin: 0;
-  font-size: 0.8rem;
-  color: var(--color-error-text);
-}
-
-/* ─── Description: ghost toggle → borderless textarea ─────────────────────── */
-
-.ntm-desc-toggle {
-  align-self: flex-start;
-  border: none;
-  background: transparent;
-  color: var(--color-text-muted);
-  font-size: 0.88rem;
+.ntm-modal .ui-field__label {
+  font-size: 14px;
   font-weight: 600;
-  cursor: pointer;
-  padding: 0;
-  transition: color 0.15s;
-}
-
-.ntm-desc-toggle:hover {
   color: var(--color-text-primary);
 }
 
-.ntm-desc-textarea {
-  width: 100%;
-  border: none;
-  background: transparent;
-  color: var(--color-text-primary);
-  font-family: inherit;
-  font-size: 0.92rem;
-  resize: vertical;
-  min-height: 56px;
-  padding: 0;
-  box-sizing: border-box;
+.ntm-modal .ui-input,
+.ntm-modal .ui-textarea {
+  font-weight: 500;
 }
 
-.ntm-desc-textarea::placeholder {
-  color: var(--color-text-muted);
+.ntm-modal .ui-input::placeholder,
+.ntm-modal .ui-textarea::placeholder {
+  font-weight: 500;
 }
 
-/* ─── Due date / assignee row ─────────────────────────────────────────────── */
-
-.ntm-row {
-  display: flex;
-  gap: 40px;
+.ntm-modal .ui-btn {
+  height: 44px;
+  font-size: 15px;
+  font-weight: 600;
 }
 
-.ntm-field-col {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  flex: 1;
-}
-
-.ntm-field-label {
-  font-size: 0.7rem;
+.ntm-modal .ui-btn--primary {
+  padding: 0 22px;
   font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--color-text-muted);
 }
 
-.ntm-date-pill-wrap {
+.ntm-modal .ui-btn--xs {
+  height: 36px;
+  font-size: 14px;
+}
+
+.ntm-modal .ui-btn--sm {
+  height: 40px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* ─── Header ──────────────────────────────────────────────────────────────── */
+
+.ntm-header {
+  align-items: flex-start;
+}
+
+.ntm-heading {
+  min-width: 0;
+}
+
+.ntm-subtitle {
+  margin: 4px 0 0;
+  overflow: hidden;
+  color: var(--color-text-secondary);
+  font-size: 15px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ─── Name + description ──────────────────────────────────────────────────── */
+
+.ntm-name-input {
+  height: 48px;
+  font-size: 17px;
+}
+
+.ntm-desc {
+  min-height: 120px;
+  font-size: 15px;
+}
+
+/* ─── Colour swatches ─────────────────────────────────────────────────────── */
+
+.ntm-swatches {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  gap: 10px;
+}
+
+.ntm-swatch {
+  display: flex;
+  width: 28px;
+  height: 28px;
+  padding: 2px;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.ntm-swatch:hover {
+  border-color: var(--color-border-strong);
+}
+
+.ntm-swatch[aria-checked='true'] {
+  border-color: var(--color-text-primary);
+}
+
+.ntm-swatch__dot {
+  flex: 1;
+  border-radius: 50%;
+}
+
+/* ─── Due date + assignee ─────────────────────────────────────────────────── */
+
+.ntm-grid {
+  position: relative; /* anchors the date picker to this row */
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.ntm-date,
+.ntm-assignee {
   position: relative;
 }
 
-.ntm-date-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 9px 14px;
-  border: 1px solid transparent;
-  border-radius: 10px;
-  background: var(--color-neutral-bg);
-  color: var(--color-text-secondary);
-  font-size: 0.85rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: border-color 0.15s, color 0.15s, background-color 0.15s;
-}
-
-.ntm-date-pill:hover {
-  color: var(--color-text-primary);
-  background: var(--color-bg-canvas-hover);
-}
-
-.ntm-date-pill--set {
-  border-color: var(--color-brand-primary);
-  color: var(--color-brand-primary);
-  background: var(--color-info-bg);
-}
-
-.ntm-clear-btn {
+.ntm-date__trigger,
+.ntm-assignee__trigger {
   display: flex;
   align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  border: none;
-  border-radius: 50%;
-  background: var(--color-neutral-bg);
-  color: var(--color-text-muted);
-  font-size: 0.7rem;
+  gap: 8px;
+  width: 100%;
+  height: 46px;
+  padding: 0 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-text-primary);
+  font-size: 15px;
+  font-weight: 500;
+  text-align: left;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
-  line-height: 1;
+  transition: border-color 0.15s, background-color 0.15s;
+}
+
+.ntm-date__trigger:hover,
+.ntm-date__trigger[aria-expanded='true'],
+.ntm-assignee__trigger:hover,
+.ntm-assignee__trigger[aria-expanded='true'] {
+  border-color: var(--color-border-strong);
+}
+
+.ntm-date__trigger svg {
+  flex-shrink: 0;
+  color: var(--color-text-secondary);
+}
+
+.ntm-date__value,
+.ntm-assignee__value {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Leave room for the clear button that sits over the right edge. */
+.ntm-date__trigger--set {
+  padding-right: 42px;
+  font-weight: 600;
+}
+
+.ntm-date__trigger--set svg {
+  color: var(--color-brand-text);
+}
+
+.ntm-date__clear {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+}
+
+.ntm-assignee__trigger {
+  padding-left: 9px;
+}
+
+.ntm-assignee__trigger .member-avatar {
   flex-shrink: 0;
 }
 
-.ntm-clear-btn:hover {
-  background: var(--color-error-bg);
-  color: var(--color-error-text);
+.ntm-chevron {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
 }
 
-/* ─── Assignee row ─────────────────────────────────────────────────────────── */
+/* ─── Assignee menu ───────────────────────────────────────────────────────── */
 
-.ntm-assignee-row {
+.ntm-assignee__menu {
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 10;
+  width: max(100%, 240px);
+  min-width: 0;
+  max-height: 264px;
+  overflow-y: auto;
+}
+
+.ntm-assignee__item {
+  justify-content: flex-start;
+  flex-shrink: 0;
+  height: 42px;
+  font-weight: 600;
+}
+
+.ntm-assignee__item .member-avatar {
+  flex-shrink: 0;
+}
+
+.ntm-assignee__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ntm-assignee__check {
+  display: flex;
+  flex-shrink: 0;
+  color: var(--color-brand-text);
+}
+
+/* ─── Calendar popover ────────────────────────────────────────────────────── */
+
+.ntm-cal {
+  /* Level with the due-date row, just outside the modal's right edge
+     (grid edge + 36px modal padding + 14px gap), so no field is hidden. */
+  position: absolute;
+  top: 0;
+  left: calc(100% + 36px + 14px);
+  z-index: 10;
+  width: 300px;
+  padding: 12px;
+  background: var(--color-bg-overlay);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-overlay);
+}
+
+.ntm-cal__header {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
+  justify-content: space-between;
+  margin-bottom: 6px;
 }
 
-.ntm-assignee-avatar {
-  display: inline-flex;
-  border: 1px solid transparent;
-  border-radius: 50%;
-  background: transparent;
-  padding: 2px;
-  cursor: pointer;
-  transition: box-shadow 0.15s;
-  line-height: 0;
+.ntm-cal__title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--color-text-primary);
 }
 
-.ntm-assignee-avatar:hover {
-  box-shadow: 0 0 0 2px var(--color-bg-canvas-hover);
+.ntm-cal__grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
 }
 
-.ntm-assignee-avatar--active {
-  box-shadow: 0 0 0 2px var(--color-bg-overlay), 0 0 0 3.5px var(--color-brand-primary);
-}
-
-/* ─── Resources ────────────────────────────────────────────────────────────── */
-
-.ntm-resources {
+.ntm-cal__dow {
   display: flex;
-  flex-direction: column;
-  gap: 10px;
+  align-items: center;
+  justify-content: center;
+  height: 26px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-text-muted);
 }
 
-.ntm-resources__header {
+.ntm-cal__day {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 36px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-text-primary);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.1s;
+}
+
+.ntm-cal__day:hover:not(:disabled) {
+  background: var(--color-bg-canvas-hover);
+}
+
+.ntm-cal__day--other {
+  color: var(--color-text-muted);
+  opacity: 0.45;
+  cursor: default;
+}
+
+.ntm-cal__day--today {
+  color: var(--color-brand-text);
+  font-weight: 700;
+}
+
+.ntm-cal__day--selected,
+.ntm-cal__day--selected:hover:not(:disabled) {
+  background: var(--color-brand-primary);
+  color: var(--color-text-on-brand);
+  font-weight: 600;
+}
+
+/* ─── Resources ───────────────────────────────────────────────────────────── */
+
+.ntm-resources__head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
@@ -265,285 +361,150 @@
 }
 
 .ntm-resources__hint {
-  font-size: 0.76rem;
+  font-size: 13px;
+  font-weight: 500;
   color: var(--color-text-muted);
-  font-style: italic;
 }
 
 .ntm-resources__triggers {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
-}
-
-.ntm-resource-trigger {
-  display: inline-flex;
-  align-items: center;
   gap: 8px;
-  padding: 9px 14px;
-  border: 1px dashed var(--color-border-strong);
-  border-radius: 10px;
-  background: transparent;
-  color: var(--color-text-secondary);
-  font-size: 0.85rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: color 0.15s, background-color 0.15s, border-color 0.15s;
 }
 
-.ntm-resource-trigger:hover {
-  color: var(--color-brand-primary);
-  border-color: var(--color-brand-primary);
-  background: var(--color-bg-canvas-hover);
-}
-
-.ntm-link-form {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  padding: 10px 12px;
-  border: 1px dashed var(--color-border-strong);
-  border-radius: 10px;
-}
-
-.ntm-link-form__input {
-  flex: 1;
-  min-width: 120px;
-  border: none;
-  background: transparent;
-  color: var(--color-text-primary);
-  font-family: inherit;
-  font-size: 0.85rem;
-}
-
-.ntm-link-form__input::placeholder {
-  color: var(--color-text-muted);
-}
-
-.ntm-link-form__add {
-  padding: 6px 12px;
-  border: none;
-  border-radius: 8px;
-  background: var(--color-brand-primary);
-  color: var(--color-text-on-brand);
-  font-size: 0.8rem;
-  font-weight: 600;
-  cursor: pointer;
-  flex-shrink: 0;
-}
-
-.ntm-link-form__cancel {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  border: none;
-  border-radius: 50%;
-  background: var(--color-neutral-bg);
-  color: var(--color-text-muted);
-  font-size: 0.7rem;
-  cursor: pointer;
-  flex-shrink: 0;
-}
-
-.ntm-link-form__cancel:hover {
-  background: var(--color-error-bg);
-  color: var(--color-error-text);
-}
-
-.ntm-pending-list {
+.ntm-pending {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-.ntm-pending-chip {
+.ntm-pending__row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 7px 10px;
-  border-radius: 8px;
-  background: var(--color-neutral-bg);
+  gap: 10px;
+  height: 44px;
+  padding: 0 8px 0 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.ntm-pending__icon {
+  display: flex;
+  flex-shrink: 0;
   color: var(--color-text-secondary);
 }
 
-.ntm-pending-chip__label {
+.ntm-pending__label {
   flex: 1;
   min-width: 0;
-  font-size: 0.82rem;
-  color: var(--color-text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.ntm-pending-chip__remove {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  background: transparent;
-  color: var(--color-text-muted);
-  cursor: pointer;
-  padding: 2px;
-  flex-shrink: 0;
+/* ─── Add-link dialog (small, above the task modal) ───────────────────────── */
+
+.ntm-link-overlay {
+  z-index: 1100;
+  animation: ntm-fade-in 0.12s ease-out;
 }
 
-.ntm-pending-chip__remove:hover {
-  color: var(--color-error-text);
-}
-
-/* ─── Footer ───────────────────────────────────────────────────────────────── */
-
-.ntm-footer {
-  display: flex;
-  align-items: center;
+.ntm-link-dialog {
+  width: min(400px, 100%);
   gap: 20px;
+  padding: 28px;
+  animation: ntm-pop-in 0.14s ease-out;
+}
+
+.ntm-link-dialog__title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.ntm-link-dialog .ui-field__label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.ntm-link-dialog .ui-input {
+  height: 44px;
+  font-weight: 500;
+}
+
+.ntm-link-dialog .ui-btn {
+  height: 42px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.ntm-link-dialog .ui-btn--primary {
+  font-weight: 700;
+}
+
+.ntm-link-dialog__footer {
+  display: flex;
   justify-content: flex-end;
+  gap: 10px;
   padding-top: 4px;
 }
 
-.ntm-btn-ghost {
-  background: transparent;
-  border: none;
-  color: var(--color-text-secondary);
-  font-size: 0.92rem;
-  font-weight: 600;
-  padding: 10px 6px;
+/* ─── Error + footer ──────────────────────────────────────────────────────── */
+
+.ntm-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  padding: 10px 12px;
   border-radius: var(--radius-control);
-  cursor: pointer;
-  transition: color 0.15s;
+  background: var(--color-error-bg);
+  color: var(--color-error-text);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
 }
 
-.ntm-btn-ghost:hover {
-  color: var(--color-text-primary);
+.ntm-error svg {
+  flex-shrink: 0;
+  margin-top: 1px;
 }
 
-.ntm-btn-primary {
-  background: var(--color-brand-primary);
-  color: var(--color-text-on-brand);
-  border: none;
-  padding: 11px 24px;
-  border-radius: 10px;
-  font-size: 0.92rem;
-  font-weight: 700;
-  cursor: pointer;
-  box-shadow: 0 1px 2px hsl(0 0% 0% / 0.12);
-  transition: background-color 0.15s, transform 0.05s;
-}
-
-.ntm-btn-primary:hover:not(:disabled) {
-  background: var(--color-brand-primary-hover);
-}
-
-.ntm-btn-primary:active:not(:disabled) {
-  transform: scale(0.98);
-}
-
-.ntm-btn-primary:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-/* ─── Mini calendar popover ───────────────────────────────────────────────── */
-
-.ntm-cal-pop {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
-  z-index: 500;
-  background: var(--color-bg-overlay);
-  border: 1px solid var(--color-border-strong);
-  border-radius: 10px;
-  box-shadow: var(--shadow-overlay);
-  padding: 10px;
-  width: 248px;
-}
-
-.ntm-cal-pop__header {
+.ntm-footer {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 8px;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: auto; /* footer rests at the bottom of the taller modal */
+  padding-top: 8px;
 }
 
-.ntm-cal-pop__nav {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  border: none;
-  background: transparent;
-  color: var(--color-text-primary);
-  cursor: pointer;
-  border-radius: 4px;
+/* Not enough room beside the modal (narrow window): open the picker under
+   the row instead, rather than letting it fall off screen. */
+@media (max-width: 1080px) {
+  .ntm-cal {
+    top: calc(100% + 6px);
+    right: 0;
+    left: auto;
+  }
 }
 
-.ntm-cal-pop__nav:hover {
+.ntm-plain-btn:hover {
   background: var(--color-bg-canvas-hover);
 }
 
-.ntm-cal-pop__title {
-  font-size: 0.83rem;
-  font-weight: 600;
-  color: var(--color-text-primary);
-}
-
-.ntm-cal-pop__grid {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 2px;
-}
-
-.ntm-cal-pop__dow {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.65rem;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  color: var(--color-text-muted);
-  padding: 2px 0 4px;
-}
-
-.ntm-cal-pop__day {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  border: none;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--color-text-primary);
-  font-size: 0.8rem;
-  cursor: pointer;
-  transition: background 0.1s;
-}
-
-.ntm-cal-pop__day:hover:not(:disabled) {
-  background: var(--color-bg-canvas-hover);
-}
-
-.ntm-cal-pop__day--other {
-  opacity: 0.25;
-  cursor: default;
-}
-
-.ntm-cal-pop__day--today {
-  font-weight: 700;
-  color: var(--color-brand-primary);
-}
-
-.ntm-cal-pop__day--selected {
+/* Submitting: keep the filled primary look (dimmed) rather than falling back
+   to the dashed "not ready yet" disabled style. */
+.ui-btn--primary.ntm-submit--busy:disabled {
   background: var(--color-brand-primary);
+  border-color: transparent;
   color: var(--color-text-on-brand);
-  font-weight: 600;
-}
-
-.ntm-cal-pop__day--selected:hover:not(:disabled) {
-  background: var(--color-brand-primary-hover);
+  opacity: 0.7;
+  cursor: progress;
 }

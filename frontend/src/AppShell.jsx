@@ -4,7 +4,6 @@ import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import SidebarV2 from './components/Sidebar/SidebarV2'
 import NewWorkspaceModal from './components/Home/NewWorkspaceModal'
 import SettingsModal from './components/Profile/SettingsModal'
-import CalendarModal from './components/Calendar/CalendarModal'
 import Toast from './components/shared/Toast'
 import { useAuth } from './context/AuthContext'
 import {
@@ -101,7 +100,6 @@ function AppShell() {
     )
   const [showNewModal, setShowNewModal] = useState(false)
   const [showProfileModal, setShowProfileModal] = useState(false)
-  const [showCalendar, setShowCalendar] = useState(false)
   const [calendarPrefillDate, setCalendarPrefillDate] = useState(null)
   const [toast, setToast] = useState(null)
   // Stable identity matters: Toast restarts its auto-dismiss timer whenever
@@ -344,12 +342,22 @@ function AppShell() {
     )
   }
 
-  async function handleCreateWorkspace(data) {
+  async function handleCreateWorkspace({ folder_id: folderId = null, ...data }) {
     const ws = await createWorkspace(data)
+    // The folder is the creator's own preference (per member), so it is set
+    // with a follow-up call rather than in the create payload. If that call
+    // fails the workspace still exists - say so instead of failing the create.
+    if (folderId !== null) {
+      try {
+        await patchWorkspacePreferences(ws.id, { folder_id: folderId })
+        ws.folder_id = folderId
+      } catch {
+        setToast('Workspace created, but it could not be moved into that folder')
+      }
+    }
     setWorkspaces((prev) => [normalizeWorkspace(ws), ...prev])
     setShowNewModal(false)
     setCalendarPrefillDate(null)
-    setShowCalendar(false)
     // Creating a workspace is almost always followed by wanting to add tasks
     // to it, so go straight there instead of leaving the user on Home.
     navigate(`/workspaces/${ws.id}`)
@@ -362,6 +370,10 @@ function AppShell() {
     upcomingTasks,
     onSelectWorkspace: handleSelectWorkspace,
     onNewWorkspace: () => setShowNewModal(true),
+    onNewWorkspaceOnDate: (date) => {
+      setCalendarPrefillDate(date)
+      setShowNewModal(true)
+    },
     onTogglePin: handleTogglePin,
     onArchive: handleArchive,
     onLeave: handleLeave,
@@ -376,7 +388,8 @@ function AppShell() {
 
   const workspaceMatch = location.pathname.match(/^\/workspaces\/(\d+)/)
   const activeWorkspaceId = workspaceMatch ? Number(workspaceMatch[1]) : null
-  const activeNav = showCalendar ? 'calendar' : location.pathname === '/' ? 'home' : null
+  const activeNav =
+    location.pathname === '/calendar' ? 'calendar' : location.pathname === '/' ? 'home' : null
 
   return (
     <div className="app-shell">
@@ -403,7 +416,7 @@ function AppShell() {
         onToast={setToast}
         onOpenSettings={() => setShowProfileModal(true)}
         onSignOut={logout}
-        onOpenCalendar={() => setShowCalendar((v) => !v)}
+        onOpenCalendar={() => navigate('/calendar')}
         onGoHome={() => navigate('/')}
       />
 
@@ -418,18 +431,6 @@ function AppShell() {
           onClose={() => { setShowNewModal(false); setCalendarPrefillDate(null) }}
           onCreate={handleCreateWorkspace}
           defaultDueDate={calendarPrefillDate}
-        />
-      )}
-
-      {showCalendar && (
-        <CalendarModal
-          workspaces={activeWorkspaces}
-          onClose={() => setShowCalendar(false)}
-          onSelectWorkspace={(id) => { setShowCalendar(false); handleSelectWorkspace(id) }}
-          onNewWorkspaceOnDate={(date) => {
-            setCalendarPrefillDate(date)
-            setShowNewModal(true)
-          }}
         />
       )}
 
