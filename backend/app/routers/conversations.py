@@ -13,6 +13,7 @@ from app.models import (
     Conversation,
     ConversationType,
     Message,
+    MessageReaction,
     Workspace,
     WorkspaceMember,
 )
@@ -24,8 +25,11 @@ from app.schemas import (
     MessageCreate,
     MessageResponse,
     PaginatedMessageResponse,
+    ReactionSummary,
+    ReactionToggle,
 )
 from app.utils import get_conversation_by_id, get_conversation_by_id_with_messages
+from app.utils.reactions import summarize_reactions, toggle_reaction
 
 router = APIRouter(prefix="/{workspace_id}/conversations", tags=["conversations"])
 
@@ -236,15 +240,12 @@ async def _get_cursor_message(message_id: int, conversation_id: int, db: DbSessi
     return message
 
 
-@router.get(
-    "/{conversation_id}/messages",
-    response_model=PaginatedMessageResponse,
-    dependencies=[Depends(require_membership)],
-)
+@router.get("/{conversation_id}/messages", response_model=PaginatedMessageResponse)
 async def list_messages(
     conversation_id: int,
     workspace_id: int,
     db: DbSession,
+    member: Annotated[WorkspaceMember, Depends(require_membership)],
     skip: Annotated[int | None, Query(ge=0)] = None,
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
     before_id: int | None = None,
@@ -328,13 +329,55 @@ async def list_messages(
     if has_more is None:
         has_more = skip + limit < total
 
+    # Reactions ride along on every message in the page, so the client never
+    # has to ask for them separately.
+    summaries = await summarize_reactions(
+        MessageReaction, MessageReaction.message_id, [m.id for m in messages], member.user_id, db
+    )
+
     return PaginatedMessageResponse(
-        messages=messages,
+        messages=[
+            MessageResponse.model_validate(m).model_copy(
+                update={"reactions": summaries.get(m.id, [])}
+            )
+            for m in messages
+        ],
         total=total,
         skip=skip,
         limit=limit,
         has_more=has_more,
     )
+
+
+@router.post(
+    "/{conversation_id}/messages/{message_id}/reactions",
+    response_model=list[ReactionSummary],
+)
+async def toggle_message_reaction(
+    conversation_id: int,
+    workspace_id: int,
+    message_id: int,
+    data: ReactionToggle,
+    db: DbSession,
+    member: Annotated[WorkspaceMember, Depends(require_membership)],
+):
+    """Add the caller's reaction, or remove it if they already left it.
+
+    Returns the message's full reaction list so the client can replace its
+    chips in one go. Note that polling with after_id only returns *new*
+    messages, so a reaction added to an older message reaches other viewers
+    on their next full load, not through polling.
+    """
+    await get_conversation_by_id(conversation_id, workspace_id, db)
+    message = await _get_cursor_message(message_id, conversation_id, db)
+
+    await toggle_reaction(
+        MessageReaction, MessageReaction.message_id, message.id, member.user_id, data.emoji, db
+    )
+    summaries = await summarize_reactions(
+        MessageReaction, MessageReaction.message_id, [message.id], member.user_id, db
+    )
+    return summaries.get(message.id, [])
 
 
 @router.delete(

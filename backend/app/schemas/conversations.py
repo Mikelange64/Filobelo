@@ -2,6 +2,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from datetime import datetime
 
 from app.models import ConversationType, SenderType
+from app.schemas.reactions import ReactionSummary
 
 
 class ConversationCreate(BaseModel):
@@ -55,6 +56,7 @@ class MessageResponse(BaseModel):
     content:         str
     sources:         list[MessageSource] | None = None
     created_at:      datetime
+    reactions:       list[ReactionSummary] = []
 
 
 class PaginatedMessageResponse(BaseModel):

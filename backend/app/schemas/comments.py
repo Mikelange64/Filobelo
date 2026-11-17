@@ -2,6 +2,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.schemas.reactions import ReactionSummary
+
 
 class CommentCreate(BaseModel):
     content: str = Field(min_length=1, max_length=2000)
@@ -20,3 +22,4 @@ class CommentResponse(BaseModel):
     content:   str
     left_at:   datetime
     edited_at: datetime | None
+    reactions: list[ReactionSummary] = []
