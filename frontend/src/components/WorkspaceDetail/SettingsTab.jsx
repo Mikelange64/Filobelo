@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { patchWorkspace } from '../../api/client'
 import { formatAbsoluteDate, formatDueDate, toDateInputValue, dateInputToISO } from '../../utils/date'
 import useDelayedFlag from '../../hooks/useDelayedFlag'
+import useDismissableMenu from '../../hooks/useDismissableMenu'
+import DatePicker from '../shared/DatePicker'
 import './SettingsTab.css'
 
 // Workspace page → Settings tab. Same form language as the account settings
@@ -25,6 +27,70 @@ function ReadOnlyField({ label, value, empty }) {
     <div className="ui-field">
       <span className="ui-field__label">{label}</span>
       <p className={`wss-value${value ? '' : ' wss-value--empty'}`}>{value || empty}</p>
+    </div>
+  )
+}
+
+const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+/** "YYYY-MM-DD" -> local Date at midnight. */
+function parseDateValue(value) {
+  if (!value) return null
+  const [y, m, d] = value.split('-').map(Number)
+  return new Date(y, m - 1, d)
+}
+
+// Due date: the same trigger + mini calendar as the create modals (shared
+// DatePicker), instead of the browser's own date input. value is the
+// "YYYY-MM-DD" form state; "" means no deadline.
+function DueDateField({ value, onChange }) {
+  const [open, setOpen, wrapRef] = useDismissableMenu()
+  const selected = parseDateValue(value)
+
+  return (
+    <div className="ui-field">
+      <span className="ui-field__label" id="wss-due-label">Due date</span>
+      <div className="wss-date" ref={wrapRef}>
+        <button
+          type="button"
+          className={`wss-date__trigger${selected ? ' wss-date__trigger--set' : ''}`}
+          onClick={() => setOpen((v) => !v)}
+          aria-haspopup="dialog"
+          aria-expanded={open}
+          aria-labelledby="wss-due-label wss-due-value"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+            <rect x="4" y="5.5" width="16" height="14" rx="2.5" />
+            <path d="M4 10h16M8.5 3.5v4M15.5 3.5v4" />
+          </svg>
+          <span className="wss-date__value" id="wss-due-value">
+            {selected
+              ? `${selected.getDate()} ${MONTH_ABBR[selected.getMonth()]} ${selected.getFullYear()}`
+              : 'No deadline'}
+          </span>
+        </button>
+        {selected && (
+          <button
+            type="button"
+            className="ui-icon-btn ui-icon-btn--sm wss-date__clear"
+            onClick={() => onChange('')}
+            aria-label="Clear due date"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
+              <path d="M6 6l12 12M18 6L6 18" />
+            </svg>
+          </button>
+        )}
+        {open && (
+          <div className="wss-date__popover">
+            <DatePicker
+              selectedDate={selected}
+              label="Pick a due date"
+              onSelect={(date) => { onChange(toDateInputValue(date)); setOpen(false) }}
+            />
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -126,16 +192,7 @@ export default function SettingsTab({ workspace, isAdmin, workspaceId, onWorkspa
       <Section title="Schedule" desc={`The deadline drives the overdue alerts.${memberNote}`}>
         <div className="wss-grid">
           {isAdmin ? (
-            <div className="ui-field">
-              <label className="ui-field__label" htmlFor="wss-due">Due date</label>
-              <input
-                id="wss-due"
-                type="date"
-                className="ui-input"
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-              />
-            </div>
+            <DueDateField value={dueDate} onChange={setDueDate} />
           ) : (
             <ReadOnlyField
               label="Due date"
