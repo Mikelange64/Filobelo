@@ -125,7 +125,7 @@ function WorkspaceDetail() {
   const [selectedTaskId, setSelectedTaskId]     = useState(null)
   const [slideOverTask, setSlideOverTask]       = useState(null)
   const [slideOverLoading, setSlideOverLoading] = useState(false)
-  const [slideOverWidth, setSlideOverWidth]     = useState(760)
+  const [slideOverWidth, setSlideOverWidth]     = useState(540)
   const [showNewTaskModal, setShowNewTaskModal] = useState(false)
   const [conversationsPanelOpen, setConversationsPanelOpen]   = useState(false)
   const [conversationsExpanded, setConversationsExpanded]   = useState(false)
@@ -1048,7 +1048,6 @@ function WorkspaceDetail() {
                     slideOverLoading={slideOverLoading}
                     workspace={workspace}
                     memberById={memberById}
-                    members={workspace.members}
                     isAdmin={isAdmin}
                     currentUserId={currentUserId}
                     workspaceId={workspaceId}
@@ -1059,7 +1058,6 @@ function WorkspaceDetail() {
                     onDelete={handleDeleteTask}
                     onSave={handleSaveTask}
                     onReassign={(taskId) => setReassignTaskId(taskId)}
-                    onComingSoon={onComingSoon}
                     onToast={onToast}
                 />
             )}
