@@ -1,4 +1,5 @@
 from .associations import WorkspaceMember
+from .comments import Comment
 from .conversations import Conversation, ConversationType, Message, SenderType
 from .resources import Resource, ResourceType
 from .tasks import Task, TaskStatus
@@ -32,4 +33,7 @@ __all__ = [
 
     # associations.py
     "WorkspaceMember",
+
+    # comments.py
+    "Comment",
 ]
