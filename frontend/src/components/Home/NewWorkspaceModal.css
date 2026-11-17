@@ -16,7 +16,8 @@
 
 .nwm-modal {
   position: relative; /* the date picker opens beside the modal, not over it */
-  width: min(600px, 100%);
+  width: min(520px, 100%);
+  min-height: min(680px, calc(var(--app-height) - 48px));
   margin: auto;
   max-height: none;
   animation: nwm-pop-in 0.16s ease-out;
@@ -34,9 +35,10 @@
 
 .nwm-form {
   display: flex;
+  flex: 1;
   flex-direction: column;
-  gap: 26px;
-  padding: 36px;
+  gap: 30px;
+  padding: 40px 36px;
 }
 
 /* Heavier text, as on Home: titles 700, labels and controls 600, body 500. */
@@ -107,13 +109,14 @@
 }
 
 .nwm-desc {
-  min-height: 96px;
+  min-height: 120px;
   font-size: 15px;
 }
 
 /* ─── Due date ────────────────────────────────────────────────────────────── */
 
 .nwm-grid {
+  position: relative; /* anchors the date picker to this row */
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
@@ -261,10 +264,11 @@
 /* ─── Calendar popover ────────────────────────────────────────────────────── */
 
 .nwm-cal {
-  /* Beside the modal, top-aligned with it, so no field is hidden. */
+  /* Level with the due-date row, just outside the modal's right edge
+     (grid edge + 36px modal padding + 14px gap), so no field is hidden. */
   position: absolute;
   top: 0;
-  left: calc(100% + 14px);
+  left: calc(100% + 36px + 14px);
   z-index: 10;
   width: 300px;
   padding: 12px;
@@ -366,16 +370,17 @@
   display: flex;
   justify-content: flex-end;
   gap: 10px;
+  margin-top: auto; /* footer rests at the bottom of the taller modal */
   padding-top: 8px;
 }
 
-/* Not enough room beside the modal (narrow window): drop the picker over the
-   modal's top instead, centred, rather than letting it fall off screen. */
-@media (max-width: 1160px) {
+/* Not enough room beside the modal (narrow window): open the picker under
+   the row instead, rather than letting it fall off screen. */
+@media (max-width: 1080px) {
   .nwm-cal {
-    top: 120px;
-    left: 50%;
-    transform: translateX(-50%);
+    top: calc(100% + 6px);
+    right: 0;
+    left: auto;
   }
 }
 
