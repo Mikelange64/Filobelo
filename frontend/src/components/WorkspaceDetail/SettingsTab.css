@@ -32,14 +32,15 @@
 
 .wss-section__title {
     margin: 0;
-    font-size: 16px;
-    font-weight: 600;
+    font-size: 17px;
+    font-weight: 700;
     color: var(--color-text-primary);
 }
 
 .wss-section__desc {
     margin: 0;
-    font-size: 13px;
+    font-size: 14px;
+    font-weight: 500;
     line-height: 1.5;
     color: var(--color-text-secondary);
 }
@@ -60,7 +61,8 @@
 /* Read-only value for members, aligned with where an input's text sits. */
 .wss-value {
     margin: 0;
-    font-size: 15px;
+    font-size: 16px;
+    font-weight: 500;
     line-height: 1.5;
     color: var(--color-text-primary);
     white-space: pre-wrap;
@@ -69,6 +71,25 @@
 
 .wss-value--empty {
     color: var(--color-text-muted);
+}
+
+/* One step up from the base primitives (weight +1 step, text +1px), the same
+   pass the other redesigned screens got. Scoped to the tab because ui.css is
+   shared; these belong in ui.css if the step becomes the app default. */
+.wss .ui-field__label {
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.wss .ui-input,
+.wss .ui-textarea {
+    font-size: 16px;
+    font-weight: 500;
+}
+
+.wss .ui-btn {
+    font-size: 15px;
+    font-weight: 600;
 }
 
 /* ── Save row ── */
@@ -82,20 +103,22 @@
 
 .wss-save-row__hint {
     margin-right: 2px;
-    font-size: 13px;
+    font-size: 14px;
+    font-weight: 500;
     color: var(--color-text-muted);
 }
 
 .wss-save-row__success {
     margin-right: 2px;
-    font-size: 13px;
-    font-weight: 500;
+    font-size: 14px;
+    font-weight: 600;
     color: var(--color-success-text);
 }
 
 .wss-save-row__error {
     margin-right: 2px;
-    font-size: 13px;
+    font-size: 14px;
+    font-weight: 500;
     color: var(--color-error-text);
 }
 
@@ -136,8 +159,8 @@
 }
 
 .wss-row__title {
-    font-size: 15px;
-    font-weight: 600;
+    font-size: 16px;
+    font-weight: 700;
     color: var(--color-text-primary);
 }
 
@@ -146,7 +169,8 @@
 }
 
 .wss-row__desc {
-    font-size: 13px;
+    font-size: 14px;
+    font-weight: 500;
     line-height: 1.5;
     color: var(--color-text-secondary);
 }

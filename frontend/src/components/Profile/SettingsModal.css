@@ -19,6 +19,42 @@
   outline: none;
 }
 
+/* One step up from the base primitives (weight +1 step, text +1px), the same
+   pass the other redesigned screens got. Scoped to the dialog because ui.css
+   is shared; these belong in ui.css if the step becomes the app default. */
+.sm-dialog .ui-field__label {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.sm-dialog .ui-input {
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.sm-dialog .ui-btn {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.sm-dialog .ui-btn--sm {
+  font-size: 14px;
+}
+
+.sm-dialog .ui-caps {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.sm-dialog .ui-seg__opt {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.sm-dialog .ui-seg__opt[aria-checked='true'] {
+  font-weight: 700;
+}
+
 /* ── Nav ── */
 
 .sm-nav {
@@ -48,8 +84,8 @@
   border-radius: 8px;
   background: transparent;
   color: var(--color-text-secondary);
-  font-size: 14px;
-  font-weight: 500;
+  font-size: 15px;
+  font-weight: 600;
   text-align: left;
   cursor: pointer;
   transition: background-color 0.15s, color 0.15s;
@@ -68,7 +104,7 @@
 .sm-nav__item--on:hover {
   background: var(--color-bg-selected);
   color: var(--color-text-primary);
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .sm-nav__spacer {
@@ -92,8 +128,8 @@
 .sm-nav__username {
   flex-grow: 1;
   min-width: 0;
-  font-size: 13px;
-  font-weight: 500;
+  font-size: 14px;
+  font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -154,12 +190,13 @@
 
 .sm-section__title {
   margin: 0;
-  font-size: 15px;
-  font-weight: 600;
+  font-size: 16px;
+  font-weight: 700;
 }
 
 .sm-section__desc {
-  font-size: 13px;
+  font-size: 14px;
+  font-weight: 500;
   color: var(--color-text-secondary);
 }
 
@@ -184,18 +221,20 @@
 }
 
 .sm-save-row__hint {
-  font-size: 13px;
+  font-size: 14px;
+  font-weight: 500;
   color: var(--color-text-muted);
 }
 
 .sm-save-row__success {
-  font-size: 13px;
-  font-weight: 500;
+  font-size: 14px;
+  font-weight: 600;
   color: var(--color-success-text);
 }
 
 .sm-save-row__error {
-  font-size: 13px;
+  font-size: 14px;
+  font-weight: 500;
   color: var(--color-error-text);
 }
 
@@ -229,7 +268,8 @@
 }
 
 .sm-photo__hint {
-  font-size: 12px;
+  font-size: 13px;
+  font-weight: 500;
   color: var(--color-text-muted);
 }
 
@@ -253,12 +293,13 @@
 }
 
 .sm-row-text__title {
-  font-size: 15px;
-  font-weight: 600;
+  font-size: 16px;
+  font-weight: 700;
 }
 
 .sm-row-text__desc {
-  font-size: 13px;
+  font-size: 14px;
+  font-weight: 500;
   line-height: 1.5;
   color: var(--color-text-secondary);
 }
@@ -327,13 +368,13 @@
 }
 
 .sm-theme__label {
-  font-size: 14px;
-  font-weight: 500;
+  font-size: 15px;
+  font-weight: 600;
   color: var(--color-text-primary);
 }
 
 .sm-theme--on .sm-theme__label {
-  font-weight: 600;
+  font-weight: 700;
 }
 
 /* ── Appearance: preference rows (text size, sidebar) ── */
