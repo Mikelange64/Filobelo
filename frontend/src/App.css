@@ -4,7 +4,7 @@
    itself never scrolls: only .app-shell__content does. */
 .app-shell {
   display: flex;
-  height: 100vh;
+  height: var(--app-height);
   overflow: hidden;
   background: var(--color-bg-sidebar);
 }

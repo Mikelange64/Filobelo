@@ -1,5 +1,5 @@
 .landing {
-  min-height: 100vh;
+  min-height: var(--app-height);
   background: var(--color-bg-canvas);
   color: var(--color-text-primary);
 }

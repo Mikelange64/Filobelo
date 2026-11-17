@@ -1,475 +1,386 @@
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: hsl(30 15% 8% / 0.38);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+/*
+ * New workspace modal. Shell, header and fields come from ui.css
+ * (.ui-overlay/.ui-modal, .ui-field, .ui-input, .ui-seg, .ui-btn); this file
+ * only adds what the shared primitives don't cover. NewTaskModal.css mirrors
+ * it under the ntm- prefix so the two creation modals stay siblings.
+ */
+
+/* The overlay scrolls instead of the modal, so the calendar popover is never
+   clipped. margin:auto centres the modal while it fits and lets it grow past
+   the viewport (top stays reachable) when it doesn't. */
+.nwm-overlay {
+  align-items: flex-start;
   overflow-y: auto;
-  z-index: 400;
+  animation: nwm-fade-in 0.14s ease-out;
 }
 
-@keyframes nwm-pop-in {
-  from { opacity: 0; transform: translate(-50%, 4px) scale(0.98); }
-  to { opacity: 1; transform: translate(-50%, 0) scale(1); }
-}
-
-.modal {
-  position: absolute;
-  left: 50%;
-  top: 100px;
-  transform: translateX(-50%);
-  width: 560px;
-  max-width: calc(100vw - 32px);
-  margin-bottom: 40px;
-  background: var(--color-bg-overlay);
-  border: 1px solid var(--color-border);
-  border-radius: 18px;
-  box-shadow: 0 24px 70px hsl(0 0% 0% / 0.28);
+.nwm-modal {
+  position: relative; /* the date picker opens beside the modal, not over it */
+  width: min(520px, 100%);
+  margin: auto;
+  max-height: none;
   animation: nwm-pop-in 0.16s ease-out;
 }
 
-/* ─── Top bar: eyebrow + close ────────────────────────────────────────────── */
+@keyframes nwm-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
 
-.nwm-topbar {
+@keyframes nwm-pop-in {
+  from { opacity: 0; transform: translateY(4px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+
+.nwm-form {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 24px 32px 0;
-}
-
-.nwm-eyebrow {
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--color-text-muted);
-}
-
-.modal__close {
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: var(--color-text-muted);
-  padding: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 4px;
-  transition: color 0.15s, background-color 0.15s;
-}
-
-.modal__close:hover {
-  color: var(--color-text-primary);
-  background: var(--color-bg-canvas-hover);
-}
-
-.modal__body {
-  padding: 20px 32px 28px;
-  display: flex;
-  flex-direction: column;
-  gap: 22px;
-}
-
-/* ─── Title row: inline heading input ───────────────────────────────────────── */
-
-.nwm-title-row {
-  display: flex;
-  align-items: center;
-  gap: 18px;
-  padding-bottom: 18px;
-  border-bottom: 1px solid var(--color-border);
-}
-
-.nwm-title-input {
   flex: 1;
-  min-width: 0;
-  border: none;
-  background: transparent;
-  font-family: inherit;
-  font-size: 1.55rem;
+  flex-direction: column;
+  gap: 30px;
+  padding: 40px 36px;
+}
+
+/* Heavier text, as on Home: titles 700, labels and controls 600, body 500. */
+.nwm-modal .ui-modal__title {
+  font-size: 25px;
   font-weight: 700;
-  color: var(--color-text-primary);
-  padding: 2px 0;
+  letter-spacing: -0.01em;
 }
 
-.nwm-title-input::placeholder {
-  color: var(--color-text-muted);
-  font-weight: 700;
-}
-
-.nwm-title-input:focus,
-.nwm-title-input:focus-visible {
-  outline: none;
-  box-shadow: none;
-}
-
-.nwm-error {
-  margin: 0;
-  font-size: 0.8rem;
-  color: var(--color-error-text);
-}
-
-/* ─── Description: ghost toggle → borderless textarea ─────────────────────── */
-
-.nwm-desc-toggle {
-  align-self: flex-start;
-  border: none;
-  background: transparent;
-  color: var(--color-text-muted);
-  font-size: 0.88rem;
+.nwm-modal .ui-field__label {
+  font-size: 14px;
   font-weight: 600;
-  cursor: pointer;
-  padding: 0;
-  transition: color 0.15s;
-}
-
-.nwm-desc-toggle:hover {
   color: var(--color-text-primary);
 }
 
-.nwm-desc-textarea {
-  width: 100%;
-  border: none;
-  background: transparent;
-  color: var(--color-text-primary);
-  font-family: inherit;
-  font-size: 0.92rem;
-  resize: vertical;
-  min-height: 60px;
-  padding: 0;
-  box-sizing: border-box;
+.nwm-modal .ui-input,
+.nwm-modal .ui-textarea {
+  font-weight: 500;
 }
 
-.nwm-desc-textarea::placeholder {
-  color: var(--color-text-muted);
+.nwm-modal .ui-input::placeholder,
+.nwm-modal .ui-textarea::placeholder {
+  font-weight: 500;
 }
 
-.nwm-desc-textarea:focus,
-.nwm-desc-textarea:focus-visible {
-  outline: none;
-  box-shadow: none;
+.nwm-modal .ui-btn {
+  height: 44px;
+  font-size: 15px;
+  font-weight: 600;
 }
 
-/* ─── Due date / max members row ──────────────────────────────────────────── */
-
-.modal__row {
-  display: flex;
-  gap: 40px;
-}
-
-.nwm-field-col {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  flex: 1;
-}
-
-.nwm-field-label {
-  font-size: 0.7rem;
+.nwm-modal .ui-btn--primary {
+  padding: 0 22px;
   font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--color-text-muted);
 }
 
-.nwm-date-pill-wrap {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.nwm-modal .ui-seg__opt {
+  height: 38px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.nwm-modal .ui-seg__opt[aria-checked='true'] {
+  font-weight: 700;
+}
+
+/* ─── Name + description ──────────────────────────────────────────────────── */
+
+.nwm-name-input {
+  height: 48px;
+  font-size: 17px;
+}
+
+.nwm-desc {
+  min-height: 120px;
+  font-size: 15px;
+}
+
+/* ─── Due date ────────────────────────────────────────────────────────────── */
+
+.nwm-grid {
+  position: relative; /* anchors the date picker to this row */
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.nwm-date,
+.nwm-folder {
   position: relative;
 }
 
-.nwm-date-pill {
-  display: inline-flex;
+.nwm-date__trigger,
+.nwm-folder__trigger {
+  display: flex;
   align-items: center;
   gap: 8px;
-  padding: 9px 14px;
-  border: 1px solid transparent;
-  border-radius: 10px;
-  background: var(--color-neutral-bg);
-  color: var(--color-text-secondary);
-  font-size: 0.85rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: border-color 0.15s, color 0.15s, background-color 0.15s;
-}
-
-.nwm-date-pill:hover {
+  width: 100%;
+  height: 46px;
+  padding: 0 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: transparent;
   color: var(--color-text-primary);
-  background: var(--color-bg-canvas-hover);
-}
-
-.nwm-date-pill--set {
-  border-color: var(--color-brand-primary);
-  color: var(--color-brand-primary);
-  background: var(--color-info-bg);
-}
-
-.nwm-clear-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  border: none;
-  border-radius: 50%;
-  background: var(--color-neutral-bg);
-  color: var(--color-text-muted);
-  font-size: 0.7rem;
+  font-size: 15px;
+  font-weight: 500;
+  text-align: left;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
-  line-height: 1;
+  transition: border-color 0.15s, background-color 0.15s;
+}
+
+.nwm-date__trigger svg {
   flex-shrink: 0;
-}
-
-.nwm-clear-btn:hover {
-  background: var(--color-error-bg);
-  color: var(--color-error-text);
-}
-
-/* ─── Max members chip group ──────────────────────────────────────────────── */
-
-.nwm-segmented {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.nwm-segmented__btn {
-  border: 1px solid transparent;
-  background: var(--color-neutral-bg);
-  padding: 9px 14px;
-  border-radius: 10px;
-  font-size: 0.85rem;
-  font-weight: 600;
   color: var(--color-text-secondary);
-  cursor: pointer;
-  transition: background-color 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.nwm-date__trigger:hover,
+.nwm-date__trigger[aria-expanded='true'],
+.nwm-folder__trigger:hover,
+.nwm-folder__trigger[aria-expanded='true'] {
+  border-color: var(--color-border-strong);
+}
+
+.nwm-date__value,
+.nwm-folder__value {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.nwm-segmented__btn:hover {
-  color: var(--color-text-primary);
+/* Leave room for the clear button that sits over the right edge. */
+.nwm-date__trigger--set {
+  padding-right: 42px;
+  font-weight: 600;
 }
 
-.nwm-segmented__btn--active {
-  border-color: var(--color-brand-primary);
-  color: var(--color-brand-primary);
-  background: var(--color-info-bg);
+.nwm-date__trigger--set svg {
+  color: var(--color-brand-text);
 }
 
-.nwm-segmented__btn--custom {
-  color: var(--color-text-muted);
+.nwm-date__clear {
+  position: absolute;
+  top: 8px;
+  right: 8px;
 }
 
-.nwm-max-custom {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
+/* ─── Folder ──────────────────────────────────────────────────────────────── */
 
-.nwm-max-custom-input {
-  width: 96px;
-  padding: 9px 12px;
-  border: 1px solid var(--color-border);
-  border-radius: 10px;
-  background: var(--color-bg-canvas);
-  color: var(--color-text-primary);
-  font-size: 0.85rem;
-  font-family: inherit;
-  box-sizing: border-box;
-}
-
-.nwm-max-custom-input:focus,
-.nwm-max-custom-input:focus-visible {
-  outline: none;
-  border-color: var(--color-brand-primary);
-  box-shadow: none;
-}
-
-/* Custom value typed in place of the "Custom" button: same footprint as a
-   segmented button so swapping one for the other doesn't move anything. */
-.nwm-max-custom-input--inline {
-  width: 82px;
-  padding: 9px 12px;
-  border-color: var(--color-brand-primary);
-}
-
-.nwm-max-custom-input--invalid {
-  border-color: var(--color-error-text);
-}
-
-.nwm-max-custom-back {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  border: none;
-  border-radius: 50%;
-  background: var(--color-neutral-bg);
-  color: var(--color-text-muted);
-  font-size: 0.7rem;
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+.nwm-chevron {
   flex-shrink: 0;
+  color: var(--color-text-muted);
 }
 
-.nwm-max-custom-back:hover {
+.nwm-folder__swatch {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+}
+
+/* No folder: an empty outlined square with a firm line, not a colour. A real
+   folder always shows a filled square, so the two can't be confused even if
+   someone names a folder "No folder". */
+.nwm-folder__swatch--none {
+  border: 2px solid var(--color-text-muted);
+}
+
+.nwm-folder__menu {
+  top: calc(100% + 6px);
+  right: 0;
+  left: 0;
+  z-index: 10;
+  min-width: 0;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.nwm-folder__item {
+  justify-content: flex-start;
+  flex-shrink: 0;
+  height: 40px;
+  font-weight: 600;
+}
+
+.nwm-folder__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nwm-folder__check {
+  display: flex;
+  flex-shrink: 0;
+  color: var(--color-brand-text);
+}
+
+/* ─── Custom member limit ─────────────────────────────────────────────────── */
+
+/* Replaces the "Custom" option in place; matches the selected-option look. */
+.nwm-seg__custom {
+  min-width: 0;
+  width: 100%;
+  height: 38px;
+  padding: 0 6px;
+  border: 1px solid var(--color-brand-primary);
+  border-radius: 8px;
+  background: var(--color-bg-card);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+  color: var(--color-text-primary);
+  font-size: 14px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.nwm-seg__custom::placeholder {
+  color: var(--color-text-muted);
+  font-weight: 600;
+}
+
+.nwm-seg__custom--invalid {
+  /* Heavier border and a faint red fill so the error is unmistakable. */
+  border-width: 2px;
+  border-color: var(--color-error);
   background: var(--color-error-bg);
   color: var(--color-error-text);
 }
 
-/* ─── Footer ───────────────────────────────────────────────────────────────── */
+/* ─── Calendar popover ────────────────────────────────────────────────────── */
 
-.modal__footer {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  justify-content: flex-end;
-  padding-top: 10px;
-}
-
-.nwm-btn-ghost {
-  background: transparent;
-  border: none;
-  color: var(--color-text-secondary);
-  font-size: 0.92rem;
-  font-weight: 600;
-  padding: 10px 6px;
-  border-radius: var(--radius-control);
-  cursor: pointer;
-  transition: color 0.15s;
-}
-
-.nwm-btn-ghost:hover {
-  color: var(--color-text-primary);
-}
-
-.nwm-btn-primary {
-  background: var(--color-brand-primary);
-  color: var(--color-text-on-brand);
-  border: none;
-  padding: 11px 24px;
-  border-radius: 10px;
-  font-size: 0.92rem;
-  font-weight: 700;
-  cursor: pointer;
-  box-shadow: 0 1px 2px hsl(0 0% 0% / 0.12);
-  transition: background-color 0.15s, transform 0.05s;
-}
-
-.nwm-btn-primary:hover:not(:disabled) {
-  background: var(--color-brand-primary-hover);
-}
-
-.nwm-btn-primary:active:not(:disabled) {
-  transform: scale(0.98);
-}
-
-.nwm-btn-primary:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-/* ─── Mini calendar popover ───────────────────────────────────────────────── */
-
-.nwm-cal-pop {
+.nwm-cal {
+  /* Level with the due-date row, just outside the modal's right edge
+     (grid edge + 36px modal padding + 14px gap), so no field is hidden. */
   position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
-  z-index: 500;
+  top: 0;
+  left: calc(100% + 36px + 14px);
+  z-index: 10;
+  width: 300px;
+  padding: 12px;
   background: var(--color-bg-overlay);
-  border: 1px solid var(--color-border-strong);
-  border-radius: 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
   box-shadow: var(--shadow-overlay);
-  padding: 10px;
-  width: 248px;
 }
 
-.nwm-cal-pop__header {
+.nwm-cal__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
-.nwm-cal-pop__nav {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  border: none;
-  background: transparent;
-  color: var(--color-text-primary);
-  cursor: pointer;
-  border-radius: 4px;
-}
-
-.nwm-cal-pop__nav:hover {
-  background: var(--color-bg-canvas-hover);
-}
-
-.nwm-cal-pop__title {
-  font-size: 0.83rem;
-  font-weight: 600;
+.nwm-cal__title {
+  font-size: 15px;
+  font-weight: 700;
   color: var(--color-text-primary);
 }
 
-.nwm-cal-pop__grid {
+.nwm-cal__grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
   gap: 2px;
 }
 
-.nwm-cal-pop__dow {
+.nwm-cal__dow {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.65rem;
+  height: 26px;
+  font-size: 12px;
   font-weight: 700;
-  letter-spacing: 0.05em;
   color: var(--color-text-muted);
-  padding: 2px 0 4px;
 }
 
-.nwm-cal-pop__day {
+.nwm-cal__day {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
+  height: 36px;
+  padding: 0;
   border: none;
-  border-radius: 6px;
+  border-radius: 8px;
   background: transparent;
   color: var(--color-text-primary);
-  font-size: 0.8rem;
+  font-size: 14px;
+  font-weight: 500;
   cursor: pointer;
-  transition: background 0.1s;
+  transition: background-color 0.1s;
 }
 
-.nwm-cal-pop__day:hover:not(:disabled) {
+.nwm-cal__day:hover:not(:disabled) {
   background: var(--color-bg-canvas-hover);
 }
 
-.nwm-cal-pop__day--other {
-  opacity: 0.25;
+.nwm-cal__day--other {
+  color: var(--color-text-muted);
+  opacity: 0.45;
   cursor: default;
 }
 
-.nwm-cal-pop__day--today {
+.nwm-cal__day--today {
+  color: var(--color-brand-text);
   font-weight: 700;
-  color: var(--color-brand-primary);
 }
 
-.nwm-cal-pop__day--selected {
+.nwm-cal__day--selected,
+.nwm-cal__day--selected:hover:not(:disabled) {
   background: var(--color-brand-primary);
   color: var(--color-text-on-brand);
   font-weight: 600;
 }
 
-.nwm-cal-pop__day--selected:hover:not(:disabled) {
-  background: var(--color-brand-primary-hover);
+/* ─── Error + footer ──────────────────────────────────────────────────────── */
+
+.nwm-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-control);
+  background: var(--color-error-bg);
+  color: var(--color-error-text);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.nwm-error svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.nwm-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: auto; /* footer rests at the bottom of the taller modal */
+  padding-top: 8px;
+}
+
+/* Not enough room beside the modal (narrow window): open the picker under
+   the row instead, rather than letting it fall off screen. */
+@media (max-width: 1080px) {
+  .nwm-cal {
+    top: calc(100% + 6px);
+    right: 0;
+    left: auto;
+  }
+}
+
+.nwm-cancel:hover {
+  background: var(--color-bg-canvas-hover);
+}
+
+/* Submitting: keep the filled primary look (dimmed) rather than falling back
+   to the dashed "not ready yet" disabled style. */
+.ui-btn--primary.nwm-submit--busy:disabled {
+  background: var(--color-brand-primary);
+  border-color: transparent;
+  color: var(--color-text-on-brand);
+  opacity: 0.7;
+  cursor: progress;
 }
