@@ -1,7 +1,7 @@
 /* Task panel (slide-over) and the resource lists inside it.
    Values follow the "Workspace · Task panel open" mockup; colours are tokens
-   only, so the panel follows whichever theme is active. Compact (540px) and
-   expanded (840px) share one layout - expanded just has more room. */
+   only, so the panel follows whichever theme is active. Compact is a 540px
+   side panel; expanded is the same content in a centered two-column modal. */
 
 /* ─── Shell ─────────────────────────────────────────────────────────────────── */
 
@@ -27,7 +27,7 @@
   top: 12px;
   right: 12px;
   bottom: 12px;
-  /* width is set inline (compact / expanded / dragged) */
+  width: min(540px, calc(100vw - 24px));
   display: flex;
   flex-direction: column;
   background: var(--color-bg-card);
@@ -37,22 +37,6 @@
   color: var(--color-text-primary);
   z-index: 200;
   overflow: hidden;
-}
-
-.slide-over__resize-handle {
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 6px;
-  cursor: ew-resize;
-  z-index: 1;
-  transition: background-color 0.15s;
-}
-
-.slide-over__resize-handle:hover,
-.slide-over__resize-handle:active {
-  background: var(--color-brand-soft);
 }
 
 /* ─── Header ────────────────────────────────────────────────────────────────── */
@@ -78,7 +62,8 @@
 .slide-over__workspace-name {
   flex: 1;
   min-width: 0;
-  font-size: 13px;
+  font-size: 14px;
+  font-weight: 600;
   color: var(--color-text-secondary);
   white-space: nowrap;
   overflow: hidden;
@@ -86,6 +71,14 @@
 }
 
 /* ─── Body ──────────────────────────────────────────────────────────────────── */
+
+.slide-over__side {
+  display: contents;
+}
+
+.slide-over__details-title {
+  display: none;
+}
 
 .slide-over__body {
   flex: 1;
@@ -97,9 +90,91 @@
   padding: 28px 24px 32px;
 }
 
-.slide-over--expanded .slide-over__body {
-  padding-left: 32px;
-  padding-right: 32px;
+/* ─── Expanded: centered modal ──────────────────────────────────────────────── */
+
+.slide-over-backdrop--modal {
+  background: var(--color-scrim-modal);
+}
+
+.slide-over--modal {
+  top: 50%;
+  left: 50%;
+  right: auto;
+  bottom: auto;
+  width: min(1160px, calc(100vw - 48px));
+  height: min(780px, calc(100vh - 48px));
+  transform: translate(-50%, -50%);
+  border-radius: var(--radius-modal);
+  box-shadow: var(--shadow-modal);
+}
+
+.slide-over--modal .slide-over__header {
+  height: 64px;
+  padding: 0 20px 0 32px;
+  border-bottom: none;
+}
+
+.slide-over--modal .slide-over__workspace-name {
+  font-size: 14px;
+}
+
+.slide-over--modal .slide-over__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-areas:
+    'title side'
+    'desc  side'
+    'tabs  side';
+  column-gap: 40px;
+  row-gap: 28px;
+  align-content: start;
+  padding: 8px 32px 28px;
+}
+
+.slide-over--modal .slide-over__title-row { grid-area: title; }
+.slide-over--modal .slide-over__section--description { grid-area: desc; }
+.slide-over--modal .slide-over__section--tabs { grid-area: tabs; }
+
+.slide-over--modal .slide-over__title {
+  font-size: 26px;
+  letter-spacing: -0.02em;
+}
+
+.slide-over--modal .slide-over__side {
+  grid-area: side;
+  display: block;
+  align-self: start;
+  padding: 6px 18px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+}
+
+.slide-over--modal .slide-over__details-title {
+  display: block;
+  margin: 0;
+  padding: 12px 0 6px;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.slide-over--modal .slide-over__fields {
+  grid-template-columns: 104px minmax(0, 1fr);
+  row-gap: 0;
+}
+
+.slide-over--modal .slide-over__fields dt,
+.slide-over--modal .slide-over__fields dd {
+  min-height: 44px;
+}
+
+.slide-over__fields dt {
+  display: flex;
+  align-items: center;
+}
+
+.slide-over--modal .slide-over__description {
+  min-height: 84px;
 }
 
 .slide-over__title-row {
@@ -171,11 +246,13 @@
   align-items: center;
   row-gap: 10px;
   margin: 0;
-  font-size: 14px;
+  font-size: 15px;
+  font-weight: 500;
 }
 
 .slide-over__fields dt {
   color: var(--color-text-secondary);
+  font-weight: 600;
 }
 
 .slide-over__fields dd {
@@ -193,7 +270,8 @@
   min-height: 34px;
   max-width: 100%;
   color: var(--color-text-primary);
-  font-size: 14px;
+  font-size: 15px;
+  font-weight: 500;
 }
 
 /* An editable value reads as text; the hover fill shows it can be clicked. */
@@ -214,7 +292,7 @@
 }
 
 .slide-over__placeholder {
-  color: var(--color-text-muted);
+  color: var(--color-text-secondary);
 }
 
 .slide-over__saving {
@@ -252,9 +330,9 @@
 }
 
 .slide-over__section-label {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--color-text-secondary);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-primary);
 }
 
 .slide-over__description {
@@ -268,7 +346,8 @@
   background: var(--color-bg-canvas);
   color: var(--color-text-primary);
   font-family: inherit;
-  font-size: 15px;
+  font-size: 15.5px;
+  font-weight: 500;
   line-height: 1.5;
   resize: none;
   overflow: hidden;
@@ -278,7 +357,8 @@
 }
 
 .slide-over__description::placeholder {
-  color: var(--color-text-muted);
+  color: var(--color-text-secondary);
+  font-weight: 500;
 }
 
 textarea.slide-over__description:hover {
@@ -292,8 +372,9 @@ textarea.slide-over__description:focus {
 
 .slide-over__muted {
   margin: 0;
-  color: var(--color-text-muted);
-  font-size: 14px;
+  color: var(--color-text-secondary);
+  font-size: 15px;
+  font-weight: 500;
 }
 
 /* ─── Tabs ──────────────────────────────────────────────────────────────────── */
@@ -316,8 +397,8 @@ textarea.slide-over__description:focus {
   background: transparent;
   color: var(--color-text-secondary);
   font-family: inherit;
-  font-size: 14px;
-  font-weight: 500;
+  font-size: 15px;
+  font-weight: 600;
   cursor: pointer;
   transition: color 0.15s, border-color 0.15s;
 }
@@ -329,7 +410,7 @@ textarea.slide-over__description:focus {
 .slide-over__tab--active {
   border-bottom-color: var(--color-brand-primary);
   color: var(--color-text-primary);
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .slide-over__tab-count {
@@ -362,15 +443,16 @@ textarea.slide-over__description:focus {
 
 .slide-over__comments-title {
   margin: 0;
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 15px;
+  font-weight: 700;
   color: var(--color-text-primary);
 }
 
 .slide-over__comments-text {
   margin: 0;
-  font-size: 13px;
-  color: var(--color-text-muted);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
 }
 
 /* ─── Resource lists (Links / Files / Notes) ────────────────────────────────── */
@@ -383,8 +465,9 @@ textarea.slide-over__description:focus {
 
 .resources-panel__empty {
   margin: 0;
-  font-size: 14px;
-  color: var(--color-text-muted);
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
 }
 
 .resources-panel__list {
@@ -393,9 +476,11 @@ textarea.slide-over__description:focus {
   gap: 8px;
 }
 
-.resources-panel__add {
+.resources-panel__add.ui-btn {
   align-self: flex-start;
-  padding: 0 12px;
+  padding: 0 14px;
+  font-size: 14px;
+  font-weight: 600;
 }
 
 .resources-panel__file-input {
@@ -468,8 +553,8 @@ textarea.slide-over__description:focus {
 }
 
 .resource-row__title {
-  font-size: 14px;
-  font-weight: 500;
+  font-size: 15px;
+  font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -480,8 +565,9 @@ textarea.slide-over__description:focus {
 }
 
 .resource-row__meta {
-  font-size: 12px;
-  color: var(--color-text-muted);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

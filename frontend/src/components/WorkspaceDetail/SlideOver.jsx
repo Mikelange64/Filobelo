@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useLayoutEffect } from 'react'
+import { useState, useEffect, useRef, useLayoutEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { useOutletContext } from 'react-router-dom'
 import useDismissableMenu from '../../hooks/useDismissableMenu'
@@ -21,13 +21,11 @@ import LinksPanel from './LinksPanel'
 import NotesPanel from './NotesPanel'
 import './SlideOver.css'
 
-// Compact is the default. Expanded is the same panel with more room - same
-// sections in the same order - not a different layout. The resize handle can
-// set anything in between; the header button snaps between the two.
+// Compact (a 540px side panel) is the default. Expanded is the same content
+// in a centered modal: title, description and attachments on the left, the
+// Details card on the right. `width` is just the mode flag held by the page.
 const COMPACT_WIDTH = 540
-const EXPANDED_WIDTH = 840
-const MIN_WIDTH = 440
-const MAX_WIDTH = 1000
+const EXPANDED_WIDTH = 1160
 
 const ASSIGN_ICON = 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 20a8 8 0 0 1 11-7.4M17 15l3 3-3 3M14 18h6'
 const EXPAND_ICON = 'M14 4h6v6M20 4l-7 7M10 20H4v-6M4 20l7-7'
@@ -161,9 +159,6 @@ export default function SlideOver({ task, fullTask, slideOverLoading, workspace,
   const folderId = shell?.workspaces?.find((w) => w.id === workspaceId)?.folderId
   const folderColor = shell?.folders?.find((f) => f.id === folderId)?.color ?? null
 
-  const widthRef = useRef(width)
-  useEffect(() => { widthRef.current = width }, [width])
-
   useEffect(() => { setEditTitle(task.title) }, [task.id])
   useEffect(() => { setEditContent(fullTask?.content ?? '') }, [fullTask])
   useEffect(() => { setActiveTab('links') }, [task.id])
@@ -188,26 +183,11 @@ export default function SlideOver({ task, fullTask, slideOverLoading, workspace,
     return () => document.removeEventListener('keydown', onKey)
   }, [onClose, menuOpen, confirmDelete])
 
-  const handleResizeStart = useCallback((e) => {
-    e.preventDefault()
-    const startX = e.clientX
-    const startW = widthRef.current
-    function onMove(ev) {
-      onResize(Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, startW + (startX - ev.clientX))))
-    }
-    function onUp() {
-      document.removeEventListener('mousemove', onMove)
-      document.removeEventListener('mouseup', onUp)
-    }
-    document.addEventListener('mousemove', onMove)
-    document.addEventListener('mouseup', onUp)
-  }, [onResize])
-
   const owner = memberById.get(task.ownerId)
   const isOwner = task.ownerId === currentUserId
   const isDone = task.status === 'DONE'
   const canManage = isOwner || isAdmin
-  const isExpanded = width > COMPACT_WIDTH + 40
+  const isExpanded = width > COMPACT_WIDTH
 
   async function handleTitleBlur() {
     const trimmed = editTitle.trim()
@@ -255,13 +235,12 @@ export default function SlideOver({ task, fullTask, slideOverLoading, workspace,
 
   return (
     <>
-      <div className="slide-over-backdrop" onClick={onClose} aria-hidden="true" />
+      <div className={`slide-over-backdrop${isExpanded ? ' slide-over-backdrop--modal' : ''}`} onClick={onClose} aria-hidden="true" />
       <aside
-        className={`slide-over${isExpanded ? ' slide-over--expanded' : ''}`}
-        style={{ width: `min(${width}px, calc(100vw - 24px))` }}
+        className={`slide-over${isExpanded ? ' slide-over--modal' : ''}`}
+        role={isExpanded ? 'dialog' : undefined}
         aria-label="Task details"
       >
-        <div className="slide-over__resize-handle" onMouseDown={handleResizeStart} aria-hidden="true" />
 
         <header className="slide-over__header">
           {folderColor && (
@@ -272,8 +251,8 @@ export default function SlideOver({ task, fullTask, slideOverLoading, workspace,
             type="button"
             className="ui-icon-btn"
             onClick={() => onResize(isExpanded ? COMPACT_WIDTH : EXPANDED_WIDTH)}
-            aria-label={isExpanded ? 'Make panel narrower' : 'Make panel wider'}
-            title={isExpanded ? 'Narrower' : 'Wider'}
+            aria-label={isExpanded ? 'Collapse to side panel' : 'Expand task'}
+            title={isExpanded ? 'Collapse to side panel' : 'Expand'}
           >
             <Glyph d={isExpanded ? COLLAPSE_ICON : EXPAND_ICON} />
           </button>
@@ -326,6 +305,8 @@ export default function SlideOver({ task, fullTask, slideOverLoading, workspace,
             />
           </div>
 
+          <div className="slide-over__side">
+          <h3 className="slide-over__details-title">Details</h3>
           <dl className="slide-over__fields">
             <dt>Assignee</dt>
             <dd>
@@ -348,8 +329,9 @@ export default function SlideOver({ task, fullTask, slideOverLoading, workspace,
               <ColorDots value={task.color} onChange={(color) => { if (color !== task.color) onSave(task.id, { color }) }} />
             </dd>
           </dl>
+          </div>
 
-          <div className="slide-over__section">
+          <div className="slide-over__section slide-over__section--description">
             <label className="slide-over__section-label" htmlFor="slide-over-description">Description</label>
             {slideOverLoading ? (
               <p className="slide-over__description slide-over__muted">Loading…</p>
