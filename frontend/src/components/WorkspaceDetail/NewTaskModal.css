@@ -14,6 +14,8 @@
 }
 
 .ntm-modal {
+  position: relative; /* the date picker opens beside the modal, not over it */
+  width: min(600px, 100%);
   margin: auto;
   max-height: none;
   animation: ntm-pop-in 0.16s ease-out;
@@ -32,8 +34,52 @@
 .ntm-form {
   display: flex;
   flex-direction: column;
-  gap: 22px;
-  padding: 28px;
+  gap: 26px;
+  padding: 36px;
+}
+
+/* Heavier text, as on Home: titles 700, labels and controls 600, body 500. */
+.ntm-modal .ui-modal__title {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.ntm-modal .ui-field__label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.ntm-modal .ui-input,
+.ntm-modal .ui-textarea {
+  font-weight: 500;
+}
+
+.ntm-modal .ui-input::placeholder,
+.ntm-modal .ui-textarea::placeholder {
+  font-weight: 500;
+}
+
+.ntm-modal .ui-btn {
+  height: 44px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.ntm-modal .ui-btn--primary {
+  padding: 0 22px;
+  font-weight: 700;
+}
+
+.ntm-modal .ui-btn--xs {
+  height: 36px;
+  font-size: 14px;
+}
+
+.ntm-modal .ui-btn--sm {
+  height: 40px;
+  font-size: 14px;
+  font-weight: 600;
 }
 
 /* ─── Header ──────────────────────────────────────────────────────────────── */
@@ -50,7 +96,8 @@
   margin: 4px 0 0;
   overflow: hidden;
   color: var(--color-text-secondary);
-  font-size: 13px;
+  font-size: 14px;
+  font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -58,8 +105,8 @@
 /* ─── Name + description ──────────────────────────────────────────────────── */
 
 .ntm-name-input {
-  height: 44px;
-  font-size: 16px;
+  height: 48px;
+  font-size: 17px;
 }
 
 .ntm-add-desc {
@@ -69,8 +116,8 @@
   border: none;
   background: transparent;
   color: var(--color-brand-text);
-  font-size: 14px;
-  font-weight: 500;
+  font-size: 15px;
+  font-weight: 600;
   cursor: pointer;
 }
 
@@ -80,8 +127,8 @@
 }
 
 .ntm-desc {
-  min-height: 80px;
-  font-size: 14px;
+  min-height: 96px;
+  font-size: 15px;
 }
 
 /* ─── Colour swatches ─────────────────────────────────────────────────────── */
@@ -121,7 +168,7 @@
 .ntm-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  gap: 16px;
 }
 
 .ntm-date,
@@ -135,13 +182,14 @@
   align-items: center;
   gap: 8px;
   width: 100%;
-  height: var(--control-height);
-  padding: 0 12px;
+  height: 46px;
+  padding: 0 14px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-control);
   background: transparent;
   color: var(--color-text-primary);
-  font-size: 14px;
+  font-size: 15px;
+  font-weight: 500;
   text-align: left;
   cursor: pointer;
   transition: border-color 0.15s, background-color 0.15s;
@@ -170,8 +218,8 @@
 
 /* Leave room for the clear button that sits over the right edge. */
 .ntm-date__trigger--set {
-  padding-right: 38px;
-  font-weight: 500;
+  padding-right: 42px;
+  font-weight: 600;
 }
 
 .ntm-date__trigger--set svg {
@@ -180,8 +228,8 @@
 
 .ntm-date__clear {
   position: absolute;
-  top: 6px;
-  right: 6px;
+  top: 8px;
+  right: 8px;
 }
 
 .ntm-assignee__trigger {
@@ -212,7 +260,8 @@
 .ntm-assignee__item {
   justify-content: flex-start;
   flex-shrink: 0;
-  height: 40px;
+  height: 42px;
+  font-weight: 600;
 }
 
 .ntm-assignee__item .member-avatar {
@@ -235,12 +284,13 @@
 /* ─── Calendar popover ────────────────────────────────────────────────────── */
 
 .ntm-cal {
+  /* Beside the modal, top-aligned with it, so no field is hidden. */
   position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
+  top: 0;
+  left: calc(100% + 14px);
   z-index: 10;
-  width: 264px;
-  padding: 10px;
+  width: 300px;
+  padding: 12px;
   background: var(--color-bg-overlay);
   border: 1px solid var(--color-border);
   border-radius: 12px;
@@ -255,8 +305,8 @@
 }
 
 .ntm-cal__title {
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 15px;
+  font-weight: 700;
   color: var(--color-text-primary);
 }
 
@@ -270,9 +320,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 24px;
-  font-size: 11px;
-  font-weight: 600;
+  height: 26px;
+  font-size: 12px;
+  font-weight: 700;
   color: var(--color-text-muted);
 }
 
@@ -280,13 +330,14 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 32px;
+  height: 36px;
   padding: 0;
   border: none;
   border-radius: 8px;
   background: transparent;
   color: var(--color-text-primary);
-  font-size: 13px;
+  font-size: 14px;
+  font-weight: 500;
   cursor: pointer;
   transition: background-color 0.1s;
 }
@@ -323,7 +374,8 @@
 }
 
 .ntm-resources__hint {
-  font-size: 12px;
+  font-size: 13px;
+  font-weight: 500;
   color: var(--color-text-muted);
 }
 
@@ -346,11 +398,12 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  height: 40px;
-  padding: 0 6px 0 12px;
+  height: 44px;
+  padding: 0 8px 0 14px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-control);
-  font-size: 14px;
+  font-size: 15px;
+  font-weight: 500;
 }
 
 .ntm-pending__icon {
@@ -378,8 +431,8 @@
 }
 
 .ntm-link-form__input {
-  height: 36px;
-  font-size: 14px;
+  height: 40px;
+  font-size: 15px;
 }
 
 .ntm-link-form__actions {
@@ -399,8 +452,8 @@
   border-radius: var(--radius-control);
   background: var(--color-error-bg);
   color: var(--color-error-text);
-  font-size: 13px;
-  font-weight: 500;
+  font-size: 14px;
+  font-weight: 600;
   line-height: 1.4;
 }
 
@@ -413,7 +466,17 @@
   display: flex;
   justify-content: flex-end;
   gap: 10px;
-  padding-top: 6px;
+  padding-top: 8px;
+}
+
+/* Not enough room beside the modal (narrow window): drop the picker over the
+   modal's top instead, centred, rather than letting it fall off screen. */
+@media (max-width: 1160px) {
+  .ntm-cal {
+    top: 120px;
+    left: 50%;
+    transform: translateX(-50%);
+  }
 }
 
 .ntm-plain-btn:hover {

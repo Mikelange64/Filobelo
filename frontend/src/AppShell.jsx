@@ -342,8 +342,19 @@ function AppShell() {
     )
   }
 
-  async function handleCreateWorkspace(data) {
+  async function handleCreateWorkspace({ folder_id: folderId = null, ...data }) {
     const ws = await createWorkspace(data)
+    // The folder is the creator's own preference (per member), so it is set
+    // with a follow-up call rather than in the create payload. If that call
+    // fails the workspace still exists - say so instead of failing the create.
+    if (folderId !== null) {
+      try {
+        await patchWorkspacePreferences(ws.id, { folder_id: folderId })
+        ws.folder_id = folderId
+      } catch {
+        setToast('Workspace created, but it could not be moved into that folder')
+      }
+    }
     setWorkspaces((prev) => [normalizeWorkspace(ws), ...prev])
     setShowNewModal(false)
     setCalendarPrefillDate(null)

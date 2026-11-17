@@ -366,14 +366,14 @@ function NewTaskModal({ workspace, currentUserId, onClose, onCreate }) {
                     <CloseIcon size={14} />
                   </button>
                 )}
-                {showCalPop && (
-                  <MiniCalPopover
-                    selectedDate={selectedDate}
-                    onSelect={(date) => setDueValue(toDateInputValue(date))}
-                    onClose={() => setShowCalPop(false)}
-                  />
-                )}
               </div>
+              {showCalPop && (
+                <MiniCalPopover
+                  selectedDate={selectedDate}
+                  onSelect={(date) => setDueValue(toDateInputValue(date))}
+                  onClose={() => setShowCalPop(false)}
+                />
+              )}
             </div>
 
             <div className="ui-field">

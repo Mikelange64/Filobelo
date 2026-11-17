@@ -15,6 +15,8 @@
 }
 
 .nwm-modal {
+  position: relative; /* the date picker opens beside the modal, not over it */
+  width: min(600px, 100%);
   margin: auto;
   max-height: none;
   animation: nwm-pop-in 0.16s ease-out;
@@ -33,15 +35,58 @@
 .nwm-form {
   display: flex;
   flex-direction: column;
-  gap: 22px;
-  padding: 28px;
+  gap: 26px;
+  padding: 36px;
+}
+
+/* Heavier text, as on Home: titles 700, labels and controls 600, body 500. */
+.nwm-modal .ui-modal__title {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.nwm-modal .ui-field__label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.nwm-modal .ui-input,
+.nwm-modal .ui-textarea {
+  font-weight: 500;
+}
+
+.nwm-modal .ui-input::placeholder,
+.nwm-modal .ui-textarea::placeholder {
+  font-weight: 500;
+}
+
+.nwm-modal .ui-btn {
+  height: 44px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.nwm-modal .ui-btn--primary {
+  padding: 0 22px;
+  font-weight: 700;
+}
+
+.nwm-modal .ui-seg__opt {
+  height: 38px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.nwm-modal .ui-seg__opt[aria-checked='true'] {
+  font-weight: 700;
 }
 
 /* ─── Name + description ──────────────────────────────────────────────────── */
 
 .nwm-name-input {
-  height: 44px;
-  font-size: 16px;
+  height: 48px;
+  font-size: 17px;
 }
 
 .nwm-add-desc {
@@ -51,8 +96,8 @@
   border: none;
   background: transparent;
   color: var(--color-brand-text);
-  font-size: 14px;
-  font-weight: 500;
+  font-size: 15px;
+  font-weight: 600;
   cursor: pointer;
 }
 
@@ -62,8 +107,8 @@
 }
 
 .nwm-desc {
-  min-height: 80px;
-  font-size: 14px;
+  min-height: 96px;
+  font-size: 15px;
 }
 
 /* ─── Due date ────────────────────────────────────────────────────────────── */
@@ -71,25 +116,28 @@
 .nwm-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  gap: 16px;
 }
 
-.nwm-date {
+.nwm-date,
+.nwm-folder {
   position: relative;
 }
 
-.nwm-date__trigger {
+.nwm-date__trigger,
+.nwm-folder__trigger {
   display: flex;
   align-items: center;
   gap: 8px;
   width: 100%;
-  height: var(--control-height);
-  padding: 0 12px;
+  height: 46px;
+  padding: 0 14px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-control);
   background: transparent;
   color: var(--color-text-primary);
-  font-size: 14px;
+  font-size: 15px;
+  font-weight: 500;
   text-align: left;
   cursor: pointer;
   transition: border-color 0.15s, background-color 0.15s;
@@ -101,11 +149,14 @@
 }
 
 .nwm-date__trigger:hover,
-.nwm-date__trigger[aria-expanded='true'] {
+.nwm-date__trigger[aria-expanded='true'],
+.nwm-folder__trigger:hover,
+.nwm-folder__trigger[aria-expanded='true'] {
   border-color: var(--color-border-strong);
 }
 
-.nwm-date__value {
+.nwm-date__value,
+.nwm-folder__value {
   flex: 1;
   min-width: 0;
   overflow: hidden;
@@ -115,8 +166,8 @@
 
 /* Leave room for the clear button that sits over the right edge. */
 .nwm-date__trigger--set {
-  padding-right: 38px;
-  font-weight: 500;
+  padding-right: 42px;
+  font-weight: 600;
 }
 
 .nwm-date__trigger--set svg {
@@ -125,19 +176,98 @@
 
 .nwm-date__clear {
   position: absolute;
-  top: 6px;
-  right: 6px;
+  top: 8px;
+  right: 8px;
+}
+
+/* ─── Folder ──────────────────────────────────────────────────────────────── */
+
+.nwm-chevron {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+}
+
+.nwm-folder__swatch {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+}
+
+/* No folder: an empty outlined square, not a colour. */
+.nwm-folder__swatch--none {
+  border: 1.5px dashed var(--color-border-strong);
+}
+
+.nwm-folder__menu {
+  top: calc(100% + 6px);
+  right: 0;
+  left: 0;
+  z-index: 10;
+  min-width: 0;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.nwm-folder__item {
+  justify-content: flex-start;
+  flex-shrink: 0;
+  height: 40px;
+  font-weight: 600;
+}
+
+.nwm-folder__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nwm-folder__check {
+  display: flex;
+  flex-shrink: 0;
+  color: var(--color-brand-text);
+}
+
+/* ─── Custom member limit ─────────────────────────────────────────────────── */
+
+.nwm-custom {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.nwm-custom__input {
+  width: 120px;
+  height: 44px;
+  font-size: 16px;
+}
+
+.nwm-custom__input--invalid,
+.nwm-custom__input--invalid:focus {
+  border-color: var(--color-error);
+}
+
+.nwm-custom__hint {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+
+.nwm-custom__hint--invalid {
+  color: var(--color-error-text);
 }
 
 /* ─── Calendar popover ────────────────────────────────────────────────────── */
 
 .nwm-cal {
+  /* Beside the modal, top-aligned with it, so no field is hidden. */
   position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
+  top: 0;
+  left: calc(100% + 14px);
   z-index: 10;
-  width: 264px;
-  padding: 10px;
+  width: 300px;
+  padding: 12px;
   background: var(--color-bg-overlay);
   border: 1px solid var(--color-border);
   border-radius: 12px;
@@ -152,8 +282,8 @@
 }
 
 .nwm-cal__title {
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 15px;
+  font-weight: 700;
   color: var(--color-text-primary);
 }
 
@@ -167,9 +297,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 24px;
-  font-size: 11px;
-  font-weight: 600;
+  height: 26px;
+  font-size: 12px;
+  font-weight: 700;
   color: var(--color-text-muted);
 }
 
@@ -177,13 +307,14 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 32px;
+  height: 36px;
   padding: 0;
   border: none;
   border-radius: 8px;
   background: transparent;
   color: var(--color-text-primary);
-  font-size: 13px;
+  font-size: 14px;
+  font-weight: 500;
   cursor: pointer;
   transition: background-color 0.1s;
 }
@@ -221,8 +352,8 @@
   border-radius: var(--radius-control);
   background: var(--color-error-bg);
   color: var(--color-error-text);
-  font-size: 13px;
-  font-weight: 500;
+  font-size: 14px;
+  font-weight: 600;
   line-height: 1.4;
 }
 
@@ -235,7 +366,17 @@
   display: flex;
   justify-content: flex-end;
   gap: 10px;
-  padding-top: 6px;
+  padding-top: 8px;
+}
+
+/* Not enough room beside the modal (narrow window): drop the picker over the
+   modal's top instead, centred, rather than letting it fall off screen. */
+@media (max-width: 1160px) {
+  .nwm-cal {
+    top: 120px;
+    left: 50%;
+    transform: translateX(-50%);
+  }
 }
 
 .nwm-cancel:hover {
