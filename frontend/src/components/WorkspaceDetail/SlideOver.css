@@ -175,10 +175,6 @@
   color: var(--color-text-primary);
 }
 
-.slide-over__attach-row .resource-form {
-  flex: 1 1 100%;
-}
-
 .slide-over--modal .slide-over__comments-empty {
   align-items: flex-start;
   padding: 4px 0;
