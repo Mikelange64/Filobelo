@@ -20,14 +20,6 @@ class TaskUpdate(BaseModel):
     due_date: datetime | None = None
 
 
-class TaskFullUpdate(BaseModel):
-    title:    str = Field(min_length=1, max_length=100)
-    content:  str = Field(min_length=1, max_length=300)
-    color:    str = Field(min_length=1, max_length=50, default="#6bc4d4")
-    due_date: datetime | None = None
-    status:   TaskStatus = TaskStatus.TODO
-
-
 class TaskStatusUpdate(BaseModel):
     status: TaskStatus
 

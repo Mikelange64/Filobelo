@@ -8,7 +8,6 @@ from app.models import Task, TaskStatus, WorkspaceMember
 from app.schemas import (
     PaginatedTaskResponse,
     TaskCreate,
-    TaskFullUpdate,
     TaskResponse,
     TaskStatusUpdate,
     TaskUpdate,
@@ -96,35 +95,6 @@ async def update_task_partial(
     update = task_data.model_dump(exclude_unset=True)
     for field, value in update.items():
         setattr(task, field, value)
-
-    await db.commit()
-    await db.refresh(task)
-    return task
-
-
-@router.put("/{task_id}", response_model=TaskResponse)
-async def update_task_full(
-    workspace_id: int,
-    task_id: int,
-    task_data: TaskFullUpdate,
-    db: DbSession,
-    member: Annotated[WorkspaceMember, Depends(require_membership)],
-):
-    task = await get_task_by_id(task_id, workspace_id, db)
-    if task.owner_id != member.user_id and member.role != "admin":
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authorized to fully update this task",
-        )
-
-    task.title = task_data.title
-    task.content = task_data.content
-    task.color = task_data.color
-    task.due_date = task_data.due_date
-    task.status = task_data.status
-    task.completed_at = (
-        datetime.now(UTC) if task_data.status == TaskStatus.DONE else None
-    )
 
     await db.commit()
     await db.refresh(task)

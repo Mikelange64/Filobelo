@@ -31,7 +31,6 @@ from .resources import (
 from .tasks import (
     PaginatedTaskResponse,
     TaskCreate,
-    TaskFullUpdate,
     TaskResponse,
     TaskStatusUpdate,
     TaskSummary,
@@ -76,7 +75,6 @@ __all__ = [
     
     # TASK
     "TaskCreate",
-    "TaskFullUpdate",
     "TaskResponse",
     "TaskStatusUpdate",
     "TaskSummary",
