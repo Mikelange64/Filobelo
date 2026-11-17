@@ -16,6 +16,10 @@ export default function TaskRow({ task, member, isAdmin, currentUserId, isSelect
   const [isRenaming, setIsRenaming] = useState(false)
   const [renameValue, setRenameValue] = useState(task.title)
   const [menuOpen, setMenuOpen, menuRef, floatingRef] = useDismissableMenu()
+  // The menu opens beside the ⋯ (into the free space right of the list).
+  // The colour flyout continues to the right only when the menu and the
+  // flyout both fit there; otherwise it opens back over the list.
+  const [flyoutLeft, setFlyoutLeft] = useState(false)
 
   async function handleRenameSave() {
     const trimmed = renameValue.trim()
@@ -124,7 +128,12 @@ export default function TaskRow({ task, member, isAdmin, currentUserId, isSelect
           aria-label={`Actions for ${task.title}`}
           aria-haspopup="menu"
           aria-expanded={menuOpen}
-          onClick={(e) => { e.stopPropagation(); setMenuOpen((v) => !v) }}
+          onClick={(e) => {
+            e.stopPropagation()
+            const room = window.innerWidth - e.currentTarget.getBoundingClientRect().right
+            setFlyoutLeft(room < 520)
+            setMenuOpen((v) => !v)
+          }}
         >
           <DotsIcon />
         </button>
@@ -132,8 +141,8 @@ export default function TaskRow({ task, member, isAdmin, currentUserId, isSelect
           <ActionMenu
             anchorRef={menuRef}
             floatingRef={floatingRef}
-            placement="below"
-            className="task-row-menu"
+            placement="right"
+            className={`task-row-menu${flyoutLeft ? ' task-row-menu--flyout-left' : ''}`}
             items={menuItems}
             label={`Actions for ${task.title}`}
             onClose={() => setMenuOpen(false)}

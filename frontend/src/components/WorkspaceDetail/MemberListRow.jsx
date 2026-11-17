@@ -53,7 +53,7 @@ export default function MemberListRow({ member, isAdmin, isSelf, onRemove, onPro
             <ActionMenu
               anchorRef={menuRef}
               floatingRef={floatingRef}
-              placement="below"
+              placement="right"
               items={items}
               label={`Actions for ${member.name}`}
               onClose={() => setMenuOpen(false)}

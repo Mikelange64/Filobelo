@@ -526,9 +526,14 @@
     }
 }
 
-/* Colour flyout in the row menu: opens to the left, since the row ⋯ sits at
-   the right edge of the page. */
+/* Colour flyout in the row menu: to the right by default (the menu sits in
+   the free space beside the list); back to the left when that would run off
+   screen. */
 .task-row-menu .ui-menu--sub {
+    min-width: 0;
+}
+
+.task-row-menu--flyout-left .ui-menu--sub {
     left: auto;
     right: calc(100% + 13px);
     min-width: 0;
