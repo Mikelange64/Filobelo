@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { WORKSPACE_COLORS } from '../../constants/colors'
 import { toDateInputValue, dateInputToISO } from '../../utils/date'
 import useDelayedFlag from '../../hooks/useDelayedFlag'
+import DatePicker from '../shared/DatePicker'
 import { LinkIcon, FileIcon, TrashIcon, CheckIcon } from './icons'
 import MemberAvatar from './MemberAvatar'
 import './NewTaskModal.css'
@@ -18,25 +19,6 @@ const COLOR_NAMES = {
   '#f9b53e': 'Amber',
   '#5bbf8a': 'Green',
   '#a78bf5': 'Purple',
-}
-
-function getCalendarDays(year, month) {
-  const firstDay = new Date(year, month - 1, 1)
-  const start = new Date(firstDay)
-  start.setDate(1 - firstDay.getDay())
-  const days = []
-  const cur = new Date(start)
-  while (days.length < 42) {
-    days.push(new Date(cur))
-    cur.setDate(cur.getDate() + 1)
-  }
-  return days
-}
-
-function isSameDay(a, b) {
-  return a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
 }
 
 /** "YYYY-MM-DD" -> local Date at midnight. */
@@ -66,63 +48,18 @@ function useOutsideClose(ref, triggerSelector, onClose) {
 // ─── Mini calendar popover ───────────────────────────────────────────────────
 
 function MiniCalPopover({ selectedDate, onSelect, onClose }) {
-  const today = new Date()
-  const [year, setYear] = useState(selectedDate ? selectedDate.getFullYear() : today.getFullYear())
-  const [month, setMonth] = useState(selectedDate ? selectedDate.getMonth() + 1 : today.getMonth() + 1)
   const ref = useRef(null)
   useOutsideClose(ref, '.ntm-date__trigger', onClose)
 
-  function prevMonth() {
-    if (month === 1) { setMonth(12); setYear(y => y - 1) }
-    else setMonth(m => m - 1)
-  }
-  function nextMonth() {
-    if (month === 12) { setMonth(1); setYear(y => y + 1) }
-    else setMonth(m => m + 1)
-  }
-
-  const days = getCalendarDays(year, month)
-
+  // Same picker as everywhere else (shared/DatePicker); Clear sends null,
+  // which the caller turns into "no deadline".
   return (
-    <div className="ntm-cal" ref={ref} role="dialog" aria-label="Pick a due date">
-      <div className="ntm-cal__header">
-        <button type="button" className="ui-icon-btn ui-icon-btn--sm" onClick={prevMonth} aria-label="Previous month">
-          <ChevronLeft />
-        </button>
-        <span className="ntm-cal__title">{MONTH_NAMES[month - 1]} {year}</span>
-        <button type="button" className="ui-icon-btn ui-icon-btn--sm" onClick={nextMonth} aria-label="Next month">
-          <ChevronRight />
-        </button>
-      </div>
-
-      <div className="ntm-cal__grid">
-        {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
-          <span key={i} className="ntm-cal__dow">{d}</span>
-        ))}
-        {days.map((date, i) => {
-          const inMonth = date.getMonth() + 1 === month
-          const isToday = isSameDay(date, today)
-          const isSel = selectedDate && isSameDay(date, selectedDate)
-          return (
-            <button
-              key={i}
-              type="button"
-              className={[
-                'ntm-cal__day',
-                !inMonth ? 'ntm-cal__day--other' : '',
-                isToday ? 'ntm-cal__day--today' : '',
-                isSel ? 'ntm-cal__day--selected' : '',
-              ].filter(Boolean).join(' ')}
-              onClick={() => { if (inMonth) { onSelect(date); onClose() } }}
-              disabled={!inMonth}
-              tabIndex={inMonth ? 0 : -1}
-              aria-pressed={isSel || undefined}
-            >
-              {date.getDate()}
-            </button>
-          )
-        })}
-      </div>
+    <div className="ntm-cal" ref={ref}>
+      <DatePicker
+        selectedDate={selectedDate}
+        label="Pick a due date"
+        onSelect={(date) => { onSelect(date); onClose() }}
+      />
     </div>
   )
 }
@@ -557,22 +494,6 @@ function ChevronDown() {
   return (
     <svg className="ntm-chevron" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
       <path d="M6 9l6 6 6-6" />
-    </svg>
-  )
-}
-
-function ChevronLeft() {
-  return (
-    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
-      <path d="M15 18l-6-6 6-6" />
-    </svg>
-  )
-}
-
-function ChevronRight() {
-  return (
-    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
-      <path d="M9 18l6-6-6-6" />
     </svg>
   )
 }

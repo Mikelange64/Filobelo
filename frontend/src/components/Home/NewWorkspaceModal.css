@@ -257,80 +257,22 @@
   top: 0;
   left: calc(100% + 36px + 14px);
   z-index: 10;
-  width: 300px;
-  padding: 12px;
+  width: 320px;
+  padding: 14px;
   background: var(--color-bg-overlay);
   border: 1px solid var(--color-border);
   border-radius: 12px;
   box-shadow: var(--shadow-overlay);
 }
 
-.nwm-cal__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 6px;
-}
 
-.nwm-cal__title {
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--color-text-primary);
-}
 
-.nwm-cal__grid {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 2px;
-}
 
-.nwm-cal__dow {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 26px;
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--color-text-muted);
-}
 
-.nwm-cal__day {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 36px;
-  padding: 0;
-  border: none;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--color-text-primary);
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background-color 0.1s;
-}
 
-.nwm-cal__day:hover:not(:disabled) {
-  background: var(--color-bg-canvas-hover);
-}
 
-.nwm-cal__day--other {
-  color: var(--color-text-muted);
-  opacity: 0.45;
-  cursor: default;
-}
 
-.nwm-cal__day--today {
-  color: var(--color-brand-text);
-  font-weight: 700;
-}
 
-.nwm-cal__day--selected,
-.nwm-cal__day--selected:hover:not(:disabled) {
-  background: var(--color-brand-primary);
-  color: var(--color-text-on-brand);
-  font-weight: 600;
-}
 
 /* ─── Error + footer ──────────────────────────────────────────────────────── */
 
