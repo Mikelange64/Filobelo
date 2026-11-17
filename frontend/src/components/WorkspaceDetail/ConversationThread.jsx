@@ -141,6 +141,62 @@ export function Composer({ value, onChange, onSend, canSend, placeholder, hint, 
   )
 }
 
+// The ⋯ menu for one conversation: the same items in the thread header and
+// on a row of the conversation list.
+export function ConversationMenu({ conversation, anchorRef, floatingRef, onClose, onPin, onRename, onArchive, onDelete }) {
+  const items = [
+    {
+      id: 'pin',
+      label: conversation.is_pinned ? 'Unpin' : 'Pin to top',
+      icon: conversation.is_pinned ? MENU_ICON.unpin : MENU_ICON.pin,
+      onSelect: onPin,
+    },
+    { id: 'rename', label: 'Rename', icon: MENU_ICON.rename, onSelect: onRename },
+    {
+      id: 'archive',
+      label: conversation.is_archived ? 'Unarchive' : 'Archive',
+      icon: conversation.is_archived ? MENU_ICON.restore : MENU_ICON.archive,
+      onSelect: onArchive,
+    },
+    {
+      id: 'delete',
+      label: conversation.type === 'BOT' ? 'Delete chat' : 'Delete conversation',
+      icon: MENU_ICON.trash,
+      danger: true,
+      separatorBefore: true,
+      onSelect: onDelete,
+    },
+  ]
+  return (
+    <ActionMenu
+      anchorRef={anchorRef}
+      floatingRef={floatingRef}
+      placement="below"
+      items={items}
+      label={`Options for ${conversation.title}`}
+      onClose={onClose}
+    />
+  )
+}
+
+// Portalled to <body> so it is never clipped by the panel.
+export function DeleteConversationDialog({ conversation, workspaceTitle, onConfirm, onCancel }) {
+  const isBot = conversation.type === 'BOT'
+  return createPortal(
+    <ConfirmModal
+      title={isBot ? 'Delete this chat?' : 'Delete conversation?'}
+      message={isBot
+        ? `“${conversation.title}” and its messages are deleted. There is no undo.`
+        : `“${conversation.title}” and all its messages are deleted for everyone in ${workspaceTitle}. There is no undo.`}
+      confirmLabel="Delete"
+      danger
+      onConfirm={onConfirm}
+      onCancel={onCancel}
+    />,
+    document.body,
+  )
+}
+
 // ── Thread ───────────────────────────────────────────────────────────────
 
 const DELETED_MEMBER = { name: 'Deleted user', avatarUrl: null }
@@ -667,30 +723,6 @@ export default function ConversationThread({
     ? workspaceTitle
     : `${workspaceTitle} · ${memberCount} member${memberCount === 1 ? '' : 's'}`
 
-  const menuItems = [
-    {
-      id: 'pin',
-      label: conversation.is_pinned ? 'Unpin' : 'Pin to top',
-      icon: conversation.is_pinned ? MENU_ICON.unpin : MENU_ICON.pin,
-      onSelect: () => updateFlags({ is_pinned: !conversation.is_pinned }),
-    },
-    { id: 'rename', label: 'Rename', icon: MENU_ICON.rename, onSelect: () => setRenaming(true) },
-    {
-      id: 'archive',
-      label: conversation.is_archived ? 'Unarchive' : 'Archive',
-      icon: conversation.is_archived ? MENU_ICON.restore : MENU_ICON.archive,
-      onSelect: () => updateFlags({ is_archived: !conversation.is_archived }),
-    },
-    {
-      id: 'delete',
-      label: isBotConversation ? 'Delete chat' : 'Delete conversation',
-      icon: MENU_ICON.trash,
-      danger: true,
-      separatorBefore: true,
-      onSelect: () => setConfirmingDelete(true),
-    },
-  ]
-
   const title = renaming ? (
     <input
       className="chat-header__title-input"
@@ -777,13 +809,15 @@ export default function ConversationThread({
                   <DotsIcon />
                 </HeaderButton>
                 {menuOpen && (
-                  <ActionMenu
+                  <ConversationMenu
+                    conversation={conversation}
                     anchorRef={menuRef}
                     floatingRef={menuFloatingRef}
-                    placement="below"
-                    items={menuItems}
-                    label={`Options for ${conversation.title}`}
                     onClose={() => setMenuOpen(false)}
+                    onPin={() => updateFlags({ is_pinned: !conversation.is_pinned })}
+                    onRename={() => setRenaming(true)}
+                    onArchive={() => updateFlags({ is_archived: !conversation.is_archived })}
+                    onDelete={() => setConfirmingDelete(true)}
                   />
                 )}
               </div>
@@ -842,18 +876,13 @@ export default function ConversationThread({
         hint={isBotConversation ? 'Filobelo can make mistakes' : 'Shift + Enter for a new line'}
       />
 
-      {confirmingDelete && createPortal(
-        <ConfirmModal
-          title={isBotConversation ? 'Delete this chat?' : 'Delete conversation?'}
-          message={isBotConversation
-            ? `“${conversation.title}” and its messages are deleted. There is no undo.`
-            : `“${conversation.title}” and all its messages are deleted for everyone in ${workspaceTitle}. There is no undo.`}
-          confirmLabel="Delete"
-          danger
+      {confirmingDelete && (
+        <DeleteConversationDialog
+          conversation={conversation}
+          workspaceTitle={workspaceTitle}
           onConfirm={handleDelete}
           onCancel={() => setConfirmingDelete(false)}
-        />,
-        document.body,
+        />
       )}
     </div>
   )

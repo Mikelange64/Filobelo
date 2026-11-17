@@ -83,20 +83,13 @@
 }
 
 .chat-list__row {
-    width: 100%;
     display: flex;
-    align-items: flex-start;
-    gap: 12px;
-    padding: 12px 20px;
-    border: none;
-    background: transparent;
-    font: inherit;
-    color: var(--color-text-primary);
-    text-align: left;
-    cursor: pointer;
+    align-items: center;
+    padding-right: 10px;
 }
 
-.chat-list__row:hover {
+.chat-list__row:hover,
+.chat-list__row--menu-open {
     background: var(--color-bg-card-hover);
 }
 
@@ -105,7 +98,64 @@
     background: var(--color-brand-soft);
 }
 
-.chat-list__row--archived {
+/* The clickable part of the row (everything but the ⋯). */
+.chat-list__select {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px 6px 12px 20px;
+    border: none;
+    background: transparent;
+    font: inherit;
+    color: var(--color-text-primary);
+    text-align: left;
+}
+
+button.chat-list__select {
+    cursor: pointer;
+}
+
+/* The ⋯ keeps its place (so the text never shifts) and shows on hover,
+   keyboard focus, or while its menu is open. */
+.chat-list__menu {
+    display: flex;
+    flex-shrink: 0;
+    width: 28px;
+    opacity: 0;
+}
+
+.chat-list__row:hover .chat-list__menu,
+.chat-list__row:focus-within .chat-list__menu,
+.chat-list__row--menu-open .chat-list__menu {
+    opacity: 1;
+}
+
+@media (hover: none) {
+    .chat-list__menu {
+        opacity: 1;
+    }
+}
+
+.chat-list__rename {
+    flex: 1;
+    min-width: 0;
+    height: 34px;
+    box-sizing: border-box;
+    padding: 0 10px;
+    border: 1px solid var(--color-brand-primary);
+    border-radius: 8px;
+    background: var(--color-bg-card);
+    font: inherit;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--color-text-primary);
+    outline: none;
+    box-shadow: none;
+}
+
+.chat-list__row--archived .chat-list__select {
     opacity: 0.72;
 }
 

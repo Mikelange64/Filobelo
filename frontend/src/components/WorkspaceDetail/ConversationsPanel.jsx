@@ -1,14 +1,21 @@
 import { useEffect, useState } from "react";
-import { createConversation } from "../../api/client";
+import {
+    createConversation,
+    updateConversation,
+    deleteConversation,
+} from "../../api/client";
+import useDismissableMenu from "../../hooks/useDismissableMenu";
 import { keys, writeCache } from "../../api/queryClient";
 import ConversationThread, {
     ChatHeader,
     Composer,
+    DeleteConversationDialog,
+    ConversationMenu,
     MemberStack,
     NewChatButton,
 } from "./ConversationThread";
 import { BotMark } from "./MessageBubble";
-import { SparkleIcon } from "./icons";
+import { DotsIcon, SparkleIcon } from "./icons";
 import "./ConversationsPanel.css";
 
 // One floating panel, two modes: "BOT" (Ask Filobelo, private to you) and
@@ -71,36 +78,128 @@ function titleFromQuestion(text) {
     return `${base.replace(/[\s,.;:!?-]+$/, "")}…`;
 }
 
-function ConversationRow({ conversation, isBot, active, onSelect }) {
+// One row of the list: click to open; the ⋯ (for whoever may manage the
+// conversation) pins, renames in place, archives or deletes it.
+function ConversationRow({
+    conversation,
+    isBot,
+    active,
+    canManage,
+    onSelect,
+    onPatch,
+    onDelete,
+}) {
+    const [menuOpen, setMenuOpen, menuRef, floatingRef] = useDismissableMenu();
+    const [renaming, setRenaming] = useState(false);
+    const [renameValue, setRenameValue] = useState(conversation.title);
+
+    function saveRename() {
+        const trimmed = renameValue.trim();
+        setRenaming(false);
+        if (trimmed && trimmed !== conversation.title)
+            onPatch(conversation, { title: trimmed });
+    }
+
+    const icon = (
+        <span
+            className={`chat-list__icon${isBot ? " chat-list__icon--bot" : ""}`}
+            aria-hidden="true"
+        >
+            {isBot ? <SparkleIcon size={15} /> : "#"}
+        </span>
+    );
+
     return (
-        <li>
-            <button
-                type="button"
-                className={`chat-list__row${active ? " chat-list__row--active" : ""}${conversation.is_archived ? " chat-list__row--archived" : ""}`}
-                onClick={() => onSelect(conversation.id)}
-            >
-                <span
-                    className={`chat-list__icon${isBot ? " chat-list__icon--bot" : ""}`}
-                    aria-hidden="true"
+        <li
+            className={`chat-list__row${active ? " chat-list__row--active" : ""}${conversation.is_archived ? " chat-list__row--archived" : ""}${menuOpen ? " chat-list__row--menu-open" : ""}`}
+        >
+            {renaming ? (
+                <div className="chat-list__select">
+                    {icon}
+                    <input
+                        className="chat-list__rename"
+                        value={renameValue}
+                        maxLength={100}
+                        aria-label="Conversation name"
+                        autoFocus
+                        onFocus={(e) => e.target.select()}
+                        onChange={(e) => setRenameValue(e.target.value)}
+                        onBlur={saveRename}
+                        onKeyDown={(e) => {
+                            if (e.key === "Enter") saveRename();
+                            if (e.key === "Escape") {
+                                // Cancels the rename only, not the panel.
+                                e.stopPropagation();
+                                setRenaming(false);
+                            }
+                        }}
+                    />
+                </div>
+            ) : (
+                <button
+                    type="button"
+                    className="chat-list__select"
+                    onClick={() => onSelect(conversation.id)}
                 >
-                    {isBot ? <SparkleIcon size={15} /> : "#"}
-                </span>
-                <span className="chat-list__text">
-                    <span className="chat-list__top">
-                        <span className="chat-list__title">
-                            {conversation.title}
+                    {icon}
+                    <span className="chat-list__text">
+                        <span className="chat-list__top">
+                            <span className="chat-list__title">
+                                {conversation.title}
+                            </span>
+                            <span className="chat-list__time">
+                                {formatConversationTimestamp(
+                                    conversation.last_message_at,
+                                )}
+                            </span>
                         </span>
-                        <span className="chat-list__time">
-                            {formatConversationTimestamp(
-                                conversation.last_message_at,
-                            )}
+                        <span className="chat-list__snippet">
+                            {conversation.last_message || "No messages yet"}
                         </span>
                     </span>
-                    <span className="chat-list__snippet">
-                        {conversation.last_message || "No messages yet"}
-                    </span>
-                </span>
-            </button>
+                </button>
+            )}
+            {!canManage && !renaming && (
+                // Keeps the times in one column with the rows that have a ⋯.
+                <span className="chat-list__menu" aria-hidden="true" />
+            )}
+            {canManage && !renaming && (
+                <div className="chat-list__menu" ref={menuRef}>
+                    <button
+                        type="button"
+                        className="ui-icon-btn ui-icon-btn--sm"
+                        aria-label={`Options for ${conversation.title}`}
+                        aria-haspopup="menu"
+                        aria-expanded={menuOpen}
+                        onClick={() => setMenuOpen((v) => !v)}
+                    >
+                        <DotsIcon />
+                    </button>
+                    {menuOpen && (
+                        <ConversationMenu
+                            conversation={conversation}
+                            anchorRef={menuRef}
+                            floatingRef={floatingRef}
+                            onClose={() => setMenuOpen(false)}
+                            onPin={() =>
+                                onPatch(conversation, {
+                                    is_pinned: !conversation.is_pinned,
+                                })
+                            }
+                            onRename={() => {
+                                setRenameValue(conversation.title);
+                                setRenaming(true);
+                            }}
+                            onArchive={() =>
+                                onPatch(conversation, {
+                                    is_archived: !conversation.is_archived,
+                                })
+                            }
+                            onDelete={() => onDelete(conversation)}
+                        />
+                    )}
+                </div>
+            )}
         </li>
     );
 }
@@ -136,6 +235,8 @@ export default function ConversationsPanel({
     const [firstMessage, setFirstMessage] = useState(null);
     // The thread you came back from, highlighted in the list.
     const [lastViewedId, setLastViewedId] = useState(null);
+    // The conversation whose delete is waiting for confirmation (list view).
+    const [deleting, setDeleting] = useState(null);
     // Floating (the default): sits over the page and closes on a click
     // anywhere else. Docked: fixed to the right edge, the page narrows to
     // make room, and it stays open until closed.
@@ -188,6 +289,28 @@ export default function ConversationsPanel({
     else if (isBot && (composing || list.length === 0)) view = "start";
     else if (list.length === 0) view = "empty";
     else view = "list";
+
+    async function handlePatch(conversation, patch) {
+        try {
+            onConversationUpdated(
+                await updateConversation(workspaceId, conversation.id, patch),
+            );
+        } catch (err) {
+            onToast?.(err.detail ?? "Could not update conversation");
+        }
+    }
+
+    async function handleDelete() {
+        const target = deleting;
+        try {
+            await deleteConversation(workspaceId, target.id);
+            onConversationDeleted(target.id);
+        } catch (err) {
+            onToast?.(err.detail ?? "Could not delete conversation");
+        } finally {
+            setDeleting(null);
+        }
+    }
 
     function handleBack() {
         setLastViewedId(selectedConversationId);
@@ -268,7 +391,13 @@ export default function ConversationsPanel({
                                     conversation={c}
                                     isBot={isBot}
                                     active={c.id === lastViewedId}
+                                    canManage={
+                                        c.creator_id === currentUserId ||
+                                        isAdmin
+                                    }
                                     onSelect={onSelectConversation}
+                                    onPatch={handlePatch}
+                                    onDelete={setDeleting}
                                 />
                             ))}
                         </ul>
@@ -403,6 +532,14 @@ export default function ConversationsPanel({
             aria-label={isBot ? "Ask Filobelo" : "Workspace chat"}
         >
             {content}
+            {deleting && (
+                <DeleteConversationDialog
+                    conversation={deleting}
+                    workspaceTitle={workspaceTitle}
+                    onConfirm={handleDelete}
+                    onCancel={() => setDeleting(null)}
+                />
+            )}
         </aside>
     );
 }
