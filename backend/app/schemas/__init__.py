@@ -7,6 +7,7 @@ from .auth import (
     ResetPasswordRequest,
     Token,
 )
+from .comments import CommentCreate, CommentResponse, CommentUpdate
 from .conversations import (
     ConversationCreate,
     ConversationResponse,
@@ -97,6 +98,11 @@ __all__ = [
     "FolderCreate",
     "FolderResponse",
     "FolderUpdate",
+
+    # COMMENT
+    "CommentCreate",
+    "CommentResponse",
+    "CommentUpdate",
 
     # CONVERSATION
     "ConversationCreate",

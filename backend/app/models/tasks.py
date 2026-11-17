@@ -68,6 +68,9 @@ class Task(Base):
     resources: Mapped[list["Resource"]] = relationship(
         "Resource", back_populates="task", cascade="all, delete-orphan"
     )
+    comments: Mapped[list["Comment"]] = relationship(
+        "Comment", back_populates="task", cascade="all, delete-orphan"
+    )
 
     @property
     def _days_remaining(self):
