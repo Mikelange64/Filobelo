@@ -1,8 +1,11 @@
 import { useState, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { WORKSPACE_COLORS } from '../../constants/colors'
-import { LinkIcon, FileIcon, TrashIcon } from './icons'
+import { toDateInputValue, dateInputToISO } from '../../utils/date'
+import useDelayedFlag from '../../hooks/useDelayedFlag'
+import DatePicker from '../shared/DatePicker'
+import { LinkIcon, FileIcon, TrashIcon, CheckIcon } from './icons'
 import MemberAvatar from './MemberAvatar'
-import ColorDots from '../shared/ColorDots'
 import './NewTaskModal.css'
 
 const MONTH_NAMES = [
@@ -10,96 +13,165 @@ const MONTH_NAMES = [
   'July', 'August', 'September', 'October', 'November', 'December',
 ]
 
-function getCalendarDays(year, month) {
-  const firstDay = new Date(year, month - 1, 1)
-  const start = new Date(firstDay)
-  start.setDate(1 - firstDay.getDay())
-  const days = []
-  const cur = new Date(start)
-  while (days.length < 42) {
-    days.push(new Date(cur))
-    cur.setDate(cur.getDate() + 1)
-  }
-  return days
+const COLOR_NAMES = {
+  '#6bc4d4': 'Teal',
+  '#fc556e': 'Red',
+  '#f9b53e': 'Amber',
+  '#5bbf8a': 'Green',
+  '#a78bf5': 'Purple',
 }
 
-function isSameDay(a, b) {
-  return a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
+/** "YYYY-MM-DD" -> local Date at midnight. */
+function parseDateValue(value) {
+  if (!value) return null
+  const [y, m, d] = value.split('-').map(Number)
+  return new Date(y, m - 1, d)
 }
 
 function formatDate(d) {
   return `${d.getDate()} ${MONTH_NAMES[d.getMonth()].slice(0, 3)} ${d.getFullYear()}`
 }
 
-// ─── Mini calendar popover ───────────────────────────────────────────────────
-
-function MiniCalPopover({ selectedDate, onSelect, onClose }) {
-  const today = new Date()
-  const [year, setYear] = useState(selectedDate ? selectedDate.getFullYear() : today.getFullYear())
-  const [month, setMonth] = useState(selectedDate ? selectedDate.getMonth() + 1 : today.getMonth() + 1)
-  const ref = useRef(null)
-
+/** Closes a popover on outside mousedown; clicks on `triggerSelector` are
+ * left to the trigger's own toggle so it doesn't close and reopen. */
+function useOutsideClose(ref, triggerSelector, onClose) {
   useEffect(() => {
     function onDown(e) {
+      if (e.target.closest?.(triggerSelector)) return
       if (ref.current && !ref.current.contains(e.target)) onClose()
     }
     document.addEventListener('mousedown', onDown)
     return () => document.removeEventListener('mousedown', onDown)
-  }, [onClose])
+  }, [ref, triggerSelector, onClose])
+}
 
-  function prevMonth() {
-    if (month === 1) { setMonth(12); setYear(y => y - 1) }
-    else setMonth(m => m - 1)
-  }
-  function nextMonth() {
-    if (month === 12) { setMonth(1); setYear(y => y + 1) }
-    else setMonth(m => m + 1)
-  }
+// ─── Mini calendar popover ───────────────────────────────────────────────────
 
-  const days = getCalendarDays(year, month)
+function MiniCalPopover({ selectedDate, onSelect, onClose }) {
+  const ref = useRef(null)
+  useOutsideClose(ref, '.ntm-date__trigger', onClose)
+
+  // Same picker as everywhere else (shared/DatePicker); Clear sends null,
+  // which the caller turns into "no deadline".
+  return (
+    <div className="ntm-cal" ref={ref}>
+      <DatePicker
+        selectedDate={selectedDate}
+        label="Pick a due date"
+        onSelect={(date) => { onSelect(date); onClose() }}
+      />
+    </div>
+  )
+}
+
+// ─── Assignee menu ───────────────────────────────────────────────────────────
+
+function memberLabel(member, currentUserId) {
+  return member.id === currentUserId ? `${member.name} (you)` : member.name
+}
+
+function AssigneeMenu({ members, currentUserId, value, onSelect, onClose }) {
+  const ref = useRef(null)
+  useOutsideClose(ref, '.ntm-assignee__trigger', onClose)
+
+  // Focus the selected member when the menu opens; arrows move between rows.
+  useEffect(() => {
+    const sel = ref.current?.querySelector('[aria-checked="true"]')
+    const first = ref.current?.querySelector('[role="menuitemradio"]')
+    ;(sel ?? first)?.focus()
+  }, [])
+
+  function handleKeyDown(e) {
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
+    e.preventDefault()
+    const items = Array.from(ref.current.querySelectorAll('[role="menuitemradio"]'))
+    const i = items.indexOf(document.activeElement)
+    const next = e.key === 'ArrowDown' ? (i + 1) % items.length : (i - 1 + items.length) % items.length
+    items[next]?.focus()
+  }
 
   return (
-    <div className="ntm-cal-pop" ref={ref} role="dialog" aria-label="Pick a date">
-      <div className="ntm-cal-pop__header">
-        <button type="button" className="ntm-cal-pop__nav" onClick={prevMonth} aria-label="Previous month">
-          <ChevronLeft />
+    <div className="ui-menu ntm-assignee__menu" ref={ref} role="menu" aria-label="Assignee" onKeyDown={handleKeyDown}>
+      {members.map((m) => (
+        <button
+          key={m.id}
+          type="button"
+          role="menuitemradio"
+          aria-checked={value === m.id}
+          className={`ui-menu__item ntm-assignee__item${value === m.id ? ' ui-menu__item--active' : ''}`}
+          onClick={() => { onSelect(m.id); onClose() }}
+        >
+          <MemberAvatar member={m} size={24} />
+          <span className="ntm-assignee__name">{memberLabel(m, currentUserId)}</span>
+          {value === m.id && <span className="ntm-assignee__check"><CheckIcon /></span>}
         </button>
-        <span className="ntm-cal-pop__title">{MONTH_NAMES[month - 1]} {year}</span>
-        <button type="button" className="ntm-cal-pop__nav" onClick={nextMonth} aria-label="Next month">
-          <ChevronRight />
-        </button>
-      </div>
-
-      <div className="ntm-cal-pop__grid">
-        {['S','M','T','W','T','F','S'].map((d, i) => (
-          <span key={i} className="ntm-cal-pop__dow">{d}</span>
-        ))}
-        {days.map((date, i) => {
-          const inMonth = date.getMonth() + 1 === month
-          const isToday = isSameDay(date, today)
-          const isSel = selectedDate && isSameDay(date, selectedDate)
-          return (
-            <button
-              key={i}
-              type="button"
-              className={[
-                'ntm-cal-pop__day',
-                !inMonth ? 'ntm-cal-pop__day--other' : '',
-                isToday ? 'ntm-cal-pop__day--today' : '',
-                isSel ? 'ntm-cal-pop__day--selected' : '',
-              ].filter(Boolean).join(' ')}
-              onClick={() => { if (inMonth) { onSelect(date); onClose() } }}
-              disabled={!inMonth}
-              tabIndex={inMonth ? 0 : -1}
-            >
-              {date.getDate()}
-            </button>
-          )
-        })}
-      </div>
+      ))}
     </div>
+  )
+}
+
+// ─── Add-link dialog ─────────────────────────────────────────────────────────
+
+/** Small dialog over the New task modal, so adding a link never changes the
+ * size of the form behind it. Portalled to <body> to sit above its overlay. */
+function LinkDialog({ onAdd, onClose }) {
+  const [title, setTitle] = useState('')
+  const [url, setUrl] = useState('')
+  const canAdd = title.trim().length > 0 && url.trim().length > 0
+
+  useEffect(() => {
+    function onKeyDown(e) {
+      if (e.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [onClose])
+
+  function submit() {
+    if (canAdd) onAdd({ title: title.trim(), url: url.trim() })
+  }
+
+  return createPortal(
+    <div className="ui-overlay ntm-link-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
+      <div className="ui-modal ntm-link-dialog" role="dialog" aria-modal="true" aria-labelledby="ntm-link-title">
+        <div className="ui-modal__header">
+          <h3 className="ntm-link-dialog__title" id="ntm-link-title">Add link</h3>
+          <button type="button" className="ui-icon-btn" onClick={onClose} aria-label="Close">
+            <CloseIcon />
+          </button>
+        </div>
+
+        <div className="ui-field">
+          <label className="ui-field__label" htmlFor="ntm-link-name">Title</label>
+          <input
+            id="ntm-link-name"
+            className="ui-input"
+            placeholder="Brand guidelines"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); submit() } }}
+            autoFocus
+          />
+        </div>
+        <div className="ui-field">
+          <label className="ui-field__label" htmlFor="ntm-link-url">URL</label>
+          <input
+            id="ntm-link-url"
+            className="ui-input"
+            placeholder="https://…"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); submit() } }}
+          />
+        </div>
+
+        <div className="ntm-link-dialog__footer">
+          <button type="button" className="ui-btn ntm-plain-btn" onClick={onClose}>Cancel</button>
+          <button type="button" className="ui-btn ui-btn--primary" onClick={submit} disabled={!canAdd}>Add link</button>
+        </div>
+      </div>
+    </div>,
+    document.body,
   )
 }
 
@@ -108,50 +180,44 @@ function MiniCalPopover({ selectedDate, onSelect, onClose }) {
 function NewTaskModal({ workspace, currentUserId, onClose, onCreate }) {
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
-  const [descOpen, setDescOpen] = useState(false)
   const [color, setColor] = useState(WORKSPACE_COLORS[0])
   const [ownerId, setOwnerId] = useState(currentUserId)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [showCalPop, setShowCalPop] = useState(false)
-  const [selectedDate, setSelectedDate] = useState(null)
+  const [showAssignee, setShowAssignee] = useState(false)
+  // Due date kept as "YYYY-MM-DD" (local) and converted to the stored
+  // local-midnight ISO only on submit, via utils/date.
+  const [dueValue, setDueValue] = useState('')
+  const showCreating = useDelayedFlag(loading)
 
   const [addingLink, setAddingLink] = useState(false)
-  const [linkTitle, setLinkTitle] = useState('')
-  const [linkUrl, setLinkUrl] = useState('')
   const [pendingLinks, setPendingLinks] = useState([])
   const [pendingFiles, setPendingFiles] = useState([])
 
   const titleRef = useRef(null)
-  const descRef = useRef(null)
   const fileInputRef = useRef(null)
+  const assigneeTriggerRef = useRef(null)
+
+  const selectedDate = parseDateValue(dueValue)
+  const owner = workspace.members.find((m) => m.id === ownerId)
 
   useEffect(() => { titleRef.current?.focus() }, [])
-  useEffect(() => { if (descOpen) descRef.current?.focus() }, [descOpen])
 
   useEffect(() => {
     function onKeyDown(e) {
       if (e.key !== 'Escape') return
+      if (addingLink) return // the link dialog handles its own Escape
       if (showCalPop) setShowCalPop(false)
+      else if (showAssignee) { setShowAssignee(false); assigneeTriggerRef.current?.focus() }
       else onClose()
     }
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
-  }, [showCalPop, onClose])
+  }, [showCalPop, showAssignee, addingLink, onClose])
 
-  function handleCalendarPick(date) {
-    setSelectedDate(date)
-  }
-
-  function clearDate() {
-    setSelectedDate(null)
-  }
-
-  function handleAddLink() {
-    if (!linkTitle.trim() || !linkUrl.trim()) return
-    setPendingLinks((prev) => [...prev, { title: linkTitle.trim(), url: linkUrl.trim() }])
-    setLinkTitle('')
-    setLinkUrl('')
+  function handleAddLink(link) {
+    setPendingLinks((prev) => [...prev, link])
     setAddingLink(false)
   }
 
@@ -169,8 +235,11 @@ function NewTaskModal({ workspace, currentUserId, onClose, onCreate }) {
     setPendingFiles((prev) => prev.filter((_, i) => i !== index))
   }
 
+  const canSubmit = title.trim().length > 0 && !loading
+
   async function handleSubmit(e) {
     e.preventDefault()
+    if (!canSubmit) return
     setError('')
     setLoading(true)
     try {
@@ -179,7 +248,7 @@ function NewTaskModal({ workspace, currentUserId, onClose, onCreate }) {
         content: description.trim(),
         color,
         owner_id: ownerId,
-        due_date: selectedDate ? selectedDate.toISOString() : null,
+        due_date: dateInputToISO(dueValue),
         links: pendingLinks,
         files: pendingFiles,
       })
@@ -189,139 +258,174 @@ function NewTaskModal({ workspace, currentUserId, onClose, onCreate }) {
     }
   }
 
-  const canSubmit = title.trim().length > 0 && !loading
-
   function handleFormKeyDown(e) {
-    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && canSubmit) {
-      handleSubmit(e)
-    }
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') handleSubmit(e)
   }
 
-  return (
-    <div className="ntm-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
-      <div className="ntm-modal" role="dialog" aria-modal="true" aria-labelledby="ntm-title">
-        <div className="ntm-topbar">
-          <span className="ntm-eyebrow" id="ntm-title">New task &middot; {workspace.title}</span>
-          <button type="button" className="ntm-close" onClick={onClose} aria-label="Close">
-            <CloseIcon />
-          </button>
-        </div>
+  const hasPending = pendingLinks.length > 0 || pendingFiles.length > 0
 
-        <form className="ntm-body" onSubmit={handleSubmit} onKeyDown={handleFormKeyDown} noValidate>
-          <div className="ntm-title-row">
-            <ColorDots value={color} onChange={setColor} colors={WORKSPACE_COLORS} />
+  return (
+    <div className="ui-overlay ntm-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
+      <div className="ui-modal ntm-modal" role="dialog" aria-modal="true" aria-labelledby="ntm-title" aria-describedby="ntm-subtitle">
+        <form className="ntm-form" onSubmit={handleSubmit} onKeyDown={handleFormKeyDown} noValidate>
+          <div className="ui-modal__header ntm-header">
+            <div className="ntm-heading">
+              <h2 className="ui-modal__title" id="ntm-title">New task</h2>
+              <p className="ntm-subtitle" id="ntm-subtitle">in {workspace.title}</p>
+            </div>
+            <button type="button" className="ui-icon-btn" onClick={onClose} aria-label="Close">
+              <CloseIcon />
+            </button>
+          </div>
+
+          <div className="ui-field">
+            <label className="ui-field__label" htmlFor="ntm-name">Name</label>
             <input
               ref={titleRef}
+              id="ntm-name"
               type="text"
-              className="ntm-title-input"
+              className="ui-input ntm-name-input"
               placeholder="Untitled task"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               maxLength={100}
               required
+              aria-describedby={error ? 'ntm-error' : undefined}
+            />
+            <textarea
+              className="ui-textarea ntm-desc"
+              aria-label="Description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              maxLength={300}
+              rows={3}
+              placeholder="Add details for whoever picks this up"
             />
           </div>
 
-          {error && <p className="ntm-error" role="alert">{error}</p>}
+          <div className="ui-field">
+            <span className="ui-field__label" id="ntm-color-label">Color</span>
+            <div className="ntm-swatches" role="radiogroup" aria-labelledby="ntm-color-label">
+              {WORKSPACE_COLORS.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  role="radio"
+                  aria-checked={color === c}
+                  aria-label={COLOR_NAMES[c] ?? c}
+                  className="ntm-swatch"
+                  onClick={() => setColor(c)}
+                >
+                  {/* Task colour is data, so it's set inline. */}
+                  <span className="ntm-swatch__dot" style={{ backgroundColor: c }} />
+                </button>
+              ))}
+            </div>
+          </div>
 
-          {descOpen || description ? (
-            <textarea
-              ref={descRef}
-              className="ntm-desc-textarea"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              onBlur={() => { if (!description.trim()) setDescOpen(false) }}
-              maxLength={300}
-              rows={3}
-              placeholder="Add description…"
-            />
-          ) : (
-            <button type="button" className="ntm-desc-toggle" onClick={() => setDescOpen(true)}>
-              + Add description
-            </button>
-          )}
-
-          <div className="ntm-row">
-            <div className="ntm-field-col">
-              <span className="ntm-field-label">Due date</span>
-              <div className="ntm-date-pill-wrap">
+          <div className="ntm-grid">
+            <div className="ui-field">
+              <span className="ui-field__label" id="ntm-due-label">Due date</span>
+              <div className="ntm-date">
                 <button
                   type="button"
-                  className={`ntm-date-pill${selectedDate ? ' ntm-date-pill--set' : ''}`}
-                  onClick={() => setShowCalPop((v) => !v)}
+                  className={`ntm-date__trigger${selectedDate ? ' ntm-date__trigger--set' : ''}`}
+                  onClick={() => { setShowAssignee(false); setShowCalPop((v) => !v) }}
+                  aria-haspopup="dialog"
+                  aria-expanded={showCalPop}
+                  aria-labelledby="ntm-due-label ntm-due-value"
                 >
                   <CalIcon />
-                  <span>{selectedDate ? formatDate(selectedDate) : 'No deadline'}</span>
+                  <span className="ntm-date__value" id="ntm-due-value">
+                    {selectedDate ? formatDate(selectedDate) : 'No deadline'}
+                  </span>
                 </button>
                 {selectedDate && (
-                  <button type="button" className="ntm-clear-btn" onClick={clearDate} aria-label="Clear date">
-                    ✕
+                  <button
+                    type="button"
+                    className="ui-icon-btn ui-icon-btn--sm ntm-date__clear"
+                    onClick={() => setDueValue('')}
+                    aria-label="Clear due date"
+                  >
+                    <CloseIcon size={14} />
                   </button>
                 )}
-                {showCalPop && (
-                  <MiniCalPopover
-                    selectedDate={selectedDate}
-                    onSelect={handleCalendarPick}
-                    onClose={() => setShowCalPop(false)}
+              </div>
+              {showCalPop && (
+                <MiniCalPopover
+                  selectedDate={selectedDate}
+                  onSelect={(date) => setDueValue(toDateInputValue(date))}
+                  onClose={() => setShowCalPop(false)}
+                />
+              )}
+            </div>
+
+            <div className="ui-field">
+              <span className="ui-field__label" id="ntm-assignee-label">Assignee</span>
+              <div className="ntm-assignee">
+                <button
+                  ref={assigneeTriggerRef}
+                  type="button"
+                  className="ntm-assignee__trigger"
+                  onClick={() => { setShowCalPop(false); setShowAssignee((v) => !v) }}
+                  aria-haspopup="menu"
+                  aria-expanded={showAssignee}
+                  aria-labelledby="ntm-assignee-label ntm-assignee-value"
+                >
+                  {owner && <MemberAvatar member={owner} size={22} />}
+                  <span className="ntm-assignee__value" id="ntm-assignee-value">
+                    {owner ? memberLabel(owner, currentUserId) : 'Unassigned'}
+                  </span>
+                  <ChevronDown />
+                </button>
+                {showAssignee && (
+                  <AssigneeMenu
+                    members={workspace.members}
+                    currentUserId={currentUserId}
+                    value={ownerId}
+                    onSelect={(id) => { setOwnerId(id); assigneeTriggerRef.current?.focus() }}
+                    onClose={() => setShowAssignee(false)}
                   />
                 )}
               </div>
             </div>
-
-            <div className="ntm-field-col">
-              <span className="ntm-field-label">Assignee</span>
-              <div className="ntm-assignee-row">
-                {workspace.members.map((m) => (
-                  <button
-                    key={m.id}
-                    type="button"
-                    className={`ntm-assignee-avatar${ownerId === m.id ? ' ntm-assignee-avatar--active' : ''}`}
-                    onClick={() => setOwnerId(m.id)}
-                    aria-label={`Assign to ${m.name}`}
-                    aria-pressed={ownerId === m.id}
-                    title={m.name}
-                  >
-                    <MemberAvatar member={m} size={22} />
-                  </button>
-                ))}
-              </div>
-            </div>
           </div>
 
-          <div className="ntm-resources">
-            <div className="ntm-resources__header">
-              <span className="ntm-field-label">Resources</span>
+          <div className="ui-field">
+            <div className="ntm-resources__head">
+              <span className="ui-field__label">Resources</span>
               <span className="ntm-resources__hint">Notes can be added after creation</span>
             </div>
 
-            <div className="ntm-resources__triggers">
-              {addingLink ? (
-                <div className="ntm-link-form">
-                  <input
-                    className="ntm-link-form__input"
-                    placeholder="Title"
-                    value={linkTitle}
-                    onChange={(e) => setLinkTitle(e.target.value)}
-                    autoFocus
-                  />
-                  <input
-                    className="ntm-link-form__input"
-                    placeholder="https://…"
-                    value={linkUrl}
-                    onChange={(e) => setLinkUrl(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddLink() } }}
-                  />
-                  <button type="button" className="ntm-link-form__add" onClick={handleAddLink}>Add</button>
-                  <button type="button" className="ntm-link-form__cancel" onClick={() => { setAddingLink(false); setLinkTitle(''); setLinkUrl('') }}>✕</button>
-                </div>
-              ) : (
-                <button type="button" className="ntm-resource-trigger" onClick={() => setAddingLink(true)}>
-                  <LinkIcon /> Add link
-                </button>
-              )}
+            {hasPending && (
+              <ul className="ntm-pending">
+                {pendingLinks.map((l, i) => (
+                  <li key={`link-${i}`} className="ntm-pending__row">
+                    <span className="ntm-pending__icon"><LinkIcon /></span>
+                    <span className="ntm-pending__label" title={l.url}>{l.title}</span>
+                    <button type="button" className="ui-icon-btn ui-icon-btn--sm" onClick={() => handleRemoveLink(i)} aria-label={`Remove ${l.title}`}>
+                      <TrashIcon />
+                    </button>
+                  </li>
+                ))}
+                {pendingFiles.map((f, i) => (
+                  <li key={`file-${i}`} className="ntm-pending__row">
+                    <span className="ntm-pending__icon"><FileIcon /></span>
+                    <span className="ntm-pending__label">{f.name}</span>
+                    <button type="button" className="ui-icon-btn ui-icon-btn--sm" onClick={() => handleRemoveFile(i)} aria-label={`Remove ${f.name}`}>
+                      <TrashIcon />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
 
-              <button type="button" className="ntm-resource-trigger" onClick={() => fileInputRef.current?.click()}>
-                <FileIcon /> Attach doc
+            <div className="ntm-resources__triggers">
+              <button type="button" className="ui-btn ui-btn--dashed ui-btn--sm" onClick={() => setAddingLink(true)}>
+                <LinkIcon /> Add link
+              </button>
+              <button type="button" className="ui-btn ui-btn--dashed ui-btn--sm" onClick={() => fileInputRef.current?.click()}>
+                <FileIcon /> Attach file
               </button>
               <input
                 ref={fileInputRef}
@@ -331,77 +435,65 @@ function NewTaskModal({ workspace, currentUserId, onClose, onCreate }) {
                 onChange={handleFilePicked}
               />
             </div>
-
-            {(pendingLinks.length > 0 || pendingFiles.length > 0) && (
-              <div className="ntm-pending-list">
-                {pendingLinks.map((l, i) => (
-                  <div key={`link-${i}`} className="ntm-pending-chip">
-                    <LinkIcon />
-                    <span className="ntm-pending-chip__label">{l.title}</span>
-                    <button type="button" className="ntm-pending-chip__remove" onClick={() => handleRemoveLink(i)} aria-label={`Remove ${l.title}`}>
-                      <TrashIcon />
-                    </button>
-                  </div>
-                ))}
-                {pendingFiles.map((f, i) => (
-                  <div key={`file-${i}`} className="ntm-pending-chip">
-                    <FileIcon />
-                    <span className="ntm-pending-chip__label">{f.name}</span>
-                    <button type="button" className="ntm-pending-chip__remove" onClick={() => handleRemoveFile(i)} aria-label={`Remove ${f.name}`}>
-                      <TrashIcon />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
 
+          {error && (
+            <p className="ntm-error" id="ntm-error" role="alert">
+              <AlertIcon />
+              <span>{error}</span>
+            </p>
+          )}
+
           <div className="ntm-footer">
-            <button type="button" className="ntm-btn-ghost" onClick={onClose}>
+            <button type="button" className="ui-btn ntm-plain-btn" onClick={onClose}>
               Cancel
             </button>
-            <button type="submit" className="ntm-btn-primary" disabled={!canSubmit}>
-              {loading ? 'Creating…' : 'Create task'}
+            <button
+              type="submit"
+              className={`ui-btn ui-btn--primary${loading ? ' ntm-submit--busy' : ''}`}
+              disabled={!canSubmit}
+              aria-busy={loading || undefined}
+            >
+              {showCreating ? 'Creating…' : 'Create task'}
             </button>
           </div>
         </form>
       </div>
+      {addingLink && <LinkDialog onAdd={handleAddLink} onClose={() => setAddingLink(false)} />}
     </div>
   )
 }
 
-function CloseIcon() {
+function CloseIcon({ size = 18 }) {
   return (
-    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-      <line x1="18" y1="6" x2="6" y2="18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-      <line x1="6" y1="6" x2="18" y2="18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+      <path d="M6 6l12 12M18 6L6 18" />
     </svg>
   )
 }
 
 function CalIcon() {
   return (
-    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-      <rect x="3" y="4" width="18" height="18" rx="2" />
-      <line x1="16" y1="2" x2="16" y2="6" />
-      <line x1="8" y1="2" x2="8" y2="6" />
-      <line x1="3" y1="10" x2="21" y2="10" />
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+      <rect x="4" y="5.5" width="16" height="14" rx="2.5" />
+      <path d="M4 10h16M8.5 3.5v4M15.5 3.5v4" />
     </svg>
   )
 }
 
-function ChevronLeft() {
+function AlertIcon() {
   return (
-    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
-      <polyline points="15 18 9 12 15 6" />
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7.5v5M12 16.2v.3" />
     </svg>
   )
 }
 
-function ChevronRight() {
+function ChevronDown() {
   return (
-    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
-      <polyline points="9 18 15 12 9 6" />
+    <svg className="ntm-chevron" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+      <path d="M6 9l6 6 6-6" />
     </svg>
   )
 }

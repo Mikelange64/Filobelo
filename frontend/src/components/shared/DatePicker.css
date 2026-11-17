@@ -1,0 +1,81 @@
+/* Shared date picker body (shared/DatePicker.jsx): the create modals' mini
+   calendar, weekends in red. The caller supplies the popover surface. */
+
+.dp__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.dp__title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.dp__grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+
+.dp__dow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 26px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-text-muted);
+}
+
+.dp__dow--weekend {
+  color: var(--color-error);
+}
+
+.dp__day {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 36px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-text-primary);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.1s;
+}
+
+.dp__day:hover:not(:disabled) {
+  background: var(--color-bg-canvas-hover);
+}
+
+.dp__day--weekend {
+  color: var(--color-error);
+}
+
+.dp__day--other {
+  color: var(--color-text-muted);
+  opacity: 0.45;
+  cursor: default;
+}
+
+.dp__day--other.dp__day--weekend {
+  color: var(--color-error);
+}
+
+.dp__day--today {
+  color: var(--color-brand-text);
+  font-weight: 700;
+}
+
+.dp__day--selected,
+.dp__day--selected:hover:not(:disabled) {
+  background: var(--color-brand-primary);
+  color: var(--color-text-on-brand);
+  font-weight: 600;
+}
