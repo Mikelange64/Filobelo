@@ -12,8 +12,11 @@
     display: flex;
     flex-direction: column;
     gap: 28px;
-    max-width: 1120px;
-    margin: 0 auto;
+    /* Pinned left, 48px from the sidebar, capped. The leftover width sits on
+       the right, which is where the task and chat panels slide in, so they
+       cover empty space rather than the list. Border-box: 1248 = 1152px of
+       content + 48px padding each side. */
+    max-width: 1248px;
     /* Bottom room so the floating Ask Filobelo / chat buttons never cover
        the last row. */
     padding: 32px 48px 120px;
