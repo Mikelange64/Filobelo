@@ -29,6 +29,8 @@ const EXPANDED_WIDTH = 1160
 
 const ASSIGN_ICON = 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 20a8 8 0 0 1 11-7.4M17 15l3 3-3 3M14 18h6'
 const EXPAND_ICON = 'M14 4h6v6M20 4l-7 7M10 20H4v-6M4 20l7-7'
+// A window with its right-hand column marked: dock the panel to the side.
+const DOCK_ICON = 'M4 5h16v14H4zM14.5 5v14'
 const COLLAPSE_ICON = 'M20 10h-6V4M14 10l7-7M4 14h6v6M10 14l-7 7'
 
 const TABS = [
@@ -48,6 +50,24 @@ function dueUrgency(dueDate, isDone) {
   if (days === 1) return { tone: 'warning', label: 'Due tomorrow' }
   if (days <= 3) return { tone: 'warning', label: `In ${days} days` }
   return null
+}
+
+// Docked or floating is remembered across visits, like the chat panel's.
+// Plain localStorage, wrapped: it can throw in private windows.
+const DOCK_KEY = 'filobelo.task.docked'
+function readDocked() {
+  try {
+    return localStorage.getItem(DOCK_KEY) === 'true'
+  } catch {
+    return false
+  }
+}
+function writeDocked(on) {
+  try {
+    localStorage.setItem(DOCK_KEY, String(on))
+  } catch {
+    /* ignore */
+  }
 }
 
 function Glyph({ d, size = 16 }) {
@@ -173,6 +193,17 @@ export default function SlideOver({ task, fullTask, slideOverLoading, workspace,
   const [menuOpen, setMenuOpen, menuRef, menuFloatingRef] = useDismissableMenu()
   const menuAnchorRef = useRef(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  // Floating (default): over the page, dimmed, closes on a click outside.
+  // Docked: fixed to the right edge, the page narrows to make room, and it
+  // stays open until closed. Only the compact panel docks; the expanded modal
+  // is centered, and collapsing it brings the dock back.
+  const [docked, setDocked] = useState(readDocked)
+  function toggleDocked() {
+    setDocked((v) => {
+      writeDocked(!v)
+      return !v
+    })
+  }
   const [activeTab, setActiveTab] = useState('links')
   const taskResources = useTaskResources(workspaceId, task.id, onToast)
   const descRef = useRef(null)
@@ -212,6 +243,7 @@ export default function SlideOver({ task, fullTask, slideOverLoading, workspace,
   const isDone = task.status === 'DONE'
   const canManage = isOwner || isAdmin
   const isExpanded = width > COMPACT_WIDTH
+  const isDocked = docked && !isExpanded
 
   async function handleTitleBlur() {
     const trimmed = editTitle.trim()
@@ -278,9 +310,11 @@ export default function SlideOver({ task, fullTask, slideOverLoading, workspace,
 
   return (
     <>
-      <div className={`slide-over-backdrop${isExpanded ? ' slide-over-backdrop--modal' : ''}`} onClick={onClose} aria-hidden="true" />
+      {!isDocked && (
+        <div className={`slide-over-backdrop${isExpanded ? ' slide-over-backdrop--modal' : ''}`} onClick={onClose} aria-hidden="true" />
+      )}
       <aside
-        className={`slide-over${isExpanded ? ' slide-over--modal' : ''}`}
+        className={`slide-over${isExpanded ? ' slide-over--modal' : ''}${isDocked ? ' slide-over--docked' : ''}`}
         role={isExpanded ? 'dialog' : undefined}
         aria-label="Task details"
       >
@@ -290,6 +324,18 @@ export default function SlideOver({ task, fullTask, slideOverLoading, workspace,
             <span className="slide-over__folder-square" style={{ backgroundColor: folderColor }} aria-hidden="true" />
           )}
           <span className="slide-over__workspace-name">{workspace.title}</span>
+          {!isExpanded && (
+            <button
+              type="button"
+              className="ui-icon-btn"
+              onClick={toggleDocked}
+              aria-pressed={docked}
+              aria-label={docked ? 'Undock (float over the page)' : 'Dock to the side'}
+              title={docked ? 'Undock (float over the page)' : 'Dock to the side'}
+            >
+              <Glyph d={DOCK_ICON} size={17} />
+            </button>
+          )}
           <button
             type="button"
             className="ui-icon-btn"

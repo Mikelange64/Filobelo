@@ -22,12 +22,14 @@
   --color-card-top-border: hsl(222 16% 56%);
 }
 
+/* Anchored to the main panel (.app-shell__main is position: relative), like
+   the chat panel, so a docked panel can be part of the frame. */
 .slide-over {
-  position: fixed;
+  position: absolute;
   top: 12px;
   right: 12px;
   bottom: 12px;
-  width: min(540px, calc(100vw - 24px));
+  width: min(540px, calc(100% - 24px));
   display: flex;
   flex-direction: column;
   background: var(--color-bg-card);
@@ -90,6 +92,28 @@
   padding: 28px 24px 32px;
 }
 
+/* ─── Docked: part of the frame ─────────────────────────────────────────────── */
+
+/* Not a card on top of the page: it fills the frame's right edge (the frame
+   clips its own rounded corners) and never takes more than half of it. */
+.slide-over--docked {
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(540px, 50%);
+  border: none;
+  border-left: 1px solid var(--color-frame-edge);
+  border-radius: 0;
+  box-shadow: none;
+}
+
+/* The page makes room: the scrolling area itself narrows, so its scrollbar
+   sits beside the panel, not under it. */
+.app-shell__content:has(.slide-over--docked) {
+  margin-right: min(540px, 50%);
+  transition: margin-right 0.2s ease;
+}
+
 /* ─── Expanded: centered modal ──────────────────────────────────────────────── */
 
 .slide-over-backdrop--modal {
@@ -97,6 +121,7 @@
 }
 
 .slide-over--modal {
+  position: fixed;
   top: 50%;
   left: 50%;
   right: auto;
