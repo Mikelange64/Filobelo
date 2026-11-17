@@ -1,18 +1,22 @@
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import InstrumentedAttribute
 
 from app.database import DbSession
 from app.models.reactions import CommentReaction, MessageReaction
 from app.schemas.reactions import ReactionSummary
 
 # Both reaction tables share the same shape, so one pair of helpers serves
-# comments and messages. `fk` is the table's target column
-# (CommentReaction.comment_id / MessageReaction.message_id).
+# comments and messages.
 ReactionModel = type[CommentReaction] | type[MessageReaction]
+# The column pointing at the thing reacted to: CommentReaction.comment_id or
+# MessageReaction.message_id. Accessed on the class, so it is an
+# InstrumentedAttribute, not a plain int.
+ReactionTarget = InstrumentedAttribute[int]
 
 
 async def summarize_reactions(
-    model: ReactionModel, fk, target_ids: list[int], user_id: int, db: DbSession
+    model: ReactionModel, fk: ReactionTarget, target_ids: list[int], user_id: int, db: DbSession
 ) -> dict[int, list[ReactionSummary]]:
     """{target_id: [ReactionSummary, ...]} for every target that has reactions.
 
@@ -42,7 +46,7 @@ async def summarize_reactions(
 
 
 async def toggle_reaction(
-    model: ReactionModel, fk, target_id: int, user_id: int, emoji: str, db: DbSession
+    model: ReactionModel, fk: ReactionTarget, target_id: int, user_id: int, emoji: str, db: DbSession
 ) -> None:
     """Add the user's reaction, or remove it if they already left it."""
     result = await db.execute(
