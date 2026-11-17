@@ -236,11 +236,23 @@
   color: var(--color-text-secondary);
 }
 
+/* An open fold is at least two header-heights tall (2 x 52px), so an empty
+   one still reads as a roomy drawer rather than a sliver. */
 .slide-over__fold-body {
   display: flex;
   flex-direction: column;
+  justify-content: center;
   gap: 8px;
-  padding: 0 12px 12px;
+  min-height: 104px;
+  box-sizing: border-box;
+  padding: 4px 12px 16px;
+}
+
+/* Open: the header's hover fill only rounds the top, so it sits flush with
+   the body below instead of bulging at the bottom corners. */
+.slide-over__fold-head[aria-expanded='true'] {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
 }
 
 .slide-over__fold-body .resources-panel {
@@ -248,7 +260,8 @@
 }
 
 .slide-over__fold-body .resources-panel__empty {
-  padding: 0 6px 4px;
+  padding: 0 6px;
+  text-align: center;
 }
 
 .slide-over--modal .slide-over__details-title {
