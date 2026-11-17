@@ -41,8 +41,9 @@
 
 /* Heavier text, as on Home: titles 700, labels and controls 600, body 500. */
 .ntm-modal .ui-modal__title {
-  font-size: 20px;
+  font-size: 25px;
   font-weight: 700;
+  letter-spacing: -0.01em;
 }
 
 .ntm-modal .ui-field__label {
@@ -97,7 +98,7 @@
   margin: 4px 0 0;
   overflow: hidden;
   color: var(--color-text-secondary);
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
