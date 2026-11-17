@@ -19,6 +19,7 @@ from .conversations import (
     PaginatedMessageResponse,
 )
 from .folders import FolderCreate, FolderResponse, FolderUpdate
+from .reactions import ALLOWED_REACTIONS, ReactionSummary, ReactionToggle
 from .resources import (
     LinkCreate,
     LinkResponse,
@@ -103,6 +104,11 @@ __all__ = [
     "CommentCreate",
     "CommentResponse",
     "CommentUpdate",
+
+    # REACTION
+    "ALLOWED_REACTIONS",
+    "ReactionSummary",
+    "ReactionToggle",
 
     # CONVERSATION
     "ConversationCreate",

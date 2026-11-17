@@ -4,12 +4,14 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select, func
 from app.database import DbSession
-from app.models import Comment, Task, TaskStatus, WorkspaceMember
+from app.models import Comment, CommentReaction, Task, TaskStatus, WorkspaceMember
 from app.schemas import (
     CommentCreate,
     CommentResponse,
     CommentUpdate,
     PaginatedTaskResponse,
+    ReactionSummary,
+    ReactionToggle,
     TaskCreate,
     TaskFullUpdate,
     TaskResponse,
@@ -18,6 +20,7 @@ from app.schemas import (
 )
 from app.dependencies import get_target_membership, require_membership
 from app.utils import get_task_by_id
+from app.utils.reactions import summarize_reactions, toggle_reaction
 
 
 router = APIRouter(prefix="/{workspace_id}/tasks", tags=["tasks"])
@@ -212,6 +215,21 @@ async def _get_comment(
     return comment
 
 
+async def _comments_out(
+    comments: list[Comment], user_id: int, db: DbSession
+) -> list[CommentResponse]:
+    """Comments with their reactions attached, from one extra query."""
+    summaries = await summarize_reactions(
+        CommentReaction, CommentReaction.comment_id, [c.id for c in comments], user_id, db
+    )
+    return [
+        CommentResponse.model_validate(c).model_copy(
+            update={"reactions": summaries.get(c.id, [])}
+        )
+        for c in comments
+    ]
+
+
 @router.post(
     "/{task_id}/comments",
     response_model=CommentResponse,
@@ -230,21 +248,22 @@ async def leave_comment(
     db.add(comment)
     await db.commit()
     await db.refresh(comment)
-    return comment
+    return (await _comments_out([comment], member.user_id, db))[0]
 
 
-@router.get(
-    "/{task_id}/comments",
-    response_model=list[CommentResponse],
-    dependencies=[Depends(require_membership)],
-)
-async def list_comments(workspace_id: int, task_id: int, db: DbSession):
+@router.get("/{task_id}/comments", response_model=list[CommentResponse])
+async def list_comments(
+    workspace_id: int,
+    task_id: int,
+    db: DbSession,
+    member: Annotated[WorkspaceMember, Depends(require_membership)],
+):
     await get_task_by_id(task_id, workspace_id, db)
 
     result = await db.execute(
         select(Comment).where(Comment.task_id == task_id).order_by(Comment.left_at, Comment.id)
     )
-    return result.scalars().all()
+    return await _comments_out(list(result.scalars().all()), member.user_id, db)
 
 
 @router.patch("/{task_id}/comments/{comment_id}", response_model=CommentResponse)
@@ -270,7 +289,33 @@ async def edit_comment(
     comment.edited_at = datetime.now(UTC)
     await db.commit()
     await db.refresh(comment)
-    return comment
+    return (await _comments_out([comment], member.user_id, db))[0]
+
+
+@router.post(
+    "/{task_id}/comments/{comment_id}/reactions", response_model=list[ReactionSummary]
+)
+async def toggle_comment_reaction(
+    workspace_id: int,
+    task_id: int,
+    comment_id: int,
+    data: ReactionToggle,
+    db: DbSession,
+    member: Annotated[WorkspaceMember, Depends(require_membership)],
+):
+    """Add the caller's reaction, or remove it if they already left it.
+
+    Returns the comment's full reaction list so the client can replace its
+    chips in one go instead of patching counts locally.
+    """
+    comment = await _get_comment(workspace_id, task_id, comment_id, db)
+    await toggle_reaction(
+        CommentReaction, CommentReaction.comment_id, comment.id, member.user_id, data.emoji, db
+    )
+    summaries = await summarize_reactions(
+        CommentReaction, CommentReaction.comment_id, [comment.id], member.user_id, db
+    )
+    return summaries.get(comment.id, [])
 
 
 @router.delete("/{task_id}/comments/{comment_id}", status_code=status.HTTP_204_NO_CONTENT)

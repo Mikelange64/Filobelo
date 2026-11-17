@@ -1,6 +1,7 @@
 from .associations import WorkspaceMember
 from .comments import Comment
 from .conversations import Conversation, ConversationType, Message, SenderType
+from .reactions import CommentReaction, MessageReaction
 from .resources import Resource, ResourceType
 from .tasks import Task, TaskStatus
 from .users import PasswordResetToken, RefreshToken, User, VerificationToken
@@ -36,4 +37,8 @@ __all__ = [
 
     # comments.py
     "Comment",
+
+    # reactions.py
+    "CommentReaction",
+    "MessageReaction",
 ]
