@@ -28,8 +28,8 @@
   gap: 8px;
   margin: 0;
   padding: 2px 6px 4px;
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 15px;
+  font-weight: 700;
   color: var(--color-text-primary);
 }
 
@@ -51,8 +51,8 @@
 }
 
 .kanban-column__count {
-  font-weight: 500;
-  color: var(--color-text-muted);
+  font-weight: 600;
+  color: var(--color-text-secondary);
 }
 
 .kanban-column__empty {
@@ -62,7 +62,8 @@
   height: 88px;
   border: 1.5px dashed var(--color-border);
   border-radius: 12px;
-  font-size: 13px;
+  font-size: 14px;
+  font-weight: 500;
   color: var(--color-text-muted);
 }
 
@@ -72,8 +73,8 @@
   border: none;
   border-radius: var(--radius-control);
   background: transparent;
-  font-size: 13px;
-  font-weight: 500;
+  font-size: 14px;
+  font-weight: 600;
   color: var(--color-text-secondary);
   text-align: left;
   cursor: pointer;
@@ -129,8 +130,8 @@
 .kanban-card__title {
   margin: 0;
   min-width: 0;
-  font-size: 14px;
-  font-weight: 500;
+  font-size: 15px;
+  font-weight: 600;
   line-height: 1.4;
   color: var(--color-text-primary);
   overflow-wrap: anywhere;
@@ -153,8 +154,8 @@
 }
 
 .kanban-card__due {
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .kanban-card__due--error {
