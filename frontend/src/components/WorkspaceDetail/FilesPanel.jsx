@@ -2,8 +2,11 @@ import { useState, useRef } from 'react'
 import { uploadResourceFile } from '../../api/client'
 import useDelayedFlag from '../../hooks/useDelayedFlag'
 import ResourceRow from './ResourceRow'
+import { FileIcon } from './icons'
 
-export default function FilesPanel({ workspaceId, taskId, resources, loading, onAdded, onToast, onDelete }) {
+// part: 'all' (list + add, the compact tabs), 'list' (attached items only) or
+// 'add' (just the add control, for the expanded modal's Attachments row).
+export default function FilesPanel({ part = 'all', workspaceId, taskId, resources, loading, onAdded, onToast, onDelete }) {
   const [uploading, setUploading] = useState(false)
   const showUploading = useDelayedFlag(uploading)
   const fileRef = useRef(null)
@@ -23,20 +26,8 @@ export default function FilesPanel({ workspaceId, taskId, resources, loading, on
     }
   }
 
-  return (
-    <div className="resources-panel" role="tabpanel" aria-label="Files">
-      {loading ? (
-        <p className="slide-over__muted">Loading…</p>
-      ) : resources.length === 0 ? (
-        <p className="resources-panel__empty">No files yet.</p>
-      ) : (
-        <div className="resources-panel__list">
-          {resources.map((r) => (
-            <ResourceRow key={r.id} resource={r} onDelete={() => onDelete(r.id)} onToast={onToast} />
-          ))}
-        </div>
-      )}
-
+  const add = (
+    <>
       <input ref={fileRef} type="file" className="resources-panel__file-input" onChange={handleFileChange} tabIndex={-1} aria-hidden="true" />
       <button
         type="button"
@@ -44,8 +35,29 @@ export default function FilesPanel({ workspaceId, taskId, resources, loading, on
         onClick={() => fileRef.current?.click()}
         disabled={uploading}
       >
-        {showUploading ? 'Uploading…' : '+ Add file'}
+        {part === 'add'
+          ? <><FileIcon /> {showUploading ? 'Uploading…' : 'Attach file'}</>
+          : showUploading ? 'Uploading…' : '+ Add file'}
       </button>
+    </>
+  )
+
+  if (part === 'add') return add
+
+  return (
+    <div className="resources-panel" role={part === 'all' ? 'tabpanel' : undefined} aria-label="Files">
+      {loading ? (
+        <p className="slide-over__muted">Loading…</p>
+      ) : resources.length === 0 ? (
+        part === 'all' && <p className="resources-panel__empty">No files yet.</p>
+      ) : (
+        <div className="resources-panel__list">
+          {resources.map((r) => (
+            <ResourceRow key={r.id} resource={r} onDelete={() => onDelete(r.id)} onToast={onToast} />
+          ))}
+        </div>
+      )}
+      {part === 'all' && add}
     </div>
   )
 }

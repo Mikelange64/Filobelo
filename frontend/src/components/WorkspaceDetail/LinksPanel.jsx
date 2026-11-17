@@ -3,8 +3,11 @@ import useDismissableMenu from '../../hooks/useDismissableMenu'
 import useDelayedFlag from '../../hooks/useDelayedFlag'
 import { createLink } from '../../api/client'
 import ResourceRow from './ResourceRow'
+import { LinkIcon } from './icons'
 
-export default function LinksPanel({ workspaceId, taskId, resources, loading, onAdded, onDelete, onUpdate, onToast }) {
+// part: 'all' (list + add, the compact tabs), 'list' (attached items only) or
+// 'add' (just the add control, for the expanded modal's Attachments row).
+export default function LinksPanel({ part = 'all', workspaceId, taskId, resources, loading, onAdded, onDelete, onUpdate, onToast }) {
   const [adding, setAdding, formRef] = useDismissableMenu()
   const [title, setTitle] = useState('')
   const [url, setUrl] = useState('')
@@ -35,21 +38,10 @@ export default function LinksPanel({ workspaceId, taskId, resources, loading, on
     }
   }
 
-  return (
-    <div className="resources-panel" role="tabpanel" aria-label="Links">
-      {loading ? (
-        <p className="slide-over__muted">Loading…</p>
-      ) : resources.length === 0 ? (
-        !adding && <p className="resources-panel__empty">No links yet.</p>
-      ) : (
-        <div className="resources-panel__list">
-          {resources.map((r) => (
-            <ResourceRow key={r.id} resource={r} onDelete={() => onDelete(r.id)} onUpdate={onUpdate} onToast={onToast} />
-          ))}
-        </div>
-      )}
+  const showList = part !== 'add'
+  const showAdd = part !== 'list'
 
-      {adding ? (
+  const add = adding ? (
         <div className="resource-form" ref={formRef}>
           <input
             className="ui-input"
@@ -82,9 +74,26 @@ export default function LinksPanel({ workspaceId, taskId, resources, loading, on
         </div>
       ) : (
         <button type="button" className="ui-btn ui-btn--dashed ui-btn--sm resources-panel__add" onClick={() => setAdding(true)}>
-          + Add link
+          {part === 'add' ? <><LinkIcon /> Add link</> : '+ Add link'}
         </button>
-      )}
+      )
+
+  if (part === 'add') return add
+
+  return (
+    <div className="resources-panel" role={part === 'all' ? 'tabpanel' : undefined} aria-label="Links">
+      {showList && (loading ? (
+        <p className="slide-over__muted">Loading…</p>
+      ) : resources.length === 0 ? (
+        part === 'all' && !adding && <p className="resources-panel__empty">No links yet.</p>
+      ) : (
+        <div className="resources-panel__list">
+          {resources.map((r) => (
+            <ResourceRow key={r.id} resource={r} onDelete={() => onDelete(r.id)} onUpdate={onUpdate} onToast={onToast} />
+          ))}
+        </div>
+      ))}
+      {showAdd && add}
     </div>
   )
 }

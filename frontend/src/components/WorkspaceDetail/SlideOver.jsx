@@ -58,6 +58,30 @@ function Glyph({ d, size = 16 }) {
   )
 }
 
+// A collapsible group in the modal's right column. Left alone it opens when it
+// has something in it and stays shut when it doesn't; once clicked it stays
+// where the user put it.
+function Fold({ label, count, loading, emptyText, children }) {
+  const [userOpen, setUserOpen] = useState(null)
+  const open = userOpen ?? count > 0
+  return (
+    <section className="slide-over__fold">
+      <button type="button" className="slide-over__fold-head" aria-expanded={open} onClick={() => setUserOpen(!open)}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true" className="slide-over__fold-chevron">
+          <path d="M9 6l6 6-6 6" />
+        </svg>
+        <span className="slide-over__fold-label">{label}</span>
+        <span className="slide-over__fold-hint">{loading ? '' : count > 0 ? count : 'None yet'}</span>
+      </button>
+      {open && (
+        <div className="slide-over__fold-body">
+          {loading ? <p className="slide-over__muted">Loading…</p> : count === 0 ? <p className="resources-panel__empty">{emptyText}</p> : children}
+        </div>
+      )}
+    </section>
+  )
+}
+
 // Date picker for the Due row. Any member can change it, like the title and
 // description. A picked date saves straight away; Clear sends null.
 function DueField({ task, isDone, onSave }) {
@@ -210,6 +234,25 @@ export default function SlideOver({ task, fullTask, slideOverLoading, workspace,
     notes: taskResources.notes.length,
   }
 
+  const resourceProps = {
+    workspaceId,
+    taskId: task.id,
+    loading: taskResources.loading,
+    onAdded: taskResources.handleAdded,
+    onDelete: taskResources.handleDelete,
+    onToast,
+  }
+
+  // The one deliberate placeholder in the app: comments are the next feature.
+  // A quiet empty state, nothing to click.
+  const commentsEmpty = (
+    <div className="slide-over__comments-empty" role="tabpanel" aria-label="Comments">
+      <span className="slide-over__comments-icon"><ChatIcon /></span>
+      <p className="slide-over__comments-title">No comments yet</p>
+      <p className="slide-over__comments-text">Comments on this task will show here.</p>
+    </div>
+  )
+
   const menuItems = [
     {
       id: 'toggle',
@@ -306,6 +349,7 @@ export default function SlideOver({ task, fullTask, slideOverLoading, workspace,
           </div>
 
           <div className="slide-over__side">
+          <div className="slide-over__details-card">
           <h3 className="slide-over__details-title">Details</h3>
           <dl className="slide-over__fields">
             <dt>Assignee</dt>
@@ -331,6 +375,21 @@ export default function SlideOver({ task, fullTask, slideOverLoading, workspace,
           </dl>
           </div>
 
+          {/* Expanded only: what is already attached lives here, apart from the
+              Attachments row on the left that adds new things. */}
+          {isExpanded && (
+            <>
+              <Fold label="Links & files" count={counts.links + counts.files} loading={taskResources.loading} emptyText="No links or files yet.">
+                <LinksPanel part="list" {...resourceProps} resources={taskResources.links} onUpdate={taskResources.handleUpdate} />
+                <FilesPanel part="list" {...resourceProps} resources={taskResources.files} />
+              </Fold>
+              <Fold label="Notes" count={counts.notes} loading={taskResources.loading} emptyText="No notes yet.">
+                <NotesPanel part="list" {...resourceProps} resources={taskResources.notes} onUpdate={taskResources.handleUpdate} />
+              </Fold>
+            </>
+          )}
+          </div>
+
           <div className="slide-over__section slide-over__section--description">
             <label className="slide-over__section-label" htmlFor="slide-over-description">Description</label>
             {slideOverLoading ? (
@@ -349,6 +408,22 @@ export default function SlideOver({ task, fullTask, slideOverLoading, workspace,
             )}
           </div>
 
+          {isExpanded ? (
+            <>
+              <div className="slide-over__section slide-over__section--attach">
+                <h3 className="slide-over__section-label">Attachments</h3>
+                <div className="slide-over__attach-row">
+                  <LinksPanel part="add" {...resourceProps} resources={taskResources.links} />
+                  <FilesPanel part="add" {...resourceProps} resources={taskResources.files} />
+                  <NotesPanel part="add" {...resourceProps} resources={taskResources.notes} />
+                </div>
+              </div>
+              <div className="slide-over__section slide-over__section--comments">
+                <h3 className="slide-over__section-label">Comments</h3>
+                {commentsEmpty}
+              </div>
+            </>
+          ) : (
           <div className="slide-over__section slide-over__section--tabs">
             <div className="slide-over__tabs" role="tablist" aria-label="Task attachments">
               {TABS.map((tab) => (
@@ -401,16 +476,9 @@ export default function SlideOver({ task, fullTask, slideOverLoading, workspace,
                 onToast={onToast}
               />
             )}
-            {/* The one deliberate placeholder in the app: comments are the
-                next feature. A quiet empty state, nothing to click. */}
-            {activeTab === 'comments' && (
-              <div className="slide-over__comments-empty" role="tabpanel" aria-label="Comments">
-                <span className="slide-over__comments-icon"><ChatIcon /></span>
-                <p className="slide-over__comments-title">No comments yet</p>
-                <p className="slide-over__comments-text">Comments on this task will show here.</p>
-              </div>
-            )}
+            {activeTab === 'comments' && commentsEmpty}
           </div>
+          )}
         </div>
       </aside>
 
