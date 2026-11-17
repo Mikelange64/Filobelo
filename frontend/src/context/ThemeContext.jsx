@@ -5,9 +5,10 @@ const VALID_THEMES = ['light', 'dark', 'midnight']
 const ThemeContext = createContext(null)
 
 // Interface size. 'default' draws the app at 90% (like browser zoom at 90%),
-// 'large' at 100%. Applied as --ui-zoom on <html>; see styles/global.css.
+// 'compact' at 80%, 'large' at 100%. Applied as --ui-zoom on <html>; see
+// styles/global.css.
 const SCALE_KEY = 'filobelo-ui-scale'
-const UI_SCALES = { default: 0.9, large: 1 }
+const UI_SCALES = { compact: 0.8, default: 0.9, large: 1 }
 
 function getInitialScale() {
   try {

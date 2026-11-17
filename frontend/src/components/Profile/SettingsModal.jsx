@@ -9,6 +9,7 @@ import {
   uploadAvatarRequest,
 } from '../../api/client'
 import useDelayedFlag from '../../hooks/useDelayedFlag'
+import { getStartCollapsed, setStartCollapsed } from '../../utils/sidebarPref'
 import ConfirmModal from '../shared/ConfirmModal'
 import './SettingsModal.css'
 
@@ -262,8 +263,33 @@ function ThemePreview({ p }) {
   )
 }
 
+// Interface size: whole-interface zoom (text and components together).
+const SCALE_OPTIONS = [
+  { id: 'compact', label: 'Compact' },
+  { id: 'default', label: 'Default' },
+  { id: 'large',   label: 'Large' },
+]
+
 function AppearancePanel() {
-  const { theme, setTheme } = useTheme()
+  const { theme, setTheme, scale, setScale } = useTheme()
+  const [startCollapsed, setStartCollapsedState] = useState(getStartCollapsed)
+
+  function toggleStartCollapsed() {
+    const next = !startCollapsed
+    setStartCollapsedState(next)
+    setStartCollapsed(next)
+  }
+
+  function handleScaleKeyDown(e) {
+    const i = SCALE_OPTIONS.findIndex((o) => o.id === scale)
+    let next
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') next = (i + 1) % SCALE_OPTIONS.length
+    else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') next = (i - 1 + SCALE_OPTIONS.length) % SCALE_OPTIONS.length
+    else return
+    e.preventDefault()
+    setScale(SCALE_OPTIONS[next].id)
+    e.currentTarget.querySelectorAll('[role="radio"]')[next]?.focus()
+  }
   const optionRefs = useRef([])
   const found = THEME_OPTIONS.findIndex((t) => t.id === theme)
   const activeIndex = found === -1 ? 0 : found
@@ -309,6 +335,50 @@ function AppearancePanel() {
             )
           })}
         </div>
+      </section>
+
+      <section className="sm-pref">
+        <div className="sm-row-text">
+          <h3 className="sm-section__title" id="sm-scale-label">Text size</h3>
+          <span className="sm-row-text__desc">Scales the whole interface, like browser zoom.</span>
+        </div>
+        <div
+          className="ui-seg sm-pref__seg"
+          role="radiogroup"
+          aria-labelledby="sm-scale-label"
+          onKeyDown={handleScaleKeyDown}
+        >
+          {SCALE_OPTIONS.map((o) => (
+            <button
+              key={o.id}
+              type="button"
+              role="radio"
+              aria-checked={scale === o.id}
+              tabIndex={scale === o.id ? 0 : -1}
+              className="ui-seg__opt"
+              onClick={() => setScale(o.id)}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section className="sm-pref">
+        <div className="sm-row-text">
+          <h3 className="sm-section__title" id="sm-collapsed-label">Start with sidebar collapsed</h3>
+          <span className="sm-row-text__desc">More room for tasks on smaller screens. Applies each time the app loads.</span>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={startCollapsed}
+          aria-labelledby="sm-collapsed-label"
+          className="sm-switch"
+          onClick={toggleStartCollapsed}
+        >
+          <span className="sm-switch__knob" />
+        </button>
       </section>
     </div>
   )
