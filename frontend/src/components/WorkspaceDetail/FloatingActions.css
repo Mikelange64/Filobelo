@@ -12,12 +12,15 @@
     z-index: 100;
 }
 
+/* Collapsed: a 48px circle (16 + 16px icon + 16), same size as the chat
+   button. Hover or keyboard focus slides the label out to the left; the
+   width follows the label's max-width, so it animates smoothly. */
 .floating-actions__ask {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: 0;
     height: 48px;
-    padding: 0 20px 0 18px;
+    padding: 0 16px;
     border: none;
     border-radius: var(--radius-pill);
     background: var(--color-brand-primary);
@@ -26,13 +29,34 @@
     font: inherit;
     font-size: 15px;
     font-weight: 600;
+    white-space: nowrap;
     cursor: pointer;
-    transition: background 0.15s ease, transform 0.1s ease;
+    transition: gap 0.2s ease, padding 0.2s ease, background 0.15s ease, transform 0.1s ease;
 }
 
-.floating-actions__ask:hover {
+.floating-actions__ask svg {
+    flex-shrink: 0;
+}
+
+.floating-actions__ask-label {
+    max-width: 0;
+    overflow: hidden;
+    opacity: 0;
+    transition: max-width 0.2s ease, opacity 0.15s ease;
+}
+
+.floating-actions__ask:hover,
+.floating-actions__ask:focus-visible {
+    gap: 8px;
+    padding: 0 20px 0 18px;
     background: var(--color-brand-primary-hover);
     transform: translateY(-1px);
+}
+
+.floating-actions__ask:hover .floating-actions__ask-label,
+.floating-actions__ask:focus-visible .floating-actions__ask-label {
+    max-width: 120px;
+    opacity: 1;
 }
 
 .floating-actions__chat {

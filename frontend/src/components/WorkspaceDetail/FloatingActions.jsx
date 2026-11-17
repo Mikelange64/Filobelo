@@ -8,9 +8,11 @@ export default function FloatingActions({ onAskFilobelo, onOpenConversations, is
   return (
     <div className="floating-actions">
       {isPremium && (
-        <button type="button" className="floating-actions__ask" onClick={onAskFilobelo}>
+        // A circle like the chat button; widens to "Ask Filobelo" on hover
+        // or keyboard focus.
+        <button type="button" className="floating-actions__ask" onClick={onAskFilobelo} aria-label="Ask Filobelo">
           <SparkleIcon size={16} />
-          Ask Filobelo
+          <span className="floating-actions__ask-label" aria-hidden="true">Ask Filobelo</span>
         </button>
       )}
       <button
