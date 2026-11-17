@@ -180,9 +180,11 @@
   border-radius: 4px;
 }
 
-/* No folder: an empty outlined square, not a colour. */
+/* No folder: an empty outlined square with a firm line, not a colour. A real
+   folder always shows a filled square, so the two can't be confused even if
+   someone names a folder "No folder". */
 .nwm-folder__swatch--none {
-  border: 1.5px dashed var(--color-border-strong);
+  border: 2px solid var(--color-text-muted);
 }
 
 .nwm-folder__menu {
