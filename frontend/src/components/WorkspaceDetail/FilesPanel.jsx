@@ -1,9 +1,14 @@
 import { useState, useRef } from 'react'
 import { uploadResourceFile } from '../../api/client'
+import useDelayedFlag from '../../hooks/useDelayedFlag'
 import ResourceRow from './ResourceRow'
+import { FileIcon } from './icons'
 
-export default function FilesPanel({ workspaceId, taskId, resources, loading, onAdded, onToast, onDelete }) {
+// part: 'all' (list + add, the compact tabs), 'list' (attached items only) or
+// 'add' (just the add control, for the expanded modal's Attachments row).
+export default function FilesPanel({ part = 'all', workspaceId, taskId, resources, loading, onAdded, onToast, onDelete }) {
   const [uploading, setUploading] = useState(false)
+  const showUploading = useDelayedFlag(uploading)
   const fileRef = useRef(null)
 
   async function handleFileChange(e) {
@@ -21,12 +26,30 @@ export default function FilesPanel({ workspaceId, taskId, resources, loading, on
     }
   }
 
+  const add = (
+    <>
+      <input ref={fileRef} type="file" className="resources-panel__file-input" onChange={handleFileChange} tabIndex={-1} aria-hidden="true" />
+      <button
+        type="button"
+        className="ui-btn ui-btn--dashed ui-btn--sm resources-panel__add"
+        onClick={() => fileRef.current?.click()}
+        disabled={uploading}
+      >
+        {part === 'add'
+          ? <><FileIcon /> {showUploading ? 'Uploading…' : 'Attach file'}</>
+          : showUploading ? 'Uploading…' : '+ Add file'}
+      </button>
+    </>
+  )
+
+  if (part === 'add') return add
+
   return (
-    <div className="resources-panel">
+    <div className="resources-panel" role={part === 'all' ? 'tabpanel' : undefined} aria-label="Files">
       {loading ? (
         <p className="slide-over__muted">Loading…</p>
       ) : resources.length === 0 ? (
-        <div className="resources-panel__empty">No files yet.</div>
+        part === 'all' && <p className="resources-panel__empty">No files yet.</p>
       ) : (
         <div className="resources-panel__list">
           {resources.map((r) => (
@@ -34,18 +57,7 @@ export default function FilesPanel({ workspaceId, taskId, resources, loading, on
           ))}
         </div>
       )}
-
-      <div className="resources-panel__add-row">
-        <input ref={fileRef} type="file" className="resources-panel__file-input" onChange={handleFileChange} tabIndex={-1} />
-        <button
-          type="button"
-          className="resources-panel__add-btn"
-          onClick={() => fileRef.current?.click()}
-          disabled={uploading}
-        >
-          {uploading ? 'Uploading…' : '+ File'}
-        </button>
-      </div>
+      {part === 'all' && add}
     </div>
   )
 }

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { getWorkspaceStatus, WORKSPACE_STATUS } from '../../utils/workspaceStatus'
 import { getDaysRemaining, formatDayCount } from '../../utils/date'
+import { getUiZoom } from '../../utils/uiZoom'
 import './WorkspaceCard.css'
 
 // The one alert a card may carry. Status colour is reserved for things that
@@ -104,7 +105,8 @@ function WorkspaceCard({ workspace, folder, members, onSelect, onComplete }) {
   function handleContextMenu(e) {
     if (!onComplete) return
     e.preventDefault()
-    setCtxMenu({ x: e.clientX, y: e.clientY })
+    const z = getUiZoom()
+    setCtxMenu({ x: e.clientX / z, y: e.clientY / z })
   }
 
   return (

@@ -1,86 +1,25 @@
 import { useState } from 'react'
 import useDismissableMenu from '../../hooks/useDismissableMenu'
-import { formatDueDate } from '../../utils/date'
-import { getTaskUrgency } from './helpers'
+import ActionMenu, { MENU_ICON } from '../shared/ActionMenu'
 import { DotsIcon, CheckIcon } from './icons'
+import { PAGE_MENU_ICON } from './pageMenuIcons'
+import { getDueLabel } from './taskDue'
 import MemberAvatar from './MemberAvatar'
 import ColorDots from '../shared/ColorDots'
 
-function TaskRowMenu({ isDone, isOwner, isAdmin, taskColor, onRename, onToggle, onReassign, onColorChange, onDelete }) {
-  const [isOpen, setIsOpen, ref] = useDismissableMenu()
-  const [pickingColor, setPickingColor] = useState(false)
-  const canManage = isOwner || isAdmin
-
-  function closeMenu() {
-    setIsOpen(false)
-    setPickingColor(false)
-  }
-
-  return (
-    <div className="task-row__menu-wrap" ref={ref}>
-      <button
-        type="button"
-        className="task-row__menu-trigger"
-        onClick={(e) => { e.stopPropagation(); setPickingColor(false); setIsOpen((v) => !v) }}
-        aria-label="Task actions"
-      >
-        <DotsIcon />
-      </button>
-      {isOpen && (
-        pickingColor ? (
-          <div className="wd-menu-list" role="menu">
-            <ColorDots value={taskColor} onChange={(c) => { onColorChange(c); closeMenu() }} />
-          </div>
-        ) : (
-          <ul className="wd-menu-list" role="menu">
-            <li role="none">
-              <button type="button" role="menuitem" className="wd-menu-item"
-                onClick={() => { onRename(); setIsOpen(false) }}>
-                Rename
-              </button>
-            </li>
-            <li role="none">
-              <button type="button" role="menuitem" className="wd-menu-item"
-                onClick={() => setPickingColor(true)}>
-                Change color
-              </button>
-            </li>
-            <li role="none">
-              <button type="button" role="menuitem" className="wd-menu-item"
-                onClick={() => { onToggle(); setIsOpen(false) }}>
-                {isDone ? 'Mark incomplete' : 'Mark complete'}
-              </button>
-            </li>
-            {canManage && (
-              <li role="none">
-                <button type="button" role="menuitem" className="wd-menu-item"
-                  onClick={() => { onReassign(); setIsOpen(false) }}>
-                  Reassign
-                </button>
-              </li>
-            )}
-            {canManage && (
-              <li role="none">
-                <button type="button" role="menuitem" className="wd-menu-item wd-menu-item--danger"
-                  onClick={() => { onDelete(); setIsOpen(false) }}>
-                  Delete
-                </button>
-              </li>
-            )}
-          </ul>
-        )
-      )}
-    </div>
-  )
-}
-
-export default function TaskRow({ task, member, isAdmin, currentUserId, onSelect, onToggle, onReassign, onDelete, onRename, onColorChange }) {
-  const urgency = getTaskUrgency(task.dueDate)
+export default function TaskRow({ task, member, isAdmin, currentUserId, isSelected, onSelect, onToggle, onReassign, onDelete, onRename, onColorChange }) {
   const isOwner = task.ownerId === currentUserId
+  const canManage = isOwner || isAdmin
   const isDone = task.status === 'DONE'
   const canToggle = true
+  const due = getDueLabel(task.dueDate, isDone)
   const [isRenaming, setIsRenaming] = useState(false)
   const [renameValue, setRenameValue] = useState(task.title)
+  const [menuOpen, setMenuOpen, menuRef, floatingRef] = useDismissableMenu()
+  // The menu opens beside the ⋯ (into the free space right of the list).
+  // The colour flyout continues to the right only when the menu and the
+  // flyout both fit there; otherwise it opens back over the list.
+  const [flyoutLeft, setFlyoutLeft] = useState(false)
 
   async function handleRenameSave() {
     const trimmed = renameValue.trim()
@@ -89,17 +28,58 @@ export default function TaskRow({ task, member, isAdmin, currentUserId, onSelect
     await onRename(task.id, trimmed)
   }
 
+  const menuItems = [
+    {
+      id: 'rename',
+      label: 'Rename',
+      icon: MENU_ICON.rename,
+      onSelect: () => { setRenameValue(task.title); setIsRenaming(true) },
+    },
+    {
+      id: 'color',
+      label: 'Change colour',
+      icon: MENU_ICON.palette,
+      submenu: (
+        <div className="task-row__colors">
+          <ColorDots
+            value={task.color}
+            onChange={(c) => { setMenuOpen(false); onColorChange(task.id, c) }}
+          />
+        </div>
+      ),
+    },
+    {
+      id: 'toggle',
+      label: isDone ? 'Mark incomplete' : 'Mark complete',
+      icon: isDone ? MENU_ICON.reopen : MENU_ICON.done,
+      onSelect: onToggle,
+    },
+    canManage && {
+      id: 'reassign',
+      label: 'Reassign',
+      icon: PAGE_MENU_ICON.reassign,
+      onSelect: onReassign,
+    },
+    canManage && {
+      id: 'delete',
+      label: 'Delete task',
+      icon: MENU_ICON.trash,
+      danger: true,
+      separatorBefore: true,
+      onSelect: onDelete,
+    },
+  ]
+
   return (
     <div
-      className={`task-row${isDone ? ' task-row--completed' : ''}`}
-      style={{ '--task-row-color': task.color }}
+      className={`task-row${isDone ? ' task-row--done' : ''}${isSelected ? ' task-row--selected' : ''}${menuOpen ? ' task-row--menu-open' : ''}`}
     >
       {canToggle ? (
         <button
           type="button"
           className={`task-row__checkbox${isDone ? ' task-row__checkbox--checked' : ''}`}
           onClick={onToggle}
-          aria-label={isDone ? 'Mark incomplete' : 'Mark complete'}
+          aria-label={isDone ? `Mark "${task.title}" incomplete` : `Mark "${task.title}" complete`}
         >
           {isDone && <CheckIcon />}
         </button>
@@ -112,9 +92,12 @@ export default function TaskRow({ task, member, isAdmin, currentUserId, onSelect
         </span>
       )}
 
+      <span className="task-row__color" style={{ backgroundColor: task.color }} aria-hidden="true" />
+
       {isRenaming ? (
         <input
           className="task-row__title-input"
+          aria-label="Task title"
           value={renameValue}
           onChange={(e) => setRenameValue(e.target.value)}
           onClick={(e) => e.stopPropagation()}
@@ -132,41 +115,40 @@ export default function TaskRow({ task, member, isAdmin, currentUserId, onSelect
         </button>
       )}
 
-      {member && (
-        isDone ? (
-          <span className="task-row__name task-row__name--muted">{member.name}</span>
-        ) : (
-          <span className="task-row__assignee">
-            <MemberAvatar member={member} size={23} />
-            <span className="task-row__name">{member.name}</span>
-          </span>
-        )
-      )}
+      <span className={`task-row__due task-row__due--${due.tone}`}>{due.text}</span>
 
-      {isDone ? (
-        <span className="task-row__completed-label">Completed</span>
-      ) : (
-        task.dueDate
-          ? (
-            <span className={`task-row__due task-row__due--${urgency}`}>
-              {formatDueDate(task.dueDate)}
-            </span>
-          ) : (
-            <span className="task-row__due task-row__due--neutral">No deadline</span>
-          )
-      )}
+      <span className="task-row__assignee">
+        {member && <MemberAvatar member={member} size={26} />}
+      </span>
 
-      <TaskRowMenu
-        isDone={isDone}
-        isOwner={isOwner}
-        isAdmin={isAdmin}
-        taskColor={task.color}
-        onRename={() => setIsRenaming(true)}
-        onToggle={onToggle}
-        onReassign={onReassign}
-        onColorChange={(color) => onColorChange(task.id, color)}
-        onDelete={onDelete}
-      />
+      <div className="task-row__menu" ref={menuRef}>
+        <button
+          type="button"
+          className="ui-icon-btn ui-icon-btn--sm task-row__menu-trigger"
+          aria-label={`Actions for ${task.title}`}
+          aria-haspopup="menu"
+          aria-expanded={menuOpen}
+          onClick={(e) => {
+            e.stopPropagation()
+            const room = window.innerWidth - e.currentTarget.getBoundingClientRect().right
+            setFlyoutLeft(room < 520)
+            setMenuOpen((v) => !v)
+          }}
+        >
+          <DotsIcon />
+        </button>
+        {menuOpen && (
+          <ActionMenu
+            anchorRef={menuRef}
+            floatingRef={floatingRef}
+            placement="right"
+            className={`wd-row-menu task-row-menu${flyoutLeft ? ' task-row-menu--flyout-left' : ''}`}
+            items={menuItems}
+            label={`Actions for ${task.title}`}
+            onClose={() => setMenuOpen(false)}
+          />
+        )}
+      </div>
     </div>
   )
 }

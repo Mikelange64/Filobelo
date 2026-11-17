@@ -10,10 +10,10 @@ export default function NoteViewer({ note, onEdit, onClose }) {
         <div className="nv-header">
           <span className="nv-header__label">Note</span>
           <div className="nv-header__actions">
-            <button type="button" className="nv-icon-btn" onClick={onEdit} aria-label="Edit note">
+            <button type="button" className="ui-icon-btn ui-icon-btn--sm" onClick={onEdit} aria-label="Edit note">
               <EditIcon />
             </button>
-            <button type="button" className="nv-icon-btn" onClick={onClose} aria-label="Close">
+            <button type="button" className="ui-icon-btn ui-icon-btn--sm" onClick={onClose} aria-label="Close">
               <CloseIcon />
             </button>
           </div>

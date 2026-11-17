@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import DOMPurify from 'dompurify'
+import useDelayedFlag from '../../hooks/useDelayedFlag'
 import './NoteModal.css'
 
 const COMMANDS = [
@@ -19,11 +20,12 @@ const ALIGN_COMMANDS = [
   { cmd: 'justifyRight', label: 'Align right', icon: <AlignRightIcon /> },
 ]
 
-export default function NoteModal({ initialTitle = '', initialContent = '', accentColor, onSave, onClose }) {
+export default function NoteModal({ initialTitle = '', initialContent = '', onSave, onClose }) {
   const [title, setTitle] = useState(initialTitle)
   const [isEmpty, setIsEmpty] = useState(!initialContent)
   const [activeCommands, setActiveCommands] = useState(new Set())
   const [saving, setSaving] = useState(false)
+  const showSaving = useDelayedFlag(saving)
   const [error, setError] = useState('')
   const bodyRef = useRef(null)
 
@@ -83,7 +85,7 @@ export default function NoteModal({ initialTitle = '', initialContent = '', acce
   return (
     <div className="nm-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
       <div className="nm-modal" role="dialog" aria-modal="true" aria-labelledby="nm-title">
-        <button type="button" className="nm-close" onClick={onClose} aria-label="Close">
+        <button type="button" className="ui-icon-btn nm-close" onClick={onClose} aria-label="Close">
           <CloseIcon />
         </button>
 
@@ -162,15 +164,14 @@ export default function NoteModal({ initialTitle = '', initialContent = '', acce
           <div className="nm-toolbar__spacer" />
 
           {error && <span className="nm-toolbar__error">{error}</span>}
-          <button type="button" className="nm-btn nm-btn--ghost" onClick={onClose}>Cancel</button>
+          <button type="button" className="ui-btn ui-btn--ghost ui-btn--sm" onClick={onClose}>Cancel</button>
           <button
             type="button"
-            className="nm-btn nm-btn--save"
-            style={{ '--nm-accent': accentColor }}
+            className="ui-btn ui-btn--primary ui-btn--sm"
             onClick={handleSave}
             disabled={saving}
           >
-            {saving ? 'Saving…' : 'Save note'}
+            {showSaving ? 'Saving…' : 'Save note'}
           </button>
         </div>
       </div>

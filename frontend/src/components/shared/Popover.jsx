@@ -1,5 +1,6 @@
 import { useLayoutEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { getUiZoom } from '../../utils/uiZoom'
 
 const GAP = 6
 const MARGIN = 8
@@ -21,9 +22,12 @@ export default function Popover({ anchorRef, floatingRef, as: Tag = 'div', align
       const anchor = anchorRef.current
       const el = floatingRef.current
       if (!anchor || !el) return
+      // Work in on-screen pixels (what getBoundingClientRect and innerWidth
+      // report), then convert to CSS pixels for style.top/left at the end.
+      const z = getUiZoom()
       const a = anchor.getBoundingClientRect()
-      const w = el.offsetWidth
-      const h = el.offsetHeight
+      const w = el.offsetWidth * z
+      const h = el.offsetHeight * z
       let left, top
       if (placement === 'right') {
         // Beside the anchor (a sidebar row), over the main panel, so no row
@@ -41,6 +45,8 @@ export default function Popover({ anchorRef, floatingRef, as: Tag = 'div', align
         }
       }
       left = Math.min(Math.max(MARGIN, left), window.innerWidth - w - MARGIN)
+      top /= z
+      left /= z
       setPos((prev) => (prev && prev.top === top && prev.left === left ? prev : { top, left }))
     }
 
