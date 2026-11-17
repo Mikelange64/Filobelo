@@ -1,14 +1,19 @@
-/* ─── Conversations panel: one floating column, compact or expanded ─────────
-   Floats over the workspace with no dimming, so the page stays usable.
-   20px from the window = 12px inside the main panel's frame. */
+/* ─── Conversations panel: one column, compact or expanded ─────────────────
+   Anchored to the main panel (.app-shell__main is position: relative).
+
+   Floating (default): sits 12px inside the frame, over the page, with no
+   dimming; a click anywhere else closes it.
+   Docked: fills the frame's right edge and the page beside it narrows, so
+   nothing is covered. Stays open until closed. */
 
 .conversations-panel {
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    bottom: 20px;
-    width: 440px;
-    max-width: calc(100vw - 40px);
+    --chat-width: 440px;
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    bottom: 12px;
+    width: var(--chat-width);
+    max-width: calc(100% - 24px);
     box-sizing: border-box;
     background: var(--color-bg-card);
     border: 1px solid var(--color-border);
@@ -23,7 +28,32 @@
 }
 
 .conversations-panel--expanded {
-    width: 720px;
+    --chat-width: 720px;
+}
+
+/* Docked: part of the frame, not a card on top of it. The frame clips its
+   own rounded corners. Never takes more than half the frame. */
+.conversations-panel--docked {
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(var(--chat-width), 50%);
+    max-width: none;
+    border: none;
+    border-left: 1px solid var(--color-frame-edge);
+    border-radius: 0;
+    box-shadow: none;
+}
+
+/* The page makes room: the scrolling area itself narrows, so its scrollbar
+   sits beside the chat, not under it. */
+.app-shell__content:has(.conversations-panel--docked) {
+    margin-right: min(440px, 50%);
+    transition: margin-right 0.2s ease;
+}
+
+.app-shell__content:has(.conversations-panel--docked.conversations-panel--expanded) {
+    margin-right: min(720px, 50%);
 }
 
 .chat-panel__note {

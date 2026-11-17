@@ -26,11 +26,13 @@ const EXPAND_D = 'M14 4h6v6M20 4l-7 7M10 20H4v-6M4 20l7-7'
 const COLLAPSE_D = 'M20 4l-6 6M14 5v5h5M4 20l6-6M10 19v-5H5'
 const CLOSE_D = 'M6 6l12 12M18 6L6 18'
 const NEW_D = 'M12 20h8M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z'
+// A window with its right-hand column marked: dock the panel to the side.
+const DOCK_D = 'M4 5h16v14H4zM14.5 5v14'
 const SEND_D = 'M12 19V5M6 11l6-6 6 6'
 
 export function HeaderButton({ label, onClick, children, ...rest }) {
   return (
-    <button type="button" className="ui-icon-btn" aria-label={label} title={label} onClick={onClick} {...rest}>
+    <button type="button" className="ui-icon-btn chat-header__btn" aria-label={label} title={label} onClick={onClick} {...rest}>
       {children}
     </button>
   )
@@ -54,7 +56,7 @@ export function MemberStack({ members, size = 26 }) {
   )
 }
 
-export function ChatHeader({ onBack, backLabel, mark, title, subtitle, actions, expanded, onToggleExpanded, onClose }) {
+export function ChatHeader({ onBack, backLabel, mark, title, subtitle, actions, docked, onToggleDocked, expanded, onToggleExpanded, onClose }) {
   return (
     <div className="chat-header">
       {onBack && (
@@ -70,6 +72,13 @@ export function ChatHeader({ onBack, backLabel, mark, title, subtitle, actions, 
         {subtitle && <span className="chat-header__subtitle">{subtitle}</span>}
       </div>
       {actions}
+      <HeaderButton
+        label={docked ? 'Undock (float over the page)' : 'Dock to the side'}
+        aria-pressed={docked}
+        onClick={onToggleDocked}
+      >
+        <Glyph d={DOCK_D} size={17} />
+      </HeaderButton>
       <HeaderButton label={expanded ? 'Make smaller' : 'Expand'} onClick={onToggleExpanded}>
         <Glyph d={expanded ? COLLAPSE_D : EXPAND_D} size={16} width={2} />
       </HeaderButton>
@@ -206,7 +215,7 @@ const errorText = (err, fallback) => (typeof err?.detail === 'string' ? err.deta
 export default function ConversationThread({
   workspaceId, workspaceTitle, conversation, memberById, currentUserId, isAdmin,
   onToast, onUpdated, onDeleted, onClose, onBack, onNewChat,
-  expanded, onToggleExpanded,
+  docked, onToggleDocked, expanded, onToggleExpanded,
   autoFocusTitle, onAutoFocusTitleConsumed,
   initialMessage, onInitialMessageConsumed,
 }) {
@@ -655,7 +664,7 @@ export default function ConversationThread({
 
   const memberCount = memberById.size
   const subtitle = isBotConversation
-    ? `Filobelo · ${workspaceTitle}`
+    ? workspaceTitle
     : `${workspaceTitle} · ${memberCount} member${memberCount === 1 ? '' : 's'}`
 
   const menuItems = [
@@ -749,6 +758,8 @@ export default function ConversationThread({
         mark={isBotConversation ? <BotMark size={30} solid /> : <MemberStack members={[...memberById.values()]} />}
         title={title}
         subtitle={subtitle}
+        docked={docked}
+        onToggleDocked={onToggleDocked}
         expanded={expanded}
         onToggleExpanded={onToggleExpanded}
         onClose={onClose}

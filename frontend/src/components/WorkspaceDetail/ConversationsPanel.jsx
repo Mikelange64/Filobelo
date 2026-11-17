@@ -21,6 +21,29 @@ import "./ConversationsPanel.css";
 
 const TITLE_MAX = 60;
 
+// Docked or floating is remembered across visits. Plain localStorage,
+// wrapped: it can throw in private windows.
+const DOCK_KEY = "filobelo.chat.docked";
+function readDocked() {
+    try {
+        return localStorage.getItem(DOCK_KEY) === "true";
+    } catch {
+        return false;
+    }
+}
+function writeDocked(on) {
+    try {
+        localStorage.setItem(DOCK_KEY, String(on));
+    } catch {
+        /* ignore */
+    }
+}
+
+// Things that are drawn outside the panel but belong to it (or sit above
+// it): a click on them is not a click "away".
+const NOT_AWAY =
+    '.conversations-panel, [role="menu"], [role="alertdialog"], .confirm-modal__overlay, .ui-overlay, .toast';
+
 function formatConversationTimestamp(iso) {
     if (!iso) return "";
     const date = new Date(iso);
@@ -113,6 +136,27 @@ export default function ConversationsPanel({
     const [firstMessage, setFirstMessage] = useState(null);
     // The thread you came back from, highlighted in the list.
     const [lastViewedId, setLastViewedId] = useState(null);
+    // Floating (the default): sits over the page and closes on a click
+    // anywhere else. Docked: fixed to the right edge, the page narrows to
+    // make room, and it stays open until closed.
+    const [docked, setDocked] = useState(readDocked);
+
+    function toggleDocked() {
+        setDocked((v) => {
+            writeDocked(!v);
+            return !v;
+        });
+    }
+
+    useEffect(() => {
+        if (docked) return;
+        function onMouseDown(e) {
+            if (e.button !== 0 || e.target.closest?.(NOT_AWAY)) return;
+            onClose();
+        }
+        document.addEventListener("mousedown", onMouseDown);
+        return () => document.removeEventListener("mousedown", onMouseDown);
+    }, [docked, onClose]);
 
     useEffect(() => {
         setComposing(false);
@@ -191,7 +235,13 @@ export default function ConversationsPanel({
     );
     const listTitle = isBot ? "Filobelo chats" : "Workspace chat";
     const listSubtitle = isBot ? "Private to you" : teamSubtitle;
-    const headerProps = { expanded, onToggleExpanded, onClose };
+    const headerProps = {
+        docked,
+        onToggleDocked: toggleDocked,
+        expanded,
+        onToggleExpanded,
+        onClose,
+    };
 
     function renderList() {
         const groups = [
@@ -245,6 +295,8 @@ export default function ConversationsPanel({
                 onClose={onClose}
                 onBack={handleBack}
                 onNewChat={threadIsBot ? handleNew : undefined}
+                docked={docked}
+                onToggleDocked={toggleDocked}
                 expanded={expanded}
                 onToggleExpanded={onToggleExpanded}
                 autoFocusTitle={selected.id === justCreatedConversationId}
@@ -347,7 +399,7 @@ export default function ConversationsPanel({
 
     return (
         <aside
-            className={`conversations-panel${expanded ? " conversations-panel--expanded" : ""}`}
+            className={`conversations-panel${expanded ? " conversations-panel--expanded" : ""}${docked ? " conversations-panel--docked" : ""}`}
             aria-label={isBot ? "Ask Filobelo" : "Workspace chat"}
         >
             {content}
