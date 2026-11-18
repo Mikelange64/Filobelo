@@ -26,6 +26,25 @@ function useAutoGrow(ref, value) {
   }, [ref, value])
 }
 
+// Same keys as the chat panels: Enter sends, Shift+Enter adds a line. Ctrl or
+// Cmd+Enter also adds one (browsers do not insert it themselves). While an IME
+// is composing, Enter belongs to the IME.
+function handleEnter(e, submit, setValue) {
+  if (e.key !== 'Enter' || e.shiftKey) return
+  if (e.nativeEvent.isComposing || e.keyCode === 229) return
+  e.preventDefault()
+  if (e.ctrlKey || e.metaKey) {
+    const el = e.target
+    const next = `${el.value.slice(0, el.selectionStart)}\n${el.value.slice(el.selectionEnd)}`
+    const caret = el.selectionStart + 1
+    setValue(next)
+    // After React re-renders the new value, put the caret after the break.
+    requestAnimationFrame(() => el.setSelectionRange(caret, caret))
+    return
+  }
+  submit()
+}
+
 function Composer({ me, onSubmit }) {
   const [text, setText] = useState('')
   const [sending, setSending] = useState(false)
@@ -65,12 +84,7 @@ function Composer({ me, onSubmit }) {
             maxLength={MAX_LENGTH}
             value={text}
             onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-                e.preventDefault()
-                send()
-              }
-            }}
+            onKeyDown={(e) => handleEnter(e, send, setText)}
           />
           {trimmed && (
             <div className="task-comments__box-actions">
@@ -85,7 +99,7 @@ function Composer({ me, onSubmit }) {
         </div>
         {error && <p className="task-comments__error" role="alert">{error}</p>}
         <span className="task-comments__hint">
-          <kbd>Ctrl</kbd> + <kbd>Enter</kbd> to post
+          <kbd>Shift</kbd> + <kbd>Enter</kbd> for a new line
         </span>
       </div>
     </div>
@@ -206,9 +220,8 @@ function Comment({ comment, memberById, currentUserId, isAdmin, onEdit, onDelete
                   e.preventDefault()
                   e.stopPropagation()
                   setEditing(false)
-                } else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-                  e.preventDefault()
-                  save()
+                } else {
+                  handleEnter(e, save, setDraft)
                 }
               }}
             />
