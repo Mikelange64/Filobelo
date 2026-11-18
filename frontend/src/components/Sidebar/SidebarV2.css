@@ -545,7 +545,7 @@
   padding: 8px;
   gap: 2px;
   border-radius: 14px;
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.18);
+  box-shadow: var(--shadow-overlay);
 }
 
 .sidebar-v2__account-menu .ui-menu__item {
@@ -764,7 +764,7 @@
   width: 26px;
   height: 26px;
   border-radius: 8px;
-  color: #fff;
+  color: var(--color-text-on-brand);
   font-size: 12px;
   font-weight: 700;
 }

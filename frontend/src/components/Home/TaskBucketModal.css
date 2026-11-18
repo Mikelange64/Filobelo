@@ -1,7 +1,7 @@
 .tbm-overlay {
   position: fixed;
   inset: 0;
-  background: hsl(0 0% 0% / 0.45);
+  background: var(--color-scrim-modal);
   display: flex;
   align-items: center;
   justify-content: center;

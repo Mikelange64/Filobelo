@@ -19,7 +19,7 @@
 
 .workspace-card:hover {
   border-color: var(--color-border-strong);
-  box-shadow: 0 4px 14px rgba(31, 27, 22, 0.06);
+  box-shadow: var(--shadow-card);
 }
 
 .workspace-card__band {

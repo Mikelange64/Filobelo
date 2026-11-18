@@ -12,16 +12,6 @@
   z-index: 199;
 }
 
-/* Lighter delimiter lines only inside slide-out panels - the rest of the app
-   (workspace details, sidebar) keeps the theme's default border contrast.
-   Kept as it was: dark and midnight values belong to session 08. */
-:root[data-theme="midnight"] .slide-over,
-:root[data-theme="midnight"] .conversations-panel {
-  --color-border: hsl(222 16% 54%);
-  --color-border-strong: hsl(222 14% 68%);
-  --color-card-top-border: hsl(222 16% 56%);
-}
-
 /* Anchored to the main panel (.app-shell__main is position: relative), like
    the chat panel, so a docked panel can be part of the frame. */
 .slide-over {

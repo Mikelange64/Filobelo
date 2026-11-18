@@ -1,7 +1,7 @@
 .confirm-modal__overlay {
   position: fixed;
   inset: 0;
-  background: hsl(0 0% 0% / 0.45);
+  background: var(--color-scrim-modal);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -76,10 +76,10 @@
 }
 
 .confirm-modal__btn--danger {
-  background: color-mix(in srgb, var(--color-error) 78%, black);
-  color: #fff;
+  background: var(--color-error);
+  color: var(--color-text-on-error);
 }
 
 .confirm-modal__btn--danger:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--color-error) 65%, black);
+  background: color-mix(in srgb, var(--color-error) 85%, black);
 }

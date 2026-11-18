@@ -39,6 +39,7 @@
   --color-text-secondary: #5C5348;
   --color-text-muted: #6F655A;
   --color-text-on-brand: #FFFFFF;
+  --color-text-on-error: #FFFFFF;   /* text on a solid error-coloured fill */
 
   /* Borders */
   --color-border: #E4DCCF;
@@ -126,6 +127,7 @@
     --color-text-secondary: #BDB3A4;
     --color-text-muted: #978D7F;
     --color-text-on-brand: #0B1C1D;
+    --color-text-on-error: #2A120D;   /* text on a solid error-coloured fill */
 
     /* Borders */
     --color-border: #38322B;
@@ -199,6 +201,7 @@
   --color-text-secondary: #5C5348;
   --color-text-muted: #6F655A;
   --color-text-on-brand: #FFFFFF;
+  --color-text-on-error: #FFFFFF;   /* text on a solid error-coloured fill */
 
   /* Borders */
   --color-border: #E4DCCF;
@@ -271,6 +274,7 @@
   --color-text-secondary: #BDB3A4;
   --color-text-muted: #978D7F;
   --color-text-on-brand: #0B1C1D;
+  --color-text-on-error: #2A120D;   /* text on a solid error-coloured fill */
 
   /* Borders */
   --color-border: #38322B;
@@ -343,6 +347,7 @@
   --color-text-secondary: #A9B2C4;
   --color-text-muted: #838DA1;
   --color-text-on-brand: #08181A;
+  --color-text-on-error: #2A1013;   /* text on a solid error-coloured fill */
 
   /* Borders */
   --color-border: #252C3A;
