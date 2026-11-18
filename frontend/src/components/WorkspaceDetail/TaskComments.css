@@ -1,0 +1,257 @@
+/* Comments on a task. Values follow the "Expanded task" mockup: 30px avatars,
+   a 14px-radius composer box, pill reactions. Colours are theme tokens, so
+   light, dark and midnight need nothing extra. */
+
+.task-comments {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.task-comments__muted {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+
+/* ─── Composer ──────────────────────────────────────────────────────────────── */
+
+.task-comments__composer {
+  display: flex;
+  gap: 12px;
+}
+
+.task-comments__composer .member-avatar,
+.task-comments__item .member-avatar {
+  flex-shrink: 0;
+}
+
+.task-comments__composer-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.task-comments__box {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  background: transparent;
+}
+
+.task-comments__box:focus-within {
+  border-color: var(--color-border-strong);
+}
+
+/* No focus ring on text inputs anywhere in the app: the caret is the cue. */
+.task-comments__input {
+  width: 100%;
+  min-height: 24px;
+  padding: 0;
+  border: none;
+  outline: none;
+  box-shadow: none;
+  resize: none;
+  background: transparent;
+  font: inherit;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--color-text-primary);
+}
+
+.task-comments__input::placeholder {
+  color: var(--color-text-muted);
+}
+
+.task-comments__input--edit {
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+}
+
+.task-comments__box-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.task-comments__hint {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.task-comments__hint kbd {
+  padding: 1px 6px;
+  border: 1px solid var(--color-border);
+  border-radius: 5px;
+  font: inherit;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.task-comments__error {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-error-text);
+}
+
+/* ─── List ──────────────────────────────────────────────────────────────────── */
+
+.task-comments__list {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.task-comments__item {
+  display: flex;
+  gap: 12px;
+}
+
+.task-comments__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.task-comments__meta {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  font-size: 13px;
+}
+
+.task-comments__author {
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.task-comments__time {
+  color: var(--color-text-muted);
+}
+
+.task-comments__text {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--color-text-primary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.task-comments__edit {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.task-comments__foot {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.task-comments__row-actions {
+  display: flex;
+  gap: 12px;
+  flex-shrink: 0;
+  padding-top: 4px;
+}
+
+.task-comments__link {
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.task-comments__link:hover {
+  color: var(--color-text-primary);
+}
+
+.task-comments__link--danger:hover {
+  color: var(--color-error-text);
+}
+
+/* ─── Reactions ─────────────────────────────────────────────────────────────── */
+
+.task-comments__reactions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.task-comments__reaction {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  color: var(--color-text-primary);
+  cursor: pointer;
+}
+
+.task-comments__reaction:hover {
+  background: var(--color-bg-card-hover);
+}
+
+.task-comments__reaction--mine {
+  border-color: var(--color-brand-primary);
+  background: var(--color-brand-soft);
+}
+
+.task-comments__reaction--add {
+  width: 28px;
+  padding: 0;
+  justify-content: center;
+  color: var(--color-text-muted);
+}
+
+.task-comments__picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-bg-card);
+}
+
+.task-comments__picker-btn {
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.task-comments__picker-btn:hover {
+  background: var(--color-bg-card-hover);
+}
