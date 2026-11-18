@@ -1,11 +1,55 @@
-import { useEffect, useRef, useCallback, useState } from "react";
-import { updateConversation, deleteConversation } from "../../api/client";
+import { useEffect, useState } from "react";
+import {
+    createConversation,
+    updateConversation,
+    deleteConversation,
+} from "../../api/client";
 import useDismissableMenu from "../../hooks/useDismissableMenu";
-import { ChatIcon, ChevronIcon, DotsIcon, PlusIcon } from "./icons";
-import ConversationThread from "./ConversationThread";
-import filobeloReading from "../../assets/mascott/filobelo_reading.svg";
+import { keys, writeCache } from "../../api/queryClient";
+import ConversationThread, {
+    ChatHeader,
+    Composer,
+    DeleteConversationDialog,
+    ConversationMenu,
+    MemberStack,
+    NewChatButton,
+} from "./ConversationThread";
+import { BotMark } from "./MessageBubble";
+import { DotsIcon, SparkleIcon } from "./icons";
+import "./ConversationsPanel.css";
 
-const RAIL_COLLAPSED_WIDTH = 56;
+// One floating panel, two modes: "BOT" (Ask Filobelo, private to you) and
+// "WORKSPACE" (chat shared with every member). It is a single column in
+// both sizes: the conversation list and an open thread swap places, with a
+// back button in the thread header. Expanding only makes it wider.
+//
+// Views: list | thread | start (Filobelo: type a first question) |
+// empty (workspace chat: no conversations yet) | loading.
+
+const TITLE_MAX = 60;
+
+// Docked or floating is remembered across visits. Plain localStorage,
+// wrapped: it can throw in private windows.
+const DOCK_KEY = "filobelo.chat.docked";
+function readDocked() {
+    try {
+        return localStorage.getItem(DOCK_KEY) === "true";
+    } catch {
+        return false;
+    }
+}
+function writeDocked(on) {
+    try {
+        localStorage.setItem(DOCK_KEY, String(on));
+    } catch {
+        /* ignore */
+    }
+}
+
+// Things that are drawn outside the panel but belong to it (or sit above
+// it): a click on them is not a click "away".
+const NOT_AWAY =
+    '.conversations-panel, [role="menu"], [role="alertdialog"], .confirm-modal__overlay, .ui-overlay, .toast';
 
 function formatConversationTimestamp(iso) {
     if (!iso) return "";
@@ -23,388 +67,479 @@ function formatConversationTimestamp(iso) {
     return date.toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
-function ConversationRowMenu({ conversation, onTogglePin, onToggleArchive, onDelete }) {
-    const [isOpen, setIsOpen, menuRef] = useDismissableMenu();
-    const [confirmingDelete, setConfirmingDelete] = useState(false);
+// A new Filobelo chat is named after the question that started it, cut at a
+// word boundary when it is long.
+function titleFromQuestion(text) {
+    const flat = text.replace(/\s+/g, " ").trim();
+    if (flat.length <= TITLE_MAX) return flat;
+    const cut = flat.slice(0, TITLE_MAX);
+    const space = cut.lastIndexOf(" ");
+    const base = space > TITLE_MAX / 2 ? cut.slice(0, space) : cut;
+    return `${base.replace(/[\s,.;:!?-]+$/, "")}…`;
+}
 
-    useEffect(() => {
-        if (!isOpen) setConfirmingDelete(false);
-    }, [isOpen]);
+// One row of the list: click to open; the ⋯ (for whoever may manage the
+// conversation) pins, renames in place, archives or deletes it.
+function ConversationRow({
+    conversation,
+    isBot,
+    active,
+    canManage,
+    onSelect,
+    onPatch,
+    onDelete,
+}) {
+    const [menuOpen, setMenuOpen, menuRef, floatingRef] = useDismissableMenu();
+    const [renaming, setRenaming] = useState(false);
+    const [renameValue, setRenameValue] = useState(conversation.title);
+
+    function saveRename() {
+        const trimmed = renameValue.trim();
+        setRenaming(false);
+        if (trimmed && trimmed !== conversation.title)
+            onPatch(conversation, { title: trimmed });
+    }
+
+    const icon = (
+        <span
+            className={`chat-list__icon${isBot ? " chat-list__icon--bot" : ""}`}
+            aria-hidden="true"
+        >
+            {isBot ? <SparkleIcon size={15} /> : "#"}
+        </span>
+    );
 
     return (
-        <div className="conversations-panel__row-menu-wrap" ref={menuRef}>
-            <button
-                type="button"
-                className="conversations-panel__row-menu-trigger"
-                onClick={(e) => {
-                    e.stopPropagation();
-                    setIsOpen((v) => !v);
-                }}
-                aria-label="Conversation actions"
-            >
-                <DotsIcon />
-            </button>
-            {isOpen && (
-                <ul className="wd-menu-list" role="menu">
-                    <li role="none">
-                        <button
-                            type="button"
-                            role="menuitem"
-                            className="wd-menu-item"
-                            onClick={(e) => {
+        <li
+            className={`chat-list__row${active ? " chat-list__row--active" : ""}${conversation.is_archived ? " chat-list__row--archived" : ""}${menuOpen ? " chat-list__row--menu-open" : ""}`}
+        >
+            {renaming ? (
+                <div className="chat-list__select">
+                    {icon}
+                    <input
+                        className="chat-list__rename"
+                        value={renameValue}
+                        maxLength={100}
+                        aria-label="Conversation name"
+                        autoFocus
+                        onFocus={(e) => e.target.select()}
+                        onChange={(e) => setRenameValue(e.target.value)}
+                        onBlur={saveRename}
+                        onKeyDown={(e) => {
+                            if (e.key === "Enter") saveRename();
+                            if (e.key === "Escape") {
+                                // Cancels the rename only, not the panel.
                                 e.stopPropagation();
-                                setIsOpen(false);
-                                onTogglePin(conversation);
-                            }}
-                        >
-                            {conversation.is_pinned ? "Unpin" : "Pin"}
-                        </button>
-                    </li>
-                    <li role="none">
-                        <button
-                            type="button"
-                            role="menuitem"
-                            className="wd-menu-item"
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                setIsOpen(false);
-                                onToggleArchive(conversation);
-                            }}
-                        >
-                            {conversation.is_archived ? "Unarchive" : "Archive"}
-                        </button>
-                    </li>
-                    <li role="none">
-                        {confirmingDelete ? (
-                            <button
-                                type="button"
-                                role="menuitem"
-                                className="wd-menu-item wd-menu-item--danger"
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    setIsOpen(false);
-                                    onDelete(conversation);
-                                }}
-                            >
-                                Confirm delete?
-                            </button>
-                        ) : (
-                            <button
-                                type="button"
-                                role="menuitem"
-                                className="wd-menu-item wd-menu-item--danger"
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    setConfirmingDelete(true);
-                                }}
-                            >
-                                Delete
-                            </button>
-                        )}
-                    </li>
-                </ul>
+                                setRenaming(false);
+                            }
+                        }}
+                    />
+                </div>
+            ) : (
+                <button
+                    type="button"
+                    className="chat-list__select"
+                    onClick={() => onSelect(conversation.id)}
+                >
+                    {icon}
+                    <span className="chat-list__text">
+                        <span className="chat-list__top">
+                            <span className="chat-list__title">
+                                {conversation.title}
+                            </span>
+                            <span className="chat-list__time">
+                                {formatConversationTimestamp(
+                                    conversation.last_message_at,
+                                )}
+                            </span>
+                        </span>
+                        <span className="chat-list__snippet">
+                            {conversation.last_message || "No messages yet"}
+                        </span>
+                    </span>
+                </button>
             )}
-        </div>
+            {!canManage && !renaming && (
+                // Keeps the times in one column with the rows that have a ⋯.
+                <span className="chat-list__menu" aria-hidden="true" />
+            )}
+            {canManage && !renaming && (
+                <div className="chat-list__menu" ref={menuRef}>
+                    <button
+                        type="button"
+                        className="ui-icon-btn ui-icon-btn--sm"
+                        aria-label={`Options for ${conversation.title}`}
+                        aria-haspopup="menu"
+                        aria-expanded={menuOpen}
+                        onClick={() => setMenuOpen((v) => !v)}
+                    >
+                        <DotsIcon />
+                    </button>
+                    {menuOpen && (
+                        <ConversationMenu
+                            conversation={conversation}
+                            anchorRef={menuRef}
+                            floatingRef={floatingRef}
+                            onClose={() => setMenuOpen(false)}
+                            onPin={() =>
+                                onPatch(conversation, {
+                                    is_pinned: !conversation.is_pinned,
+                                })
+                            }
+                            onRename={() => {
+                                setRenameValue(conversation.title);
+                                setRenaming(true);
+                            }}
+                            onArchive={() =>
+                                onPatch(conversation, {
+                                    is_archived: !conversation.is_archived,
+                                })
+                            }
+                            onDelete={() => onDelete(conversation)}
+                        />
+                    )}
+                </div>
+            )}
+        </li>
     );
 }
 
 export default function ConversationsPanel({
-  workspaceId,
-  conversations,
-  mode,
-  conversationsLoading,
-  selectedConversationId,
-  onSelectConversation,
-  onStartCreate,
-  justCreatedConversationId,
-  onAutoRenameConsumed,
-  memberById,
-  currentUserId,
-  isAdmin,
-  width,
-  onResize,
-  railWidth,
-  onRailResize,
-  railCollapsed,
-  onToggleRailCollapse,
-  onClose,
-  onToast,
-  onComingSoon,
-  onConversationUpdated,
-  onConversationDeleted,
+    workspaceId,
+    workspaceTitle,
+    conversations,
+    mode,
+    conversationsLoading,
+    selectedConversationId,
+    onSelectConversation,
+    onStartCreate,
+    justCreatedConversationId,
+    onAutoRenameConsumed,
+    memberById,
+    currentUserId,
+    isAdmin,
+    expanded,
+    onToggleExpanded,
+    onClose,
+    onToast,
+    onConversationUpdated,
+    onConversationDeleted,
 }) {
-    const widthRef = useRef(width);
-    useEffect(() => {
-        widthRef.current = width;
-    }, [width]);
+    // Filobelo's start screen was asked for ("New chat"), even though there
+    // are earlier chats to list.
+    const [composing, setComposing] = useState(false);
+    const [startDraft, setStartDraft] = useState("");
+    const [starting, setStarting] = useState(false);
+    // The question typed on the start screen, handed to the new chat's
+    // thread to send: { conversationId, text }.
+    const [firstMessage, setFirstMessage] = useState(null);
+    // The thread you came back from, highlighted in the list.
+    const [lastViewedId, setLastViewedId] = useState(null);
+    // The conversation whose delete is waiting for confirmation (list view).
+    const [deleting, setDeleting] = useState(null);
+    // Floating (the default): sits over the page and closes on a click
+    // anywhere else. Docked: fixed to the right edge, the page narrows to
+    // make room, and it stays open until closed.
+    const [docked, setDocked] = useState(readDocked);
 
-    const railWidthRef = useRef(railWidth);
+    function toggleDocked() {
+        setDocked((v) => {
+            writeDocked(!v);
+            return !v;
+        });
+    }
+
     useEffect(() => {
-        railWidthRef.current = railWidth;
-    }, [railWidth]);
+        if (docked) return;
+        function onMouseDown(e) {
+            if (e.button !== 0 || e.target.closest?.(NOT_AWAY)) return;
+            onClose();
+        }
+        document.addEventListener("mousedown", onMouseDown);
+        return () => document.removeEventListener("mousedown", onMouseDown);
+    }, [docked, onClose]);
+
+    useEffect(() => {
+        setComposing(false);
+    }, [mode, workspaceId]);
 
     useEffect(() => {
         function onKey(e) {
-            if (e.key === "Escape") onClose();
+            if (e.key !== "Escape") return;
+            // An open menu or confirm dialog gets the Escape, not the panel.
+            if (document.querySelector('[role="menu"], [role="alertdialog"]'))
+                return;
+            onClose();
         }
         document.addEventListener("keydown", onKey);
         return () => document.removeEventListener("keydown", onKey);
     }, [onClose]);
 
-    const handleResizeStart = useCallback(
-        (e) => {
-            e.preventDefault();
-            const startX = e.clientX;
-            const startW = widthRef.current;
-            function onMove(ev) {
-                const newW = Math.max(
-                    560,
-                    Math.min(1000, startW + (startX - ev.clientX)),
-                );
-                onResize(newW);
-            }
-            function onUp() {
-                document.removeEventListener("mousemove", onMove);
-                document.removeEventListener("mouseup", onUp);
-            }
-            document.addEventListener("mousemove", onMove);
-            document.addEventListener("mouseup", onUp);
-        },
-        [onResize],
-    );
+    const isBot = mode === "BOT";
+    const all = conversations ?? [];
+    const list = all.filter((c) => c.type === (isBot ? "BOT" : "WORKSPACE"));
+    const selected = all.find((c) => c.id === selectedConversationId);
+    const members = [...memberById.values()];
+    const memberCount = memberById.size;
+    const teamSubtitle = `${workspaceTitle} · ${memberCount} member${memberCount === 1 ? "" : "s"}`;
 
-    const handleRailResizeStart = useCallback(
-        (e) => {
-            e.preventDefault();
-            const startX = e.clientX;
-            const startW = railWidthRef.current;
-            function onMove(ev) {
-                const newW = Math.max(
-                    200,
-                    Math.min(400, startW + (ev.clientX - startX)),
-                );
-                onRailResize(newW);
-            }
-            function onUp() {
-                document.removeEventListener("mousemove", onMove);
-                document.removeEventListener("mouseup", onUp);
-            }
-            document.addEventListener("mousemove", onMove);
-            document.addEventListener("mouseup", onUp);
-        },
-        [onRailResize],
-    );
+    let view;
+    if (selected) view = "thread";
+    else if (!conversations) view = "loading";
+    else if (isBot && (composing || list.length === 0)) view = "start";
+    else if (list.length === 0) view = "empty";
+    else view = "list";
 
-    // The Filobelo bot thread is reached via the dedicated "Ask Filobelo"
-    // action, not this list - keep it out of the regular conversations rail.
-    const workspaceConversations = (conversations ?? []).filter(
-        (c) => c.type === "WORKSPACE",
-    );
-    const botConversations = (conversations ?? []).filter(
-        (c) => c.type === "BOT",
-    );
-    const selectedConversation = [
-        ...workspaceConversations,
-        ...botConversations,
-    ].find((c) => c.id === selectedConversationId);
-
-    // The rail only ever shows conversations matching the currently active
-    // mode - "Ask Filobelo" and "Conversations" are separate contexts and
-    // should never display each other's history side by side.
-    const railConversations = mode === "BOT" ? botConversations : workspaceConversations;
-
-    async function handleTogglePin(conversation) {
+    async function handlePatch(conversation, patch) {
         try {
             onConversationUpdated(
-                await updateConversation(workspaceId, conversation.id, {
-                    is_pinned: !conversation.is_pinned,
-                }),
+                await updateConversation(workspaceId, conversation.id, patch),
             );
         } catch (err) {
             onToast?.(err.detail ?? "Could not update conversation");
         }
     }
 
-    async function handleToggleArchive(conversation) {
+    async function handleDelete() {
+        const target = deleting;
         try {
-            onConversationUpdated(
-                await updateConversation(workspaceId, conversation.id, {
-                    is_archived: !conversation.is_archived,
-                }),
-            );
-        } catch (err) {
-            onToast?.(err.detail ?? "Could not update conversation");
-        }
-    }
-
-    async function handleDeleteConversation(conversation) {
-        try {
-            await deleteConversation(workspaceId, conversation.id);
-            onConversationDeleted(conversation.id);
+            await deleteConversation(workspaceId, target.id);
+            onConversationDeleted(target.id);
         } catch (err) {
             onToast?.(err.detail ?? "Could not delete conversation");
+        } finally {
+            setDeleting(null);
         }
+    }
+
+    function handleBack() {
+        setLastViewedId(selectedConversationId);
+        setComposing(false);
+        onSelectConversation(null);
+    }
+
+    function handleNew() {
+        if (isBot) {
+            onSelectConversation(null);
+            setComposing(true);
+        } else {
+            onStartCreate();
+        }
+    }
+
+    async function handleStartSend() {
+        const text = startDraft.trim();
+        if (!text || starting) return;
+        setStarting(true);
+        try {
+            const created = await createConversation(workspaceId, {
+                title: titleFromQuestion(text),
+                type: "BOT",
+            });
+            writeCache(keys.conversations(workspaceId), (prev) => [
+                created,
+                ...(prev ?? []),
+            ]);
+            setFirstMessage({ conversationId: created.id, text });
+            setStartDraft("");
+            setComposing(false);
+            onSelectConversation(created.id);
+        } catch (err) {
+            onToast?.(err.detail ?? "Could not start a chat");
+        } finally {
+            setStarting(false);
+        }
+    }
+
+    const listMark = isBot ? (
+        <BotMark size={30} solid />
+    ) : (
+        <MemberStack members={members} />
+    );
+    const listTitle = isBot ? "Filobelo chats" : "Workspace chat";
+    const listSubtitle = isBot ? "Private to you" : teamSubtitle;
+    const headerProps = {
+        docked,
+        onToggleDocked: toggleDocked,
+        expanded,
+        onToggleExpanded,
+        onClose,
+    };
+
+    function renderList() {
+        const groups = [
+            {
+                label: "Pinned",
+                items: list.filter((c) => c.is_pinned && !c.is_archived),
+            },
+            {
+                label: isBot ? "Chats" : "Conversations",
+                items: list.filter((c) => !c.is_pinned && !c.is_archived),
+            },
+            { label: "Archived", items: list.filter((c) => c.is_archived) },
+        ].filter((g) => g.items.length > 0);
+
+        return (
+            <div className="chat-list">
+                {groups.map((g) => (
+                    <section key={g.label} className="chat-list__group">
+                        <h3 className="ui-caps chat-list__label">{g.label}</h3>
+                        <ul className="chat-list__rows">
+                            {g.items.map((c) => (
+                                <ConversationRow
+                                    key={c.id}
+                                    conversation={c}
+                                    isBot={isBot}
+                                    active={c.id === lastViewedId}
+                                    canManage={
+                                        c.creator_id === currentUserId ||
+                                        isAdmin
+                                    }
+                                    onSelect={onSelectConversation}
+                                    onPatch={handlePatch}
+                                    onDelete={setDeleting}
+                                />
+                            ))}
+                        </ul>
+                    </section>
+                ))}
+            </div>
+        );
+    }
+
+    let content;
+    if (view === "thread") {
+        const threadIsBot = selected.type === "BOT";
+        content = (
+            <ConversationThread
+                workspaceId={workspaceId}
+                workspaceTitle={workspaceTitle}
+                conversation={selected}
+                memberById={memberById}
+                currentUserId={currentUserId}
+                isAdmin={isAdmin}
+                onToast={onToast}
+                onUpdated={onConversationUpdated}
+                onDeleted={onConversationDeleted}
+                onClose={onClose}
+                onBack={handleBack}
+                onNewChat={threadIsBot ? handleNew : undefined}
+                docked={docked}
+                onToggleDocked={toggleDocked}
+                expanded={expanded}
+                onToggleExpanded={onToggleExpanded}
+                autoFocusTitle={selected.id === justCreatedConversationId}
+                onAutoFocusTitleConsumed={onAutoRenameConsumed}
+                initialMessage={
+                    firstMessage?.conversationId === selected.id
+                        ? firstMessage.text
+                        : null
+                }
+                onInitialMessageConsumed={() => setFirstMessage(null)}
+            />
+        );
+    } else if (view === "start") {
+        content = (
+            <>
+                <ChatHeader
+                    {...headerProps}
+                    onBack={
+                        list.length > 0 ? () => setComposing(false) : undefined
+                    }
+                    backLabel="All Filobelo chats"
+                    mark={<BotMark size={30} solid />}
+                    title="Ask Filobelo"
+                    subtitle={workspaceTitle}
+                />
+                <div className="chat-start">
+                    <BotMark size={52} />
+                    <div className="chat-start__text">
+                        <h2 className="chat-start__title">
+                            What can I help with?
+                        </h2>
+                        <p className="chat-start__lead">
+                            I can read the tasks, notes and links in{" "}
+                            {workspaceTitle}. Our chats are private to you.
+                        </p>
+                    </div>
+                </div>
+                <Composer
+                    value={startDraft}
+                    onChange={setStartDraft}
+                    onSend={handleStartSend}
+                    canSend={!starting && Boolean(startDraft.trim())}
+                    placeholder="Ask about this workspace…"
+                    hint="Filobelo can make mistakes"
+                    autoFocus
+                />
+            </>
+        );
+    } else {
+        content = (
+            <>
+                <ChatHeader
+                    {...headerProps}
+                    mark={listMark}
+                    title={listTitle}
+                    subtitle={listSubtitle}
+                    actions={
+                        view !== "loading" && (
+                            <NewChatButton
+                                label={isBot ? "New chat" : "New conversation"}
+                                onClick={handleNew}
+                            />
+                        )
+                    }
+                />
+                {view === "loading" && (
+                    <p className="chat-panel__note">
+                        {conversationsLoading
+                            ? "Loading conversations…"
+                            : "Could not load conversations."}
+                    </p>
+                )}
+                {view === "list" && renderList()}
+                {view === "empty" && (
+                    <div className="chat-empty">
+                        <MemberStack members={members} size={44} />
+                        <div className="chat-empty__text">
+                            <h2 className="chat-empty__title">
+                                Start the conversation
+                            </h2>
+                            <p className="chat-empty__lead">
+                                Conversations here are shared with everyone in{" "}
+                                {workspaceTitle}.
+                                {memberCount === 1 &&
+                                    " You're the only member so far."}
+                            </p>
+                        </div>
+                        <button
+                            type="button"
+                            className="ui-btn ui-btn--primary ui-btn--sm"
+                            onClick={onStartCreate}
+                        >
+                            New conversation
+                        </button>
+                    </div>
+                )}
+            </>
+        );
     }
 
     return (
-        <>
-            <div
-                className="slide-over-backdrop"
-                onClick={onClose}
-                aria-hidden="true"
-            />
-            <aside
-                className="conversations-panel"
-                style={{ width }}
-                aria-label="Conversations"
-            >
-                <div
-                    className="conversations-panel__resize-handle"
-                    onMouseDown={handleResizeStart}
+        <aside
+            className={`conversations-panel${expanded ? " conversations-panel--expanded" : ""}${docked ? " conversations-panel--docked" : ""}`}
+            aria-label={isBot ? "Ask Filobelo" : "Workspace chat"}
+        >
+            {content}
+            {deleting && (
+                <DeleteConversationDialog
+                    conversation={deleting}
+                    workspaceTitle={workspaceTitle}
+                    onConfirm={handleDelete}
+                    onCancel={() => setDeleting(null)}
                 />
-
-                <div
-                    className={`conversations-panel__rail${railCollapsed ? " conversations-panel__rail--collapsed" : ""}${!railCollapsed && !selectedConversation ? " conversations-panel__rail--full-divider" : ""}`}
-                    style={{
-                        width: railCollapsed ? RAIL_COLLAPSED_WIDTH : railWidth,
-                    }}
-                >
-                    {railCollapsed ? (
-                        <button
-                            type="button"
-                            className="conversations-panel__rail-expand-btn"
-                            onClick={onToggleRailCollapse}
-                            aria-label="Expand conversation list"
-                        >
-                            <ChevronIcon
-                                style={{ transform: "rotate(180deg)" }}
-                            />
-                        </button>
-                    ) : (
-                        <>
-                            <div className="conversations-panel__rail-header">
-                                <span className="conversations-panel__rail-title">
-                                    Conversations
-                                </span>
-                                <div className="conversations-panel__rail-header-actions">
-                                    <button
-                                        type="button"
-                                        className="conversations-panel__rail-collapse-btn"
-                                        onClick={onToggleRailCollapse}
-                                        aria-label="Collapse conversation list"
-                                    >
-                                        <ChevronIcon />
-                                    </button>
-                                </div>
-                            </div>
-
-                            <div className="conversations-panel__rail-list">
-                                <button
-                                    type="button"
-                                    className="conversations-panel__new-chat-btn"
-                                    onClick={onStartCreate}
-                                >
-                                    <PlusIcon />
-                                    <span>New chat</span>
-                                </button>
-                                {railConversations.map((c) => (
-                                    <div
-                                        key={c.id}
-                                        className={`conversations-panel__row${c.id === selectedConversationId ? " conversations-panel__row--active" : ""}`}
-                                    >
-                                        <button
-                                            type="button"
-                                            className="conversations-panel__row-select"
-                                            onClick={() =>
-                                                onSelectConversation(c.id)
-                                            }
-                                        >
-                                            <span className="conversations-panel__row-avatar">
-                                                {c.title?.[0]?.toUpperCase()}
-                                            </span>
-                                            <span className="conversations-panel__row-body">
-                                                <span className="conversations-panel__row-top">
-                                                    <span className="conversations-panel__row-name">
-                                                        {c.is_pinned && (
-                                                            <span className="conversations-panel__row-pin">
-                                                                📌
-                                                            </span>
-                                                        )}
-                                                        {c.title}
-                                                    </span>
-                                                    <span className="conversations-panel__row-time">
-                                                        {formatConversationTimestamp(
-                                                            c.last_message_at,
-                                                        )}
-                                                    </span>
-                                                </span>
-                                            </span>
-                                        </button>
-                                        {(c.creator_id === currentUserId || isAdmin) && (
-                                            <ConversationRowMenu
-                                                conversation={c}
-                                                onTogglePin={handleTogglePin}
-                                                onToggleArchive={handleToggleArchive}
-                                                onDelete={handleDeleteConversation}
-                                            />
-                                        )}
-                                    </div>
-                                ))}
-                            </div>
-
-                            <div
-                                className="conversations-panel__rail-resize-handle"
-                                onMouseDown={handleRailResizeStart}
-                            />
-                        </>
-                    )}
-                </div>
-
-                <div className="conversations-panel__main">
-                    {conversationsLoading && !conversations ? (
-                        <p className="conversations-tab__empty">
-                            <ChatIcon />
-                            <span>Loading conversations…</span>
-                        </p>
-                    ) : selectedConversation ? (
-                        <ConversationThread
-                            workspaceId={workspaceId}
-                            conversation={selectedConversation}
-                            memberById={memberById}
-                            currentUserId={currentUserId}
-                            isAdmin={isAdmin}
-                            onToast={onToast}
-                            onUpdated={onConversationUpdated}
-                            onDeleted={onConversationDeleted}
-                            onClose={onClose}
-                            onComingSoon={onComingSoon}
-                            autoFocusTitle={
-                                selectedConversation.id ===
-                                justCreatedConversationId
-                            }
-                            onAutoFocusTitleConsumed={onAutoRenameConsumed}
-                        />
-                    ) : mode === "BOT" ? (
-                        <div className="conversations-tab__empty">
-                            <img
-                                src={filobeloReading}
-                                alt=""
-                                className="conversation-thread__empty-mascot"
-                            />
-                            <p className="conversations-panel__ask-away">Ask away!</p>
-                        </div>
-                    ) : (
-                        <div className="conversations-tab__empty">
-                            <ChatIcon />
-                            <p>
-                                {railConversations.length === 0
-                                    ? "No conversations yet — start one"
-                                    : "Select a conversation to start chatting"}
-                            </p>
-                        </div>
-                    )}
-                </div>
-            </aside>
-        </>
+            )}
+        </aside>
     );
 }

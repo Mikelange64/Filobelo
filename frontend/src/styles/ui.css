@@ -1,0 +1,527 @@
+/*
+ * Shared UI primitives for the redesign: buttons, icon buttons, inputs,
+ * segmented controls, pills, menus, caps labels, modal shell.
+ *
+ * Everything here is built from the role tokens in theme.css, so it follows
+ * whichever theme is active. Sizes come from the foundations sheet:
+ * controls 40px tall, inputs/buttons radius 10, cards 14, modals 20, pills 999.
+ */
+
+/* ── Buttons ── */
+
+.ui-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: var(--control-height);
+  padding: 0 16px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-text-primary);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.ui-btn--sm {
+  height: 36px;
+  padding: 0 14px;
+}
+
+.ui-btn--xs {
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.ui-btn--primary {
+  padding: 0 18px;
+  background: var(--color-brand-primary);
+  color: var(--color-text-on-brand);
+  font-weight: 600;
+}
+
+.ui-btn--primary:hover:not(:disabled) {
+  background: var(--color-brand-primary-hover);
+}
+
+.ui-btn--secondary {
+  border-color: var(--color-border);
+}
+
+.ui-btn--secondary:hover:not(:disabled) {
+  background: var(--color-bg-canvas-hover);
+  border-color: var(--color-border-strong);
+}
+
+.ui-btn--ghost {
+  color: var(--color-text-secondary);
+}
+
+.ui-btn--ghost:hover:not(:disabled) {
+  background: var(--color-bg-canvas-hover);
+  color: var(--color-text-primary);
+}
+
+.ui-btn--danger {
+  background: var(--color-error);
+  color: var(--color-bg-card);
+  font-weight: 600;
+}
+
+.ui-btn--danger:hover:not(:disabled) {
+  filter: brightness(0.92);
+}
+
+.ui-btn--danger-outline {
+  border-color: var(--color-error);
+  color: var(--color-error);
+  font-weight: 600;
+}
+
+.ui-btn--danger-outline:hover:not(:disabled) {
+  background: var(--color-error-bg);
+}
+
+.ui-btn--dashed {
+  border: 1px dashed var(--color-border);
+  color: var(--color-brand-text);
+  font-size: 13px;
+}
+
+.ui-btn--dashed:hover:not(:disabled) {
+  border-color: var(--color-border-strong);
+  background: var(--color-bg-canvas-hover);
+}
+
+/* A disabled primary reads as "not yet", not as a broken button: flat track
+   fill with a dashed edge, the way the mockups draw Save / Create. */
+.ui-btn:disabled {
+  cursor: default;
+}
+
+.ui-btn--primary:disabled {
+  background: var(--color-bg-track);
+  border: 1px dashed var(--color-border);
+  color: var(--color-text-muted);
+}
+
+.ui-btn--secondary:disabled,
+.ui-btn--ghost:disabled,
+.ui-btn--danger:disabled,
+.ui-btn--danger-outline:disabled {
+  opacity: 0.55;
+}
+
+/* ── Icon buttons ── */
+
+.ui-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.ui-icon-btn:hover:not(:disabled),
+.ui-icon-btn[aria-expanded='true'] {
+  background: var(--color-bg-selected);
+  color: var(--color-text-primary);
+}
+
+.ui-icon-btn--bordered {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+}
+
+.ui-icon-btn--sm {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+}
+
+/* ── Fields ── */
+
+.ui-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.ui-field__label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+
+.ui-input,
+.ui-textarea {
+  width: 100%;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-bg-card);
+  color: var(--color-text-primary);
+  font-size: 15px;
+  transition: border-color 0.15s;
+}
+
+.ui-input {
+  height: 42px;
+  padding: 0 14px;
+}
+
+.ui-textarea {
+  min-height: 88px;
+  padding: 12px 14px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.ui-input::placeholder,
+.ui-textarea::placeholder {
+  color: var(--color-text-muted);
+}
+
+.ui-input:hover,
+.ui-textarea:hover {
+  border-color: var(--color-border-strong);
+}
+
+/* Focus is shown by the border alone - never a glow ring on text entry. */
+.ui-input:focus,
+.ui-textarea:focus {
+  border-color: var(--color-brand-primary);
+}
+
+/* ── Segmented control ── */
+
+.ui-seg {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 2px;
+  padding: 3px;
+  border-radius: var(--radius-control);
+  background: var(--color-bg-track);
+}
+
+.ui-seg__opt {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 34px;
+  padding: 0 6px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.ui-seg__opt:hover {
+  color: var(--color-text-primary);
+}
+
+.ui-seg__opt[aria-checked='true'],
+.ui-seg__opt[aria-selected='true'] {
+  background: var(--color-bg-card);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+  color: var(--color-text-primary);
+  font-weight: 600;
+}
+
+.ui-seg--sm .ui-seg__opt {
+  height: 30px;
+  font-size: 12px;
+}
+
+.ui-seg__count {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--color-text-muted);
+}
+
+/* ── Caps label (section headings, group labels) ── */
+
+.ui-caps {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+/* ── Pills ── */
+
+.ui-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: var(--radius-pill);
+  background: var(--color-neutral-bg);
+  color: var(--color-neutral-text);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.ui-pill--sm {
+  height: 22px;
+  padding: 0 8px;
+}
+
+.ui-pill--error {
+  background: var(--color-error-bg);
+  color: var(--color-error-text);
+}
+
+.ui-pill--warning {
+  background: var(--color-warning-bg);
+  color: var(--color-warning-text);
+}
+
+.ui-pill--success {
+  background: var(--color-success-bg);
+  color: var(--color-success-text);
+}
+
+/* ── Menus / popovers ── */
+
+.ui-menu {
+  position: absolute;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  min-width: 200px;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  background: var(--color-bg-overlay);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-overlay);
+}
+
+.ui-menu__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  height: 36px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-text-primary);
+  font-size: 14px;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.ui-menu__item:hover:not(:disabled) {
+  background: var(--color-bg-canvas-hover);
+}
+
+.ui-menu__item:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.ui-menu__item--danger {
+  color: var(--color-error);
+}
+
+.ui-menu__item--active {
+  font-weight: 600;
+}
+
+.ui-menu__hint {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.ui-menu__sep {
+  height: 1px;
+  margin: 6px 0;
+  background: var(--color-row-line);
+}
+
+/* ── Avatars ── */
+
+.ui-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--color-brand-secondary);
+  color: var(--color-text-on-brand);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.ui-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* ── Cards ── */
+
+.ui-card {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+}
+
+/* ── Modal shell ── */
+
+.ui-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--color-scrim-modal);
+}
+
+.ui-modal {
+  display: flex;
+  flex-direction: column;
+  width: min(440px, 100%);
+  max-height: calc(var(--app-height) - 48px);
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-modal);
+  box-shadow: var(--shadow-modal);
+  color: var(--color-text-primary);
+}
+
+.ui-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ui-modal__title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.ui-link {
+  border: none;
+  padding: 0;
+  background: transparent;
+  color: var(--color-brand-text);
+  font-size: 14px;
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.ui-link:hover {
+  color: var(--color-brand-primary-hover);
+  text-decoration: underline;
+}
+
+/* Portalled menus (shared/Popover). Fixed to the viewport; Popover sets top
+   and left. Above the frame and panels, below modal overlays. */
+.ui-popover.ui-menu {
+  position: fixed;
+  z-index: 900;
+}
+
+/* Rich menu (shared/ActionMenu): icon + semibold label.
+   Destructive items are red, icon included, and sit alone at the bottom. */
+.ui-menu--rich {
+  min-width: 248px;
+  border-radius: 14px;
+  box-shadow: var(--shadow-panel);
+}
+
+.ui-menu__row {
+  position: relative;
+}
+
+.ui-menu__item--rich {
+  justify-content: flex-start;
+  gap: 12px;
+  height: 38px;
+  font-weight: 600;
+}
+
+.ui-menu__item--rich .ui-menu__icon {
+  flex-shrink: 0;
+  color: var(--color-text-secondary);
+}
+
+.ui-menu__item--rich.ui-menu__item--danger .ui-menu__icon {
+  color: inherit;
+}
+
+.ui-menu__item--highlighted {
+  background: var(--color-bg-canvas-hover);
+}
+
+.ui-menu__label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ui-menu__chevron {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+}
+
+.ui-menu__item--rich .ui-menu__hint {
+  font-weight: 500;
+}
+
+/* Flyout opened from a rich item: to the right of the parent menu. */
+.ui-menu--sub {
+  position: absolute;
+  top: -7px;
+  left: calc(100% + 13px);
+  min-width: 220px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.ui-menu--sub .ui-menu__item--rich {
+  font-weight: 600;
+}

@@ -31,6 +31,7 @@ export const keys = {
   workspaces: ['workspaces'],
   folders: ['folders'],
   completedCount: ['completed-workspaces', 'count'],
+  completedList: ['completed-workspaces', 'list'],
   recentConversations: ['conversations', 'recent'],
   workspace: (id) => ['workspace', id],
   members: (id) => ['workspace', id, 'members'],

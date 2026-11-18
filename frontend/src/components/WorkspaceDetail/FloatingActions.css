@@ -1,0 +1,80 @@
+/* ─── Floating actions: Ask Filobelo + Workspace chat ──────────────────────
+   32px from the window = 24px inside the main panel's frame. */
+
+.floating-actions {
+    position: fixed;
+    right: 32px;
+    bottom: 32px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 12px;
+    z-index: 100;
+}
+
+/* Collapsed: a 48px circle (16 + 16px icon + 16), same size as the chat
+   button. Hover or keyboard focus slides the label out to the left; the
+   width follows the label's max-width, so it animates smoothly. */
+.floating-actions__ask {
+    display: inline-flex;
+    align-items: center;
+    gap: 0;
+    height: 48px;
+    padding: 0 16px;
+    border: none;
+    border-radius: var(--radius-pill);
+    background: var(--color-brand-primary);
+    color: var(--color-text-on-brand);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
+    font: inherit;
+    font-size: 15px;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: gap 0.2s ease, padding 0.2s ease, background 0.15s ease, transform 0.1s ease;
+}
+
+.floating-actions__ask svg {
+    flex-shrink: 0;
+}
+
+.floating-actions__ask-label {
+    max-width: 0;
+    overflow: hidden;
+    opacity: 0;
+    transition: max-width 0.2s ease, opacity 0.15s ease;
+}
+
+.floating-actions__ask:hover,
+.floating-actions__ask:focus-visible {
+    gap: 8px;
+    padding: 0 20px 0 18px;
+    background: var(--color-brand-primary-hover);
+    transform: translateY(-1px);
+}
+
+.floating-actions__ask:hover .floating-actions__ask-label,
+.floating-actions__ask:focus-visible .floating-actions__ask-label {
+    max-width: 120px;
+    opacity: 1;
+}
+
+.floating-actions__chat {
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--color-border);
+    border-radius: 50%;
+    background: var(--color-bg-card);
+    color: var(--color-text-primary);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.10);
+    cursor: pointer;
+    transition: background 0.15s ease, transform 0.1s ease;
+}
+
+.floating-actions__chat:hover {
+    background: var(--color-bg-card-hover);
+    transform: translateY(-1px);
+}

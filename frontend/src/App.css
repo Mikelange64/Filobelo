@@ -1,14 +1,10 @@
-/* Redesign in progress — floating-canvas shell (Zen-inspired). Old edge-to-edge
-   Topbar + flush Sidebar layout is commented out in AppShell.jsx for a
-   side-by-side comparison; this is the new layout that replaces it.
-
-   The sidebar and the app-shell background are the same surface (no border,
-   no radius on the sidebar itself — see SidebarV2.css). Only the main canvas
-   floats: inset with margin on top/right/bottom, flush against the sidebar's
-   right edge with zero gap on the left, rounded on all four corners. */
+/* Fixed frame. The sidebar and the shell background are one surface (the
+   frame); the main panel is the only thing that floats inside it - inset on
+   the top, right and bottom, flush against the sidebar on the left. The frame
+   itself never scrolls: only .app-shell__content does. */
 .app-shell {
   display: flex;
-  height: 100vh;
+  height: var(--app-height);
   overflow: hidden;
   background: var(--color-bg-sidebar);
 }
@@ -19,9 +15,12 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: var(--color-bg-card);
-  border-radius: 14px;
-  margin: 10px 10px 10px 0;
+  /* Anchor for panels that float over the page (task panel, chat). */
+  position: relative;
+  background: var(--color-bg-main);
+  border: 1px solid var(--color-frame-edge);
+  border-radius: 16px;
+  margin: 8px 8px 8px 0;
 }
 
 .app-shell__content {
@@ -45,11 +44,11 @@
   background: var(--color-bg-overlay);
   border: 1px solid var(--color-border-strong);
   color: var(--color-text-primary);
-  font-size: 0.72rem;
+  font-size: 12px;
   font-weight: 500;
   white-space: nowrap;
-  padding: 3px 8px;
-  border-radius: var(--radius-control);
+  padding: 4px 8px;
+  border-radius: 8px;
   pointer-events: none;
   opacity: 0;
   transition: opacity 0.15s ease;

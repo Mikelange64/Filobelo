@@ -1,41 +1,45 @@
-import { useState, useEffect } from 'react'
+import { useEffect } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { listResources, deleteResource, updateLink, updateNote } from '../../api/client'
+import { writeCache } from '../../api/queryClient'
 
-// Fetches every resource for a task once and hands back type-filtered slices
-// plus shared add/delete handlers, so switching between the Notes/Links/Files
-// tabs doesn't re-fetch - only a task change does.
+// Every resource for a task, fetched once and cached under the task, with
+// type-filtered slices plus shared add/update/delete handlers. Switching
+// between the Links/Files/Notes tabs never re-fetches, and re-opening a task
+// shows its resources immediately while a background refresh runs.
+//
+// The key sits under ['workspace', id] so anything that invalidates a
+// workspace also refreshes its tasks' resources.
+export const taskResourcesKey = (workspaceId, taskId) => ['workspace', workspaceId, 'task', taskId, 'resources']
+
+const EMPTY = []
+
 export default function useTaskResources(workspaceId, taskId, onToast) {
-  const [resources, setResources] = useState([])
-  const [loading, setLoading] = useState(true)
+  const key = taskResourcesKey(workspaceId, taskId)
+  const query = useQuery({
+    queryKey: key,
+    queryFn: () => listResources(workspaceId, taskId),
+  })
+  const resources = query.data ?? EMPTY
 
+  // Toast once per failed load, not on every render that sees the error.
+  const loadError = query.error
   useEffect(() => {
-    let cancelled = false
-    async function load() {
-      setLoading(true)
-      try {
-        const data = await listResources(workspaceId, taskId)
-        if (!cancelled) setResources(data)
-      } catch (err) {
-        if (!cancelled) onToast?.(err.detail ?? 'Could not load resources')
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }
-    load()
-    return () => { cancelled = true }
-  }, [workspaceId, taskId])
+    if (loadError) onToast?.(loadError.detail ?? 'Could not load resources')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadError])
 
   function handleAdded(resource) {
-    setResources((prev) => [...prev, resource])
+    writeCache(key, (old = []) => [...old, resource])
   }
 
   async function handleDelete(resourceId) {
     const prev = resources
-    setResources((r) => r.filter((res) => res.id !== resourceId))
+    writeCache(key, (old = []) => old.filter((r) => r.id !== resourceId))
     try {
       await deleteResource(workspaceId, taskId, resourceId)
     } catch (err) {
-      setResources(prev)
+      writeCache(key, prev)
       onToast?.(err.detail ?? 'Could not delete resource')
     }
   }
@@ -44,12 +48,12 @@ export default function useTaskResources(workspaceId, taskId, onToast) {
     const resource = resources.find((r) => r.id === resourceId)
     const updateFn = resource?.type === 'LINK' ? updateLink : updateNote
     const updated = await updateFn(workspaceId, taskId, resourceId, patch)
-    setResources((prev) => prev.map((r) => (r.id === resourceId ? updated : r)))
+    writeCache(key, (old = []) => old.map((r) => (r.id === resourceId ? updated : r)))
     return updated
   }
 
   return {
-    loading,
+    loading: query.isPending,
     links: resources.filter((r) => r.type === 'LINK'),
     notes: resources.filter((r) => r.type === 'NOTE'),
     files: resources.filter((r) => r.type === 'FILE'),

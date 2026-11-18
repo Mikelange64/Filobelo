@@ -49,3 +49,22 @@ export function sortByUrgency(workspaces) {
     return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()
   })
 }
+
+/** Short urgency marker shown at the end of a sidebar row, or null when the
+ *  workspace needs no attention: "92d" (overdue, red), "3d" / "Today" (due
+ *  within three days, amber), "✓" (every task done, green). */
+export function getWorkspaceFlag(workspace) {
+  if (getWorkspaceStatus(workspace) === WORKSPACE_STATUS.COMPLETE) {
+    // Not "complete": that word (and the ✓) means an admin closed the
+    // workspace and it moved to Done. This one just has nothing left open.
+    return { label: '100%', tone: 'success', title: 'All tasks done' }
+  }
+  const days = getDaysRemaining(workspace.dueDate)
+  if (days === null) return null
+  if (days < 0) {
+    return { label: `${-days}d`, tone: 'error', title: `${-days} day${days === -1 ? '' : 's'} overdue` }
+  }
+  if (days === 0) return { label: 'Today', tone: 'warning', title: 'Due today' }
+  if (days <= 3) return { label: `${days}d`, tone: 'warning', title: `Due in ${days} day${days === 1 ? '' : 's'}` }
+  return null
+}

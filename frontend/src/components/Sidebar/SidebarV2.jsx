@@ -1,71 +1,69 @@
 import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
+import { useInfiniteQuery } from '@tanstack/react-query'
 import WorkspaceListItem from './WorkspaceListItem'
-import StatusDot from '../shared/StatusDot'
-import ThemeToggle from '../shared/ThemeToggle'
 import ConfirmModal from '../shared/ConfirmModal'
-import { getWorkspaceUrgency } from '../../utils/workspaceStatus'
+import ActionMenu, { MenuItem, MENU_ICON } from '../shared/ActionMenu'
+import useDismissableMenu from '../../hooks/useDismissableMenu'
+import { useTheme } from '../../context/ThemeContext'
+import { getCompletedWorkspaces } from '../../api/client'
+import { keys } from '../../api/queryClient'
+import { getWorkspaceFlag } from '../../utils/workspaceStatus'
+import { flattenFolderTree } from '../../utils/folders'
+import { getStartCollapsed } from '../../utils/sidebarPref'
 import { SWATCH_COLORS } from '../../constants/colors'
 import './SidebarV2.css'
 
-// Redesign draft (Zen-browser-inspired floating sidebar). Kept as a separate
-// component/stylesheet rather than editing Sidebar.jsx in place, so the old
-// implementation stays fully intact for a side-by-side comparison — see the
-// commented-out block in AppShell.jsx to switch back.
+// The app's left rail. It is the same surface as the shell frame (see
+// App.css): no background or border of its own, and it never scrolls away -
+// only the list in the middle scrolls.
 
 const FOLDER_COLORS = SWATCH_COLORS
+const COMPLETED_PAGE = 20
+// Horizontal trackpad travel (px) that counts as a swipe between tabs.
+const SWIPE_DISTANCE = 50
 
 function byMostRecent(a, b) {
   return new Date(b.dateCreated).getTime() - new Date(a.dateCreated).getTime()
 }
 
+function Icon({ d, size = 18, strokeWidth = 1.8 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d={d} />
+    </svg>
+  )
+}
+
+const ICON = {
+  home: 'M4 11l8-6 8 6v8a1 1 0 0 1-1 1h-4v-5h-6v5H5a1 1 0 0 1-1-1z',
+  search: 'M15.6 15.6L20 20M17 11a6 6 0 1 1-12 0 6 6 0 0 1 12 0z',
+  calendar: 'M6.5 5.5h11a2.5 2.5 0 0 1 2.5 2.5v9a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 17V8a2.5 2.5 0 0 1 2.5-2.5zM4 10h16M8.5 3.5v4M15.5 3.5v4',
+  plus: 'M12 5v14M5 12h14',
+  check: 'M5 12.5l4.5 4.5L19 7.5',
+  upDown: 'M7 10l5-5 5 5M7 14l5 5 5-5',
+  panel: 'M6 4h12a3 3 0 0 1 3 3v10a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V7a3 3 0 0 1 3-3zM9 4v16',
+  archive: 'M4.7 4.5h14.6a1.2 1.2 0 0 1 1.2 1.2v2.1A1.2 1.2 0 0 1 19.3 9H4.7a1.2 1.2 0 0 1-1.2-1.2V5.7A1.2 1.2 0 0 1 4.7 4.5zM5 9v9.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V9M10 13h4',
+}
+
 function SearchIcon({ size = 15 }) {
-  return (
-    <svg viewBox="0 0 24 24" width={size} height={size} aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2">
-      <circle cx="11" cy="11" r="7" />
-      <line x1="21" y1="21" x2="16.65" y2="16.65" />
-    </svg>
-  )
-}
-
-function CalendarIcon() {
-  return (
-    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-      <rect x="3" y="5" width="18" height="16" rx="2" fill="none" stroke="currentColor" strokeWidth="1.6" />
-      <line x1="3" y1="9" x2="21" y2="9" stroke="currentColor" strokeWidth="1.6" />
-      <line x1="8" y1="3" x2="8" y2="7" stroke="currentColor" strokeWidth="1.6" />
-      <line x1="16" y1="3" x2="16" y2="7" stroke="currentColor" strokeWidth="1.6" />
-    </svg>
-  )
-}
-
-function BellIcon() {
-  return (
-    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-      <path d="M6 17h12l-1.5-2.5V10a4.5 4.5 0 0 0-9 0v4.5L6 17Z" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
-      <path d="M10 19a2 2 0 0 0 4 0" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-    </svg>
-  )
+  return <Icon d={ICON.search} size={size} strokeWidth={2} />
 }
 
 function DotsIcon() {
   return (
     <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
-      <circle cx="5" cy="12" r="1.6" fill="currentColor" />
-      <circle cx="12" cy="12" r="1.6" fill="currentColor" />
-      <circle cx="19" cy="12" r="1.6" fill="currentColor" />
+      <circle cx="5" cy="12" r="1.8" fill="currentColor" />
+      <circle cx="12" cy="12" r="1.8" fill="currentColor" />
+      <circle cx="19" cy="12" r="1.8" fill="currentColor" />
     </svg>
   )
 }
 
-function FolderIcon({ color, open }) {
-  return open ? (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill={color} stroke={color} strokeWidth="0" aria-hidden="true">
-      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" opacity="0.9" />
-    </svg>
-  ) : (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill={color} stroke={color} strokeWidth="0" aria-hidden="true">
-      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" opacity="0.6" />
+function FolderIcon({ color, size = 17 }) {
+  return (
+    <svg width={size} height={Math.round(size * 0.85)} viewBox="0 0 24 20" aria-hidden="true" className="sidebar-v2__folder-icon">
+      <path d="M2 4.5A2.5 2.5 0 0 1 4.5 2h4.2c.6 0 1.2.25 1.6.7L11.6 4H19.5A2.5 2.5 0 0 1 22 6.5v9a2.5 2.5 0 0 1-2.5 2.5h-15A2.5 2.5 0 0 1 2 15.5z" fill={color} />
     </svg>
   )
 }
@@ -73,12 +71,12 @@ function FolderIcon({ color, open }) {
 function ChevronIcon({ open }) {
   return (
     <svg
-      width="12" height="12" viewBox="0 0 24 24"
-      fill="none" stroke="currentColor" strokeWidth="2.5"
+      width="14" height="14" viewBox="0 0 24 24"
+      fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
       className={`sidebar-v2__chevron-svg${open ? ' sidebar-v2__chevron-svg--open' : ''}`}
       aria-hidden="true"
     >
-      <polyline points="9 18 15 12 9 6" />
+      <path d="M9 6l6 6-6 6" />
     </svg>
   )
 }
@@ -163,8 +161,9 @@ function FolderCreateRow({ onCreate, onCancel, initialColor = FOLDER_COLORS[0], 
           onKeyDown={handleKeyDown}
           maxLength={50}
         />
-        <button type="button" className="sidebar-v2__folder-confirm" onClick={submit} aria-label="Create folder">✓</button>
-        <button type="button" className="sidebar-v2__folder-cancel" onClick={onCancel} aria-label="Cancel">✕</button>
+        <button type="button" className="sidebar-v2__folder-confirm" onClick={submit} aria-label="Create folder">
+          <Icon d={ICON.check} size={14} strokeWidth={2.4} />
+        </button>
       </div>
     </div>
   )
@@ -188,13 +187,14 @@ function groupFoldersByParent(folders) {
 // level is its own FolderItem, so each keeps its own collapsed/expanded state,
 // and the nested .sidebar-v2__folder-children containers add one step of
 // indentation per level.
-function FolderItem({ folder, foldersByParent, workspaces, folders, onCreateFolder, onUpdateFolder, onDelete, onToast, onSelectWorkspace, onTogglePin, onArchive, onLeave, onMoveToFolder }) {
+function FolderItem({ folder, foldersByParent, workspaces, folders, activeWorkspaceId, onCreateFolder, onUpdateFolder, onDelete, onToast, onSelectWorkspace, onTogglePin, onArchive, onComplete, onLeave, onMoveToFolder }) {
   const [expanded, setExpanded] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
-  const [menuView, setMenuView] = useState('main') // 'main' | 'color'
   const [creatingChild, setCreatingChild] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const menuRef = useRef(null)
+  const rowRef = useRef(null)
+  const floatingRef = useRef(null)
 
   const childFolders = foldersByParent.get(folder.id) ?? []
   const ownWorkspaces = workspaces.filter((ws) => ws.folderId === folder.id).sort(byMostRecent)
@@ -203,7 +203,7 @@ function FolderItem({ folder, foldersByParent, workspaces, folders, onCreateFold
   useEffect(() => {
     if (!menuOpen) return
     function handleClickOutside(e) {
-      if (menuRef.current && !menuRef.current.contains(e.target)) closeMenu()
+      if (!menuRef.current?.contains(e.target) && !floatingRef.current?.contains(e.target)) closeMenu()
     }
     function handleEscape(e) {
       if (e.key === 'Escape') closeMenu()
@@ -218,7 +218,6 @@ function FolderItem({ folder, foldersByParent, workspaces, folders, onCreateFold
 
   function closeMenu() {
     setMenuOpen(false)
-    setMenuView('main')
   }
 
   function startSubfolder() {
@@ -247,16 +246,38 @@ function FolderItem({ folder, foldersByParent, workspaces, folders, onCreateFold
     }
   }
 
+  // Where this folder may be moved: anywhere except into itself or its own
+  // subtree (the server rejects those with a 400; they are simply not offered).
+  const ownSubtree = new Set([folder.id])
+  const moveTargets = flattenFolderTree(folders).filter(({ folder: f }) => {
+    if (ownSubtree.has(f.id)) return false
+    if (f.parent_id != null && ownSubtree.has(f.parent_id)) {
+      ownSubtree.add(f.id)
+      return false
+    }
+    return true
+  })
+
+  async function moveTo(parentId) {
+    closeMenu()
+    if ((folder.parent_id ?? null) === parentId) return
+    try {
+      await onUpdateFolder?.(folder.id, { parent_id: parentId })
+    } catch (err) {
+      onToast?.(err?.message ?? 'Could not move folder')
+    }
+  }
+
   return (
     <div className="sidebar-v2__folder">
-      <div className={`sidebar-v2__folder-row${menuOpen ? ' sidebar-v2__folder-row--menu-open' : ''}`}>
+      <div ref={rowRef} className={`sidebar-v2__folder-row${menuOpen ? ' sidebar-v2__folder-row--menu-open' : ''}`}>
         <button
           type="button"
           className="sidebar-v2__folder-toggle"
           aria-expanded={expanded}
           onClick={() => setExpanded((v) => !v)}
         >
-          <FolderIcon color={folder.color} open={expanded} />
+          <FolderIcon color={folder.color} />
           <span className="sidebar-v2__folder-name">{folder.name}</span>
           <span className="sidebar-v2__folder-chevron">
             <ChevronIcon open={expanded} />
@@ -274,29 +295,59 @@ function FolderItem({ folder, foldersByParent, workspaces, folders, onCreateFold
           >
             <DotsIcon />
           </button>
-          {menuOpen && menuView === 'main' && (
-            <ul className="sidebar-v2__folder-menu">
-              <li>
-                <button type="button" className="sidebar-v2__folder-menu-item--neutral" onClick={startSubfolder}>
-                  New subfolder
-                </button>
-              </li>
-              <li>
-                <button type="button" className="sidebar-v2__folder-menu-item--neutral" onClick={() => setMenuView('color')}>
-                  Change colour
-                </button>
-              </li>
-              <li>
-                <button type="button" onClick={() => { setConfirmDelete(true); closeMenu() }}>
-                  Delete folder
-                </button>
-              </li>
-            </ul>
-          )}
-          {menuOpen && menuView === 'color' && (
-            <div className="sidebar-v2__folder-menu sidebar-v2__folder-menu--color" role="group" aria-label="Folder colour">
-              <ColorPicker inline selected={folder.color} onChange={changeColor} />
-            </div>
+          {menuOpen && (
+            <ActionMenu
+              anchorRef={rowRef}
+              floatingRef={floatingRef}
+              label={`Options for ${folder.name}`}
+              onClose={closeMenu}
+              items={[
+                { id: 'sub', label: 'New subfolder', icon: MENU_ICON.newFolder, onSelect: startSubfolder },
+                {
+                  id: 'color',
+                  label: 'Change colour',
+                  icon: MENU_ICON.palette,
+                  submenu: <ColorPicker inline selected={folder.color} onChange={changeColor} />,
+                },
+                (moveTargets.length > 0 || folder.parent_id != null) && {
+                  id: 'move',
+                  label: 'Move to',
+                  icon: MENU_ICON.move,
+                  submenu: (
+                    <>
+                      <MenuItem
+                        role="menuitemradio"
+                        aria-checked={folder.parent_id == null}
+                        label="Top level"
+                        active={folder.parent_id == null}
+                        onClick={() => moveTo(null)}
+                      />
+                      {moveTargets.length > 0 && <div className="ui-menu__sep" role="separator" />}
+                      {moveTargets.map(({ folder: target, depth }) => (
+                        <MenuItem
+                          key={target.id}
+                          role="menuitemradio"
+                          aria-checked={folder.parent_id === target.id}
+                          active={folder.parent_id === target.id}
+                          style={depth > 0 ? { paddingLeft: 10 + depth * 14 } : undefined}
+                          icon={<FolderIcon color={target.color} size={16} />}
+                          label={target.name}
+                          onClick={() => moveTo(target.id)}
+                        />
+                      ))}
+                    </>
+                  ),
+                },
+                {
+                  id: 'delete',
+                  label: 'Delete folder',
+                  icon: MENU_ICON.trash,
+                  danger: true,
+                  separatorBefore: true,
+                  onSelect: () => setConfirmDelete(true),
+                },
+              ]}
+            />
           )}
         </div>
       </div>
@@ -339,6 +390,7 @@ function FolderItem({ folder, foldersByParent, workspaces, folders, onCreateFold
               foldersByParent={foldersByParent}
               workspaces={workspaces}
               folders={folders}
+              activeWorkspaceId={activeWorkspaceId}
               onCreateFolder={onCreateFolder}
               onUpdateFolder={onUpdateFolder}
               onDelete={onDelete}
@@ -346,6 +398,7 @@ function FolderItem({ folder, foldersByParent, workspaces, folders, onCreateFold
               onSelectWorkspace={onSelectWorkspace}
               onTogglePin={onTogglePin}
               onArchive={onArchive}
+              onComplete={onComplete}
               onLeave={onLeave}
               onMoveToFolder={onMoveToFolder}
             />
@@ -355,9 +408,12 @@ function FolderItem({ folder, foldersByParent, workspaces, folders, onCreateFold
               key={ws.id}
               workspace={ws}
               folders={folders}
+              folderColor={folder.color}
+              active={ws.id === activeWorkspaceId}
               onSelect={onSelectWorkspace}
               onTogglePin={onTogglePin}
               onArchive={onArchive}
+              onComplete={onComplete}
               onLeave={onLeave}
               onMoveToFolder={onMoveToFolder}
             />
@@ -372,7 +428,7 @@ function FolderItem({ folder, foldersByParent, workspaces, folders, onCreateFold
   )
 }
 
-function WorkspaceSearchOverlay({ workspaces, onSelect, onClose }) {
+function WorkspaceSearchOverlay({ workspaces, folders, onSelect, onClose }) {
   const [query, setQuery] = useState('')
   const inputRef = useRef(null)
 
@@ -386,6 +442,7 @@ function WorkspaceSearchOverlay({ workspaces, onSelect, onClose }) {
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [onClose])
 
+  const folderColorOf = (ws) => folders.find((f) => f.id === ws.folderId)?.color
   const q = query.trim().toLowerCase()
   const sorted = [...workspaces].sort(byMostRecent)
   const matchCount = sorted.filter((ws) => !q || ws.title.toLowerCase().includes(q)).length
@@ -399,7 +456,7 @@ function WorkspaceSearchOverlay({ workspaces, onSelect, onClose }) {
             ref={inputRef}
             type="text"
             className="wsearch-input"
-            placeholder="Search…"
+            placeholder="Search workspaces…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -413,6 +470,7 @@ function WorkspaceSearchOverlay({ workspaces, onSelect, onClose }) {
           ) : (
             sorted.map((ws) => {
               const matches = !q || ws.title.toLowerCase().includes(q)
+              const flag = getWorkspaceFlag(ws)
               const taskLabel = `${ws.numOfTasks} task${ws.numOfTasks === 1 ? '' : 's'}`
               const dueLabel = ws.dueDate ? ` · due ${new Date(ws.dueDate).toLocaleDateString([], { month: 'short', day: 'numeric' })}` : ''
               return (
@@ -424,11 +482,18 @@ function WorkspaceSearchOverlay({ workspaces, onSelect, onClose }) {
                   aria-hidden={!matches}
                   onClick={() => { onSelect(ws.id); onClose() }}
                 >
-                  <StatusDot urgency={getWorkspaceUrgency(ws)} />
+                  <span
+                    className="wsearch-result-square"
+                    style={folderColorOf(ws) ? { backgroundColor: folderColorOf(ws) } : undefined}
+                    aria-hidden="true"
+                  />
                   <span className="wsearch-result-body">
                     <span className="wsearch-result-title">{ws.title}</span>
                     <span className="wsearch-result-meta">{taskLabel}{dueLabel}</span>
                   </span>
+                  {flag && (
+                    <span className={`workspace-item__flag workspace-item__flag--${flag.tone}`}>{flag.label}</span>
+                  )}
                 </button>
               )
             })
@@ -439,37 +504,427 @@ function WorkspaceSearchOverlay({ workspaces, onSelect, onClose }) {
   )
 }
 
+// A finished (completed or archived) workspace. Same row shape as an active
+// one - folder square, title, marker that turns into ⋯ on hover - but in
+// secondary text, with its own short menu.
+function FinishedRow({ workspace, folderColor, active, marker, menuItems, onSelect }) {
+  const [open, setOpen, wrapRef, floatingRef] = useDismissableMenu()
+  const rowRef = useRef(null)
+  return (
+    <div ref={rowRef} className={`workspace-item workspace-item--muted${active ? ' workspace-item--active' : ''}`}>
+      <button
+        type="button"
+        className="workspace-item__select"
+        aria-current={active ? 'page' : undefined}
+        onClick={() => onSelect?.(workspace.id)}
+      >
+        {folderColor && (
+          <span className="workspace-item__square" style={{ backgroundColor: folderColor }} aria-hidden="true" />
+        )}
+        <span className="workspace-item__title">{workspace.title}</span>
+        {marker}
+      </button>
+      <div className="workspace-item__menu" ref={wrapRef}>
+        <button
+          type="button"
+          className="workspace-item__menu-trigger"
+          aria-label={`More actions for ${workspace.title}`}
+          aria-haspopup="menu"
+          aria-expanded={open}
+          onClick={() => setOpen((v) => !v)}
+        >
+          <DotsIcon />
+        </button>
+        {open && (
+          <ActionMenu
+            anchorRef={rowRef}
+            floatingRef={floatingRef}
+            items={menuItems}
+            label={`Actions for ${workspace.title}`}
+            onClose={() => setOpen(false)}
+          />
+        )}
+      </div>
+    </div>
+  )
+}
+
+// Completed workspaces are not part of the main workspace list (the server
+// pages them separately), so the Done view fetches its own pages on demand.
+function CompletedList({ folders, activeWorkspaceId, onSelectWorkspace, onReopen }) {
+  const query = useInfiniteQuery({
+    queryKey: keys.completedList,
+    queryFn: ({ pageParam }) => getCompletedWorkspaces(pageParam, COMPLETED_PAGE),
+    initialPageParam: 0,
+    getNextPageParam: (last, pages) =>
+      last.has_more ? pages.reduce((n, p) => n + p.workspaces.length, 0) : undefined,
+    staleTime: 0,
+  })
+  const items = query.data?.pages.flatMap((p) => p.workspaces) ?? []
+
+  if (query.isPending) return <p className="sidebar-v2__hint">Loading…</p>
+  if (query.isError && items.length === 0) {
+    return <p className="sidebar-v2__hint">Could not load completed workspaces.</p>
+  }
+  if (items.length === 0) {
+    return (
+      <div className="sidebar-v2__empty-mode">
+        <span className="sidebar-v2__empty-mode-icon"><Icon d={ICON.check} strokeWidth={2} /></span>
+        <span className="sidebar-v2__empty-mode-title">Nothing completed yet</span>
+        <span className="sidebar-v2__empty-mode-text">
+          Mark a workspace complete from its ⋯ menu and it moves here.
+        </span>
+      </div>
+    )
+  }
+
+  return (
+    <>
+      <div className="sidebar-v2__group">
+        <h2 className="ui-caps sidebar-v2__section-label">Completed</h2>
+        {items.map((ws) => {
+          const isAdmin = ws.current_user_role === 'admin'
+          return (
+            <FinishedRow
+              key={ws.id}
+              workspace={ws}
+              folderColor={folders.find((f) => f.id === ws.folder_id)?.color}
+              active={ws.id === activeWorkspaceId}
+              onSelect={onSelectWorkspace}
+              marker={(
+                <span className="workspace-item__flag workspace-item__flag--success" role="img" aria-label="Completed">
+                  <Icon d={ICON.check} size={14} strokeWidth={2.4} />
+                </span>
+              )}
+              menuItems={[
+                { id: 'open', label: 'Open', icon: MENU_ICON.open, onSelect: () => onSelectWorkspace?.(ws.id) },
+                isAdmin
+                  ? { id: 'reopen', label: 'Reopen', icon: MENU_ICON.reopen, onSelect: () => onReopen?.(ws.id) }
+                  : { id: 'reopen', label: 'Reopen', icon: MENU_ICON.reopen, hint: 'Admins only', disabled: true },
+              ]}
+            />
+          )
+        })}
+        {query.hasNextPage && (
+          <button
+            type="button"
+            className="sidebar-v2__more"
+            onClick={() => query.fetchNextPage()}
+            disabled={query.isFetchingNextPage}
+          >
+            {query.isFetchingNextPage ? 'Loading…' : 'Show more'}
+          </button>
+        )}
+      </div>
+      <p className="sidebar-v2__footnote">Reopen a workspace from its ⋯ menu to move it back to Active.</p>
+    </>
+  )
+}
+
+function ArchivedList({ workspaces, folders, activeWorkspaceId, onSelectWorkspace, onRestore }) {
+  if (workspaces.length === 0) {
+    return (
+      <div className="sidebar-v2__empty-mode">
+        <span className="sidebar-v2__empty-mode-icon"><Icon d={ICON.archive} strokeWidth={2} /></span>
+        <span className="sidebar-v2__empty-mode-title">Nothing archived</span>
+        <span className="sidebar-v2__empty-mode-text">
+          Archive a workspace from its ⋯ menu to hide it here. You can restore it any time.
+        </span>
+      </div>
+    )
+  }
+  return (
+    <>
+      <div className="sidebar-v2__group">
+        <h2 className="ui-caps sidebar-v2__section-label">Archived</h2>
+        {[...workspaces].sort(byMostRecent).map((ws) => (
+          <FinishedRow
+            key={ws.id}
+            workspace={ws}
+            folderColor={folders.find((f) => f.id === ws.folderId)?.color}
+            active={ws.id === activeWorkspaceId}
+            onSelect={onSelectWorkspace}
+            marker={null}
+            menuItems={[
+              { id: 'open', label: 'Open', icon: MENU_ICON.open, onSelect: () => onSelectWorkspace?.(ws.id) },
+              { id: 'restore', label: 'Restore', icon: MENU_ICON.restore, onSelect: () => onRestore?.(ws.id) },
+            ]}
+          />
+        ))}
+      </div>
+      <p className="sidebar-v2__footnote">Archiving only hides a workspace for you. Restore it from its ⋯ menu.</p>
+    </>
+  )
+}
+
+// Same order as everywhere else: dark, midnight, light.
+const THEMES = [
+  { id: 'dark', label: 'Dark' },
+  { id: 'midnight', label: 'Midnight' },
+  { id: 'light', label: 'Light' },
+]
+
+function AccountMenu({ currentUser, onOpenSettings, onSignOut, compact = false }) {
+  const [open, setOpen, ref] = useDismissableMenu()
+  const { theme, setTheme } = useTheme()
+  return (
+    <div className={`sidebar-v2__footer${compact ? ' sidebar-v2__footer--compact' : ''}`} ref={ref}>
+      {open && (
+        <div className="ui-menu sidebar-v2__account-menu" role="menu">
+          <div className="sidebar-v2__account-head">
+            <span className="sidebar-v2__account-name">{currentUser?.name}</span>
+            <span className="sidebar-v2__account-sub">Personal account</span>
+          </div>
+          <div className="sidebar-v2__account-theme">
+            <span className="ui-caps">Theme</span>
+            <div className="ui-seg ui-seg--sm" role="radiogroup" aria-label="Theme">
+              {THEMES.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={theme === t.id}
+                  className="ui-seg__opt"
+                  onClick={() => setTheme(t.id)}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="ui-menu__sep" aria-hidden="true" />
+          <button
+            type="button"
+            role="menuitem"
+            className="ui-menu__item"
+            onClick={() => { setOpen(false); onOpenSettings?.() }}
+          >
+            Settings
+          </button>
+          <div className="ui-menu__sep" aria-hidden="true" />
+          <button
+            type="button"
+            role="menuitem"
+            className="ui-menu__item"
+            onClick={() => { setOpen(false); onSignOut?.() }}
+          >
+            Sign out
+          </button>
+        </div>
+      )}
+      <button
+        type="button"
+        className="sidebar-v2__profile"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={compact ? 'Account' : undefined}
+        title={compact ? currentUser?.name : undefined}
+        onClick={() => setOpen((v) => !v)}
+      >
+        <span className="ui-avatar">
+          {currentUser?.avatarUrl
+            ? <img src={currentUser.avatarUrl} alt="" />
+            : (currentUser?.name ? currentUser.name[0].toUpperCase() : '?')}
+        </span>
+        {!compact && (
+          <>
+            <span className="sidebar-v2__profile-name">{currentUser?.name ?? 'Sign in'}</span>
+            <span className="sidebar-v2__profile-caret"><Icon d={ICON.upDown} size={16} strokeWidth={2} /></span>
+          </>
+        )}
+      </button>
+    </div>
+  )
+}
+
+// Per-viewer UI memory (sidebar collapsed, which sections are folded). Plain
+// localStorage, wrapped: private windows can throw, and the sidebar must work
+// without it.
+function usePersistentState(key, initial, forced) {
+  const [value, setValue] = useState(() => {
+    if (forced !== undefined) return forced
+    try {
+      const raw = localStorage.getItem(key)
+      return raw == null ? initial : JSON.parse(raw)
+    } catch {
+      return initial
+    }
+  })
+  useEffect(() => {
+    try { localStorage.setItem(key, JSON.stringify(value)) } catch { /* ignore */ }
+  }, [key, value])
+  return [value, setValue]
+}
+
+// A section heading that folds its list, like "Pinned ⌄" in chat sidebars.
+// `action` (e.g. the folder +) sits on the right and is not part of the toggle.
+function SectionHeader({ label, open, onToggle, action }) {
+  return (
+    <div className="sidebar-v2__section-header">
+      <button type="button" className="sidebar-v2__section-toggle" aria-expanded={open} onClick={onToggle}>
+        <h2 className="ui-caps">{label}</h2>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"
+          className={`sidebar-v2__section-chevron${open ? '' : ' sidebar-v2__section-chevron--closed'}`}>
+          <path d="M6 9l6 6 6-6" />
+        </svg>
+      </button>
+      {action}
+    </div>
+  )
+}
+
+// The collapsed sidebar: a 72px rail with icons and one tile per workspace
+// (its initial on the folder colour), plus a dot when it needs attention.
+function SidebarRail({ workspaces, folders, activeWorkspaceId, activeNav, currentUser, onExpand, onNewWorkspace, onGoHome, onSearch, onOpenCalendar, onSelectWorkspace, onOpenSettings, onSignOut }) {
+  const ordered = [
+    ...workspaces.filter((ws) => ws.isPinned).sort(byMostRecent),
+    ...workspaces.filter((ws) => !ws.isPinned).sort(byMostRecent),
+  ]
+  const nav = [
+    { id: 'home', label: 'Home', icon: ICON.home, onClick: onGoHome },
+    { id: 'search', label: 'Search', icon: ICON.search, onClick: onSearch },
+    { id: 'calendar', label: 'Calendar', icon: ICON.calendar, onClick: onOpenCalendar },
+  ]
+  return (
+    <>
+      <button type="button" className="sidebar-v2__rail-btn" onClick={onExpand} aria-label="Expand sidebar" title="Expand sidebar">
+        <Icon d={ICON.panel} />
+      </button>
+      <button type="button" className="ui-btn ui-btn--primary sidebar-v2__rail-new" onClick={onNewWorkspace} aria-label="New workspace" title="New workspace">
+        <Icon d={ICON.plus} size={18} strokeWidth={2.2} />
+      </button>
+      <div className="sidebar-v2__rail-group">
+        {nav.map((n) => (
+          <button
+            key={n.id}
+            type="button"
+            className={`sidebar-v2__rail-btn${activeNav === n.id ? ' sidebar-v2__rail-btn--active' : ''}`}
+            aria-label={n.label}
+            title={n.label}
+            aria-current={activeNav === n.id ? 'page' : undefined}
+            onClick={n.onClick}
+          >
+            <Icon d={n.icon} />
+          </button>
+        ))}
+      </div>
+      <span className="sidebar-v2__rail-divider" aria-hidden="true" />
+      <div className="sidebar-v2__rail-list">
+        {ordered.map((ws) => {
+          const color = folders.find((f) => f.id === ws.folderId)?.color
+          const flag = getWorkspaceFlag(ws)
+          const alert = flag && (flag.tone === 'error' || flag.tone === 'warning') ? flag.tone : null
+          return (
+            <button
+              key={ws.id}
+              type="button"
+              className={`sidebar-v2__rail-btn${ws.id === activeWorkspaceId ? ' sidebar-v2__rail-btn--active' : ''}`}
+              aria-label={ws.title}
+              title={ws.title}
+              aria-current={ws.id === activeWorkspaceId ? 'page' : undefined}
+              onClick={() => onSelectWorkspace?.(ws.id)}
+            >
+              <span
+                className={`sidebar-v2__rail-tile${color ? '' : ' sidebar-v2__rail-tile--plain'}`}
+                style={color ? { backgroundColor: color } : undefined}
+              >
+                {ws.title.trim()[0]?.toUpperCase() ?? '?'}
+              </span>
+              {alert && <span className={`sidebar-v2__rail-alert sidebar-v2__rail-alert--${alert}`} aria-hidden="true" />}
+            </button>
+          )
+        })}
+      </div>
+      <AccountMenu compact currentUser={currentUser} onOpenSettings={onOpenSettings} onSignOut={onSignOut} />
+    </>
+  )
+}
+
+const MODES = [
+  { id: 'active', label: 'Active' },
+  { id: 'completed', label: 'Done' },
+  { id: 'archived', label: 'Archived' },
+]
+
 function SidebarV2({
   workspaces = [],
+  archivedWorkspaces = [],
   completedCount = 0,
-  archivedCount = 0,
   folders = [],
   currentUser = null,
+  activeWorkspaceId = null,
+  activeNav = null, // 'home' | 'calendar' | null
   onNewWorkspace,
-  onOpenInbox,
-  onOpenCompleted,
-  onOpenArchived,
   onSelectWorkspace,
   onTogglePin,
   onArchive,
+  onComplete,
+  onRestore,
+  onReopen,
   onLeave,
   onCreateFolder,
   onUpdateFolder,
   onDeleteFolder,
   onMoveToFolder,
   onToast,
-  onProfileClick,
-  onCalendarToggle,
-  onNotificationsClick,
-  onLogoClick,
+  onOpenSettings,
+  onSignOut,
+  onOpenCalendar,
+  onGoHome,
 }) {
   const [creatingFolder, setCreatingFolder] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
+  // Which list the middle of the sidebar shows. Not persisted: Active is the
+  // default every time the app opens.
+  const [mode, setMode] = useState('active')
+  const [collapsed, setCollapsed] = usePersistentState('filobelo.sidebar.collapsed', false, getStartCollapsed() ? true : undefined)
+  const [sections, setSections] = usePersistentState('filobelo.sidebar.sections', { pinned: true, folders: true, workspaces: true })
+  const navRef = useRef(null)
+  const toggleSection = (id) => setSections((prev) => ({ ...prev, [id]: !(prev?.[id] ?? true) }))
+  const isOpen = (id) => sections?.[id] ?? true
+
+  // Two-finger horizontal swipe over the sidebar steps between Active, Done
+  // and Archived. One gesture moves one tab: after a switch, further events
+  // (including trackpad momentum) are ignored until the wheel goes quiet.
+  useEffect(() => {
+    const el = navRef.current
+    if (!el) return
+    let travel = 0
+    let locked = false
+    let idleTimer
+    function onWheel(e) {
+      if (el.dataset.collapsed === 'true') return
+      if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return
+      // Horizontal: ours. Also stops the browser using it for back/forward.
+      e.preventDefault()
+      clearTimeout(idleTimer)
+      idleTimer = setTimeout(() => { travel = 0; locked = false }, 200)
+      if (locked) return
+      travel += e.deltaMode === 1 ? e.deltaX * 16 : e.deltaX
+      if (Math.abs(travel) < SWIPE_DISTANCE) return
+      locked = true
+      const step = travel > 0 ? 1 : -1
+      setMode((current) => {
+        const i = MODES.findIndex((m) => m.id === current)
+        return MODES[Math.min(MODES.length - 1, Math.max(0, i + step))].id
+      })
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => {
+      el.removeEventListener('wheel', onWheel)
+      clearTimeout(idleTimer)
+    }
+  }, [])
 
   const pinned = workspaces.filter((ws) => ws.isPinned).sort(byMostRecent)
   const rest = workspaces.filter((ws) => !ws.isPinned).sort(byMostRecent)
   const foldersByParent = groupFoldersByParent(folders)
   const rootFolders = foldersByParent.get(null) ?? []
+  const counts = {
+    active: workspaces.length,
+    completed: completedCount,
+    archived: archivedWorkspaces.length,
+  }
 
   async function handleCreate(name, color) {
     try {
@@ -481,187 +936,219 @@ function SidebarV2({
     }
   }
 
+  const rowProps = {
+    folders,
+    onSelect: onSelectWorkspace,
+    onTogglePin,
+    onArchive,
+    onComplete,
+    onLeave,
+    onMoveToFolder,
+  }
+
   return (
     <>
-      <nav className="sidebar-v2" aria-label="Workspaces">
+      <nav
+        className={`sidebar-v2${collapsed ? ' sidebar-v2--collapsed' : ''}`}
+        aria-label="Main"
+        ref={navRef}
+        data-collapsed={collapsed}
+      >
+        {collapsed ? (
+          <SidebarRail
+            workspaces={workspaces}
+            folders={folders}
+            activeWorkspaceId={activeWorkspaceId}
+            activeNav={activeNav}
+            currentUser={currentUser}
+            onExpand={() => setCollapsed(false)}
+            onNewWorkspace={onNewWorkspace}
+            onGoHome={onGoHome}
+            onSearch={() => setSearchOpen(true)}
+            onOpenCalendar={onOpenCalendar}
+            onSelectWorkspace={onSelectWorkspace}
+            onOpenSettings={onOpenSettings}
+            onSignOut={onSignOut}
+          />
+        ) : (
+        <>
         <div className="sidebar-v2__header">
-          <button
-            type="button"
-            className="sidebar-v2__logo-btn"
-            onClick={onLogoClick}
-            aria-label="Go to home"
-          >
+          <button type="button" className="sidebar-v2__logo-btn" onClick={onGoHome} aria-label="Go to home">
             <span className="sidebar-v2__logo-text">Filobelo</span>
           </button>
-          <button
-            type="button"
-            className="sidebar-v2__search-icon-btn"
-            onClick={() => setSearchOpen(true)}
-            aria-label="Search workspaces"
-            data-tooltip="Search"
-          >
-            <SearchIcon size={18} />
+          <button type="button" className="ui-icon-btn sidebar-v2__collapse" onClick={() => setCollapsed(true)} aria-label="Collapse sidebar" title="Collapse sidebar">
+            <Icon d={ICON.panel} />
           </button>
         </div>
 
-        <div className="sidebar-v2__actions">
-          <button type="button" className="sidebar-v2__action sidebar-v2__action--primary" onClick={onNewWorkspace}>
-            + New workspace
+        <button type="button" className="ui-btn ui-btn--primary sidebar-v2__new" onClick={onNewWorkspace}>
+          <Icon d={ICON.plus} size={16} strokeWidth={2.2} />
+          New workspace
+        </button>
+
+        <div className="sidebar-v2__group">
+          <button
+            type="button"
+            className={`sidebar-v2__nav-item${activeNav === 'home' ? ' sidebar-v2__nav-item--active' : ''}`}
+            aria-current={activeNav === 'home' ? 'page' : undefined}
+            onClick={onGoHome}
+          >
+            <Icon d={ICON.home} />
+            <span className="sidebar-v2__nav-label">Home</span>
           </button>
-          <button type="button" className="sidebar-v2__action sidebar-v2__action--muted" onClick={onOpenInbox}>
-            Inbox
+          <button type="button" className="sidebar-v2__nav-item" onClick={() => setSearchOpen(true)}>
+            <Icon d={ICON.search} />
+            <span className="sidebar-v2__nav-label">Search</span>
           </button>
+          <button
+            type="button"
+            className={`sidebar-v2__nav-item${activeNav === 'calendar' ? ' sidebar-v2__nav-item--active' : ''}`}
+            aria-current={activeNav === 'calendar' ? 'page' : undefined}
+            onClick={onOpenCalendar}
+          >
+            <Icon d={ICON.calendar} />
+            <span className="sidebar-v2__nav-label">Calendar</span>
+          </button>
+        </div>
+
+        <div className="ui-seg ui-seg--sm sidebar-v2__modes" role="tablist" aria-label="Workspace status">
+          {MODES.map((m) => (
+            <button
+              key={m.id}
+              type="button"
+              role="tab"
+              aria-selected={mode === m.id}
+              className="ui-seg__opt"
+              onClick={() => setMode(m.id)}
+            >
+              {m.label}
+              <span className="ui-seg__count">{counts[m.id]}</span>
+            </button>
+          ))}
         </div>
 
         <div className="sidebar-v2__list">
-          <div className="sidebar-v2__section">
-            <div className="sidebar-v2__section-header">
-              <h2 className="sidebar-v2__section-label">Folders</h2>
-              <button
-                type="button"
-                className="sidebar-v2__section-add"
-                onClick={() => setCreatingFolder(true)}
-                aria-label="New folder"
-              >
-                +
-              </button>
-            </div>
-
-            {creatingFolder && (
-              <FolderCreateRow onCreate={handleCreate} onCancel={() => setCreatingFolder(false)} />
-            )}
-
-            {folders.length === 0 && !creatingFolder && (
-              <p className="sidebar-v2__empty-hint">No folders yet</p>
-            )}
-
-            {rootFolders.map((folder) => (
-              <FolderItem
-                key={folder.id}
-                folder={folder}
-                foldersByParent={foldersByParent}
-                workspaces={workspaces}
-                folders={folders}
-                onCreateFolder={onCreateFolder}
-                onUpdateFolder={onUpdateFolder}
-                onDelete={onDeleteFolder}
-                onToast={onToast}
-                onSelectWorkspace={onSelectWorkspace}
-                onTogglePin={onTogglePin}
-                onArchive={onArchive}
-                onLeave={onLeave}
-                onMoveToFolder={onMoveToFolder}
-              />
-            ))}
-          </div>
-
-          <div className="sidebar-v2__divider" />
-
-          {workspaces.length === 0 ? (
-            <p className="sidebar-v2__empty">No workspaces yet.</p>
-          ) : (
-            <>
+          {mode === 'active' && (
+            <div className="sidebar-v2__mode" key="active">
               {pinned.length > 0 && (
-                <>
-                  <div className="sidebar-v2__section">
-                    <h2 className="sidebar-v2__section-label">Pinned</h2>
-                    {pinned.map((ws) => (
-                      <WorkspaceListItem
-                        key={ws.id}
-                        workspace={ws}
-                        folders={folders}
-                        folderColor={folders.find((f) => f.id === ws.folderId)?.color}
-                        onSelect={onSelectWorkspace}
-                        onTogglePin={onTogglePin}
-                        onArchive={onArchive}
-                        onLeave={onLeave}
-                        onMoveToFolder={onMoveToFolder}
-                      />
-                    ))}
-                  </div>
-                  <div className="sidebar-v2__divider" />
-                </>
+                <div className="sidebar-v2__group">
+                  <SectionHeader label="Pinned" open={isOpen('pinned')} onToggle={() => toggleSection('pinned')} />
+                  {isOpen('pinned') && pinned.map((ws) => (
+                    <WorkspaceListItem
+                      key={ws.id}
+                      workspace={ws}
+                      folderColor={folders.find((f) => f.id === ws.folderId)?.color}
+                      active={ws.id === activeWorkspaceId}
+                      {...rowProps}
+                    />
+                  ))}
+                </div>
               )}
 
-              <div className="sidebar-v2__section">
-                <h2 className="sidebar-v2__section-label">All workspaces</h2>
-                {rest.map((ws) => (
-                  <WorkspaceListItem
-                    key={ws.id}
-                    workspace={ws}
+              <div className="sidebar-v2__group">
+                <SectionHeader
+                  label="Folders"
+                  open={isOpen('folders')}
+                  onToggle={() => toggleSection('folders')}
+                  action={(
+                    <button
+                      type="button"
+                      className="ui-icon-btn ui-icon-btn--sm sidebar-v2__section-add"
+                      // mousedown would otherwise reach the create row's
+                      // outside-click handler first: it closes, then this click
+                      // reopens it. Stopping it here lets + toggle cleanly.
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onClick={() => {
+                        if (!isOpen('folders')) toggleSection('folders')
+                        setCreatingFolder((v) => !v)
+                      }}
+                      aria-expanded={creatingFolder}
+                      aria-label="New folder"
+                    >
+                      <Icon d={ICON.plus} size={14} strokeWidth={2.2} />
+                    </button>
+                  )}
+                />
+
+                {creatingFolder && (
+                  <FolderCreateRow onCreate={handleCreate} onCancel={() => setCreatingFolder(false)} />
+                )}
+
+                {isOpen('folders') && folders.length === 0 && !creatingFolder && (
+                  <p className="sidebar-v2__hint">No folders yet</p>
+                )}
+
+                {isOpen('folders') && rootFolders.map((folder) => (
+                  <FolderItem
+                    key={folder.id}
+                    folder={folder}
+                    foldersByParent={foldersByParent}
+                    workspaces={workspaces}
                     folders={folders}
-                    folderColor={folders.find((f) => f.id === ws.folderId)?.color}
-                    onSelect={onSelectWorkspace}
+                    activeWorkspaceId={activeWorkspaceId}
+                    onCreateFolder={onCreateFolder}
+                    onUpdateFolder={onUpdateFolder}
+                    onDelete={onDeleteFolder}
+                    onToast={onToast}
+                    onSelectWorkspace={onSelectWorkspace}
                     onTogglePin={onTogglePin}
                     onArchive={onArchive}
+                    onComplete={onComplete}
                     onLeave={onLeave}
                     onMoveToFolder={onMoveToFolder}
                   />
                 ))}
               </div>
-            </>
+
+              <div className="sidebar-v2__group">
+                <SectionHeader label="Workspaces" open={isOpen('workspaces')} onToggle={() => toggleSection('workspaces')} />
+                {isOpen('workspaces') && workspaces.length === 0 && <p className="sidebar-v2__hint">No workspaces yet</p>}
+                {isOpen('workspaces') && rest.map((ws) => (
+                  <WorkspaceListItem
+                    key={ws.id}
+                    workspace={ws}
+                    folderColor={folders.find((f) => f.id === ws.folderId)?.color}
+                    active={ws.id === activeWorkspaceId}
+                    {...rowProps}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {mode === 'completed' && (
+            <div className="sidebar-v2__mode" key="completed">
+              <CompletedList
+                folders={folders}
+                activeWorkspaceId={activeWorkspaceId}
+                onSelectWorkspace={onSelectWorkspace}
+                onReopen={onReopen}
+              />
+            </div>
+          )}
+
+          {mode === 'archived' && (
+            <div className="sidebar-v2__mode" key="archived">
+              <ArchivedList
+                workspaces={archivedWorkspaces}
+                folders={folders}
+                activeWorkspaceId={activeWorkspaceId}
+                onSelectWorkspace={onSelectWorkspace}
+                onRestore={onRestore}
+              />
+            </div>
           )}
         </div>
 
-        {(completedCount > 0 || archivedCount > 0) && (
-          <div className="sidebar-v2__divider" />
+        <AccountMenu currentUser={currentUser} onOpenSettings={onOpenSettings} onSignOut={onSignOut} />
+        </>
         )}
-
-        {completedCount > 0 && (
-          <button type="button" className="sidebar-v2__completed-btn" onClick={onOpenCompleted}>
-            <span className="sidebar-v2__completed-label">Completed</span>
-            <span className="sidebar-v2__completed-count">{completedCount}</span>
-          </button>
-        )}
-
-        {/* Same look as Completed (shares its classes). AppShell passes
-            archivedCount / onOpenArchived; hidden while there is nothing archived. */}
-        {archivedCount > 0 && (
-          <button type="button" className="sidebar-v2__completed-btn" onClick={onOpenArchived}>
-            <span className="sidebar-v2__completed-label">Archived</span>
-            <span className="sidebar-v2__completed-count">{archivedCount}</span>
-          </button>
-        )}
-
-        <div className="sidebar-v2__utility-row">
-          <ThemeToggle />
-          <button
-            type="button"
-            className="sidebar-v2__utility-btn"
-            aria-label="Calendar"
-            data-tooltip="Calendar"
-            onClick={onCalendarToggle}
-          >
-            <CalendarIcon />
-          </button>
-          <button
-            type="button"
-            className="sidebar-v2__utility-btn"
-            aria-label="Notifications"
-            data-tooltip="Notifications"
-            onClick={onNotificationsClick}
-          >
-            <BellIcon />
-          </button>
-        </div>
-
-        <div className="sidebar-v2__footer">
-          <button type="button" className="sidebar-v2__profile" onClick={onProfileClick}>
-            {currentUser?.avatarUrl ? (
-              <img src={currentUser.avatarUrl} alt="" className="sidebar-v2__profile-avatar-img" />
-            ) : (
-              <span className="sidebar-v2__profile-avatar-placeholder">
-                {currentUser?.name ? currentUser.name[0].toUpperCase() : '?'}
-              </span>
-            )}
-            <span className="sidebar-v2__profile-name">{currentUser?.name ?? 'Sign in'}</span>
-          </button>
-        </div>
       </nav>
 
       {searchOpen && (
         <WorkspaceSearchOverlay
           workspaces={workspaces}
+          folders={folders}
           onSelect={onSelectWorkspace}
           onClose={() => setSearchOpen(false)}
         />

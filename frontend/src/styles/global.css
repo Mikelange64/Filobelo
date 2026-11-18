@@ -4,6 +4,19 @@
   box-sizing: border-box;
 }
 
+/* Interface scale. The app is drawn at 90% by default - what browser zoom at
+   90% looks like - so more fits on screen; Settings > Appearance can switch
+   it to 100% (ThemeContext sets --ui-zoom on <html>).
+
+   Under CSS zoom, viewport units shrink with it (100vh is 90% of the window),
+   so anything that must fill the window uses --app-height instead. Code that
+   positions things from mouse or getBoundingClientRect() coordinates must
+   divide by the zoom: see utils/uiZoom.js. */
+:root {
+  --ui-zoom: 0.9;
+  --app-height: calc(100vh / var(--ui-zoom));
+}
+
 html,
 body {
   margin: 0;
@@ -11,23 +24,30 @@ body {
 }
 
 body {
+  zoom: var(--ui-zoom);
+}
+
+body {
   background-color: var(--color-bg-canvas);
   color: var(--color-text-primary);
-  font-family:
-    system-ui,
-    -apple-system,
-    "Segoe UI",
-    Roboto,
-    sans-serif;
-  line-height: 1.4;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
 }
 
 #root {
-  min-height: 100vh;
+  min-height: var(--app-height);
+}
+
+button,
+input,
+textarea,
+select {
+  font-family: inherit;
 }
 
 button {
-  font-family: inherit;
   color: inherit;
 }
 

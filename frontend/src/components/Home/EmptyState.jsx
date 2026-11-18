@@ -10,10 +10,10 @@ function EmptyState({ mascotSlot, onNewWorkspace }) {
       <p className="empty-state__message">Nothing planned! Anything in mind?</p>
       <button
         type="button"
-        className="empty-state__cta"
+        className="ui-btn ui-btn--primary"
         onClick={onNewWorkspace}
       >
-        + New workspace
+        New workspace
       </button>
     </div>
   )

@@ -78,3 +78,9 @@ export function dateInputToISO(value) {
   const [year, month, day] = value.split('-').map(Number)
   return new Date(year, month - 1, day).toISOString()
 }
+
+/** "1 day" / "12 days" - the bare count used by "… late" / "… overdue" labels. */
+export function formatDayCount(days) {
+  const n = Math.abs(days)
+  return `${n} day${n === 1 ? '' : 's'}`
+}

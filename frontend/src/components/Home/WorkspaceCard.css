@@ -1,172 +1,195 @@
+/* Option A: folder band, folder name over the title, big percentage. */
 .workspace-card {
+  --card-accent: var(--color-brand-primary);
+  position: relative;
   display: flex;
   flex-direction: column;
-  width: 100%;
-  min-height: 150px;
-  padding: 0;
+  gap: 12px;
+  min-height: 236px;
+  padding: 0 20px 18px;
+  overflow: hidden;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-card);
-  background-color: var(--color-bg-card);
-  box-shadow: var(--shadow-card);
+  background: var(--color-bg-card);
+  color: var(--color-text-primary);
   text-align: left;
   cursor: pointer;
-  overflow: hidden;
-  transition: box-shadow 0.15s ease, background-color 0.15s ease;
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
 
 .workspace-card:hover {
-  background-color: var(--color-bg-card-hover);
-  box-shadow: var(--shadow-card), 0 4px 20px hsl(0 0% 0% / 0.30);
   border-color: var(--color-border-strong);
+  box-shadow: var(--shadow-card);
 }
 
-/* Colored accent strip at the top — reflects urgency/status */
-.workspace-card__highlight {
-  height: 4px;
-  width: 100%;
+.workspace-card__band {
+  display: block;
   flex-shrink: 0;
+  height: 5px;
+  margin: 0 -20px 4px;
+  background: var(--card-accent);
 }
 
-.workspace-card__body {
+/* No folder: grey band and folder line; the bar keeps the brand colour. */
+.workspace-card--plain .workspace-card__band {
+  background: var(--color-border-strong);
+}
+
+.workspace-card__head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding-top: 12px;
+}
+
+.workspace-card__heading {
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  flex: 1;
-  padding: 16px;
-  gap: 10px;
+  gap: 3px;
 }
 
-.workspace-card__title {
-  margin: 0;
-  font-size: 1rem;
-  font-weight: 700;
-  color: var(--color-text-primary);
+.workspace-card__folder {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--card-accent) 78%, var(--color-text-primary));
+}
+
+.workspace-card--plain .workspace-card__folder {
+  color: var(--color-text-muted);
+}
+
+.workspace-card__folder-name {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.workspace-card__meta {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-}
-
-/* Color applied inline via accent variable */
-.workspace-card__status {
-  font-size: 0.85rem;
+.workspace-card__title {
+  font-size: 16px;
   font-weight: 600;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
 }
 
 .workspace-card__pct {
-  font-size: 1.6rem;
+  flex-shrink: 0;
+  font-size: 28px;
   font-weight: 700;
+  letter-spacing: -0.02em;
   line-height: 1;
-  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
 }
 
-.workspace-card__pct-symbol {
-  font-size: 1rem;
+.workspace-card__pct-sign {
+  margin-left: 1px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--color-text-secondary);
-  margin-left: 1px;
 }
 
-/* Progress bar — color applied inline, matches highlight and status label */
+.workspace-card__status {
+  display: flex;
+  align-items: center;
+  min-height: 22px;
+}
+
+.workspace-card__no-deadline {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-text-muted);
+}
+
+/* Fills the middle of the card; the progress block stays at the bottom. */
+.workspace-card__next {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.workspace-card__next-label {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.workspace-card__next-when--error { color: var(--color-error); font-weight: 600; }
+.workspace-card__next-when--warning { color: var(--color-warning); font-weight: 600; }
+
+.workspace-card__next-title {
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.workspace-card__next-title--muted {
+  color: var(--color-text-secondary);
+  font-weight: 400;
+}
+
+.workspace-card__foot {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .workspace-card__progress-track {
-  height: 4px;
-  background-color: var(--color-border);
-  border-radius: 2px;
+  display: block;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--color-bg-track);
+  overflow: hidden;
 }
 
 .workspace-card__progress-fill {
-  height: 100%;
-  border-radius: 2px;
-  transition: width 0.2s ease;
+  display: block;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--card-accent);
+  transition: width 0.3s ease;
 }
 
-.workspace-card__footer {
+.workspace-card__meta {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-top: auto;
+  gap: 12px;
+  min-height: 24px;
+  font-size: 13px;
+  color: var(--color-text-secondary);
 }
 
-.workspace-card__task-count,
-.workspace-card__member-count {
-  font-size: 0.78rem;
-  color: var(--color-text-muted);
-}
-
-/* Member avatars */
 .workspace-card__avatars {
   display: flex;
-  align-items: center;
 }
 
 .workspace-card__avatar {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   width: 24px;
   height: 24px;
-  margin-left: -7px;
-  border-radius: 50%;
-  border: 2px solid var(--color-bg-card);
-  background-color: var(--color-brand-secondary);
-  color: var(--color-text-on-brand);
-  font-size: 0.62rem;
-  font-weight: 700;
-  overflow: hidden;
-  flex-shrink: 0;
+  font-size: 10px;
+  box-shadow: 0 0 0 2px var(--color-bg-card);
 }
 
-.workspace-card__avatar:first-child {
-  margin-left: 0;
-}
-
-.workspace-card__avatar img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+.workspace-card__avatar + .workspace-card__avatar {
+  margin-left: -6px;
 }
 
 .workspace-card__avatar--overflow {
-  background-color: var(--color-bg-overlay);
-  color: var(--color-text-muted);
-  font-size: 0.58rem;
+  background: var(--color-bg-track);
+  color: var(--color-text-secondary);
+  font-size: 10px;
 }
 
-/* Right-click context menu */
 .ws-ctx-menu {
   position: fixed;
-  z-index: 1000;
-  min-width: 160px;
-  background: var(--color-bg-overlay);
-  border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-control);
-  box-shadow: var(--shadow-overlay);
-  padding: 4px 0;
-  outline: none;
-}
-
-.ws-ctx-menu__item {
-  display: block;
-  width: 100%;
-  padding: 8px 14px;
-  background: none;
-  border: none;
-  text-align: left;
-  font-size: 0.875rem;
-  color: var(--color-text-primary);
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.ws-ctx-menu__item:hover {
-  background: var(--color-bg-canvas-hover);
-}
-
-.ws-ctx-menu__item--complete {
-  color: var(--color-brand-primary);
-  font-weight: 600;
+  z-index: 1100;
+  min-width: 180px;
 }
