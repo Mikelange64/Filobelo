@@ -13,12 +13,13 @@ import {
   toDateInputValue,
   dateInputToISO,
 } from '../../utils/date'
-import { DotsIcon, CheckIcon, ChatIcon } from './icons'
+import { DotsIcon, CheckIcon } from './icons'
 import MemberAvatar from './MemberAvatar'
 import useTaskResources from './useTaskResources'
 import FilesPanel from './FilesPanel'
 import LinksPanel from './LinksPanel'
 import NotesPanel from './NotesPanel'
+import TaskComments from './TaskComments'
 import './SlideOver.css'
 
 // Compact (a 540px side panel) is the default. Expanded is the same content
@@ -275,14 +276,15 @@ export default function SlideOver({ task, fullTask, slideOverLoading, workspace,
     onToast,
   }
 
-  // The one deliberate placeholder in the app: comments are the next feature.
-  // A quiet empty state, nothing to click.
-  const commentsEmpty = (
-    <div className="slide-over__comments-empty" role="tabpanel" aria-label="Comments">
-      <span className="slide-over__comments-icon"><ChatIcon /></span>
-      <p className="slide-over__comments-title">No comments yet</p>
-      <p className="slide-over__comments-text">Comments on this task will show here.</p>
-    </div>
+  const comments = (
+    <TaskComments
+      workspaceId={workspaceId}
+      taskId={task.id}
+      memberById={memberById}
+      currentUserId={currentUserId}
+      isAdmin={isAdmin}
+      onToast={onToast}
+    />
   )
 
   const menuItems = [
@@ -425,8 +427,10 @@ export default function SlideOver({ task, fullTask, slideOverLoading, workspace,
               Attachments row on the left that adds new things. */}
           {isExpanded && (
             <>
-              <Fold label="Links & files" count={counts.links + counts.files} loading={taskResources.loading} emptyText="No links or files yet.">
+              <Fold label="Links" count={counts.links} loading={taskResources.loading} emptyText="No links yet.">
                 <LinksPanel part="list" {...resourceProps} resources={taskResources.links} onUpdate={taskResources.handleUpdate} />
+              </Fold>
+              <Fold label="Files" count={counts.files} loading={taskResources.loading} emptyText="No files yet.">
                 <FilesPanel part="list" {...resourceProps} resources={taskResources.files} />
               </Fold>
               <Fold label="Notes" count={counts.notes} loading={taskResources.loading} emptyText="No notes yet.">
@@ -466,7 +470,7 @@ export default function SlideOver({ task, fullTask, slideOverLoading, workspace,
               </div>
               <div className="slide-over__section slide-over__section--comments">
                 <h3 className="slide-over__section-label">Comments</h3>
-                {commentsEmpty}
+                {comments}
               </div>
             </>
           ) : (
@@ -522,7 +526,7 @@ export default function SlideOver({ task, fullTask, slideOverLoading, workspace,
                 onToast={onToast}
               />
             )}
-            {activeTab === 'comments' && commentsEmpty}
+            {activeTab === 'comments' && comments}
           </div>
           )}
         </div>

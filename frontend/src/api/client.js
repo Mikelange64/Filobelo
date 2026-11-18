@@ -465,3 +465,39 @@ export function sendMessage(workspaceId, conversationId, data) {
     body: JSON.stringify(data),
   })
 }
+
+// Task comments. Each comes back with its reactions summarised for the caller:
+// [{ emoji, count, reacted_by_me }]. Only the author can edit; the author or
+// an admin can delete.
+export function listComments(workspaceId, taskId) {
+  return authFetch(`/workspaces/${workspaceId}/tasks/${taskId}/comments`)
+}
+
+export function createComment(workspaceId, taskId, content) {
+  return authFetch(`/workspaces/${workspaceId}/tasks/${taskId}/comments`, {
+    method: 'POST',
+    body: JSON.stringify({ content }),
+  })
+}
+
+export function updateComment(workspaceId, taskId, commentId, content) {
+  return authFetch(`/workspaces/${workspaceId}/tasks/${taskId}/comments/${commentId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ content }),
+  })
+}
+
+export function deleteComment(workspaceId, taskId, commentId) {
+  return authFetch(`/workspaces/${workspaceId}/tasks/${taskId}/comments/${commentId}`, {
+    method: 'DELETE',
+  })
+}
+
+// Adds the caller's reaction, or removes it if already there. Returns the
+// comment's full reaction list.
+export function toggleCommentReaction(workspaceId, taskId, commentId, emoji) {
+  return authFetch(`/workspaces/${workspaceId}/tasks/${taskId}/comments/${commentId}/reactions`, {
+    method: 'POST',
+    body: JSON.stringify({ emoji }),
+  })
+}
